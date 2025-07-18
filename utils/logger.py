@@ -13,7 +13,8 @@ logging.Logger.verbose = verbose
 
 def setup_logging(logs_dir="logs",
                   console_level=VERBOSE_LEVEL_NUM,
-                  file_level=logging.DEBUG):
+                  file_level=logging.DEBUG,
+                  console_only=True):
     if not os.path.exists(logs_dir):
         os.makedirs(logs_dir)
 
@@ -39,12 +40,13 @@ def setup_logging(logs_dir="logs",
         logger = logging.getLogger(module_name)
         logger.setLevel(min(console_level, file_level))
 
-        log_file_path = os.path.join(logs_dir, f"{module_name}.log")
-        file_handler = RotatingFileHandler(
-            log_file_path,
-            maxBytes=10*1024*1024,
-            backupCount=5
-        )
-        file_handler.setLevel(file_level)
-        file_handler.setFormatter(logging.Formatter(log_format, date_format))
-        logger.addHandler(file_handler)
+        if not console_only:
+            log_file_path = os.path.join(logs_dir, f"{module_name}.log")
+            file_handler = RotatingFileHandler(
+                log_file_path,
+                maxBytes=10*1024*1024,
+                backupCount=5
+            )
+            file_handler.setLevel(file_level)
+            file_handler.setFormatter(logging.Formatter(log_format, date_format))
+            logger.addHandler(file_handler)
