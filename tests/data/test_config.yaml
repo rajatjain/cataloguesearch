@@ -1,0 +1,24 @@
+# Make sure to set the TEST_DATA_DIR and TEST_LLM_API_KEY
+# environment variables before running the tests.
+
+crawler:
+  base_pdf_path: "{TEST_DATA_DIR}/cataloguesearch/pdfs"
+  base_text_path: "{TEST_DATA_DIR}/cataloguesearch/text"
+
+index:
+  chunk_size: 500
+  chunk_overlap: 50
+
+opensearch:
+  host: localhost
+  port: 9200
+  username: admin
+  password: password
+  index_name: document_chunks_unit_test
+
+embedding_model:
+  name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+
+llm_model:
+  name: gemini-2.0-flash
+  api_key: "{TEST_LLM_API_KEY}" # This will be loaded as an environment variable
