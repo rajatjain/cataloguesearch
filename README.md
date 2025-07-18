@@ -86,6 +86,7 @@ graph TD
    python -m venv venv  
    source venv/bin/activate
 ```
+
 3. **Install dependencies**:  
 ```
    pip install -r requirements.txt
@@ -151,8 +152,10 @@ export OPENSEARCH_HOST="localhost"
 export OPENSEARCH_PORT="9200"  
 export OPENSEARCH_USER="admin"  
 export OPENSEARCH_PASSWORD="admin"  
+```
 
 Now run
+
 ```
 python discovery_module.py
 ```
