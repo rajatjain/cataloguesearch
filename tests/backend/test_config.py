@@ -1,39 +1,15 @@
-import pytest
+import logging
 import os
-
-from dotenv import load_dotenv
+import pytest
 
 from backend.config import Config
-import logging
-from utils import logger
-
-load_dotenv(
-    dotenv_path="%s/.env" % os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__))),
-    verbose=True)
-
-"""
-Sample .env file content:
-ROOT_DIR=${HOME}/cataloguesearch # set the full directory path, not just the var
-TEST_BASE_DIR=${ROOT_DIR}/tests
-TEST_DATA_DIR=${TEST_BASE_DIR}/data
-"""
-
-TEST_BASE_DIR = os.getenv("TEST_BASE_DIR")
-TEST_DATA_DIR = os.getenv("TEST_DATA_DIR")
-
-TEST_LOGS_DIR = "%s/test_logs" % TEST_BASE_DIR
-
-# Setup logging once for all tests
-logger.setup_logging(
-    logs_dir=TEST_LOGS_DIR, console_level=logger.VERBOSE_LEVEL_NUM,
-    file_level=logger.VERBOSE_LEVEL_NUM)
+from tests.backend.base import *
 
 log_handle = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="session")
-def config():
+def config(initialise):
     """
     Fixture to provide a Config instance for tests.
     This will load the configuration from the specified file.
@@ -55,6 +31,8 @@ def test_config_instance(config):
     """
     Tests that the Config instance is created correctly and has expected attributes.
     """
+    TEST_DATA_DIR = os.getenv("TEST_DATA_DIR")
+
     assert isinstance(config, Config)
     assert config.BASE_PDF_PATH == "%s/cataloguesearch/pdfs" % TEST_DATA_DIR
     assert config.BASE_TEXT_PATH == "%s/cataloguesearch/text" % TEST_DATA_DIR

@@ -18,7 +18,7 @@ def setup_logging(logs_dir="logs",
     if not os.path.exists(logs_dir):
         os.makedirs(logs_dir)
 
-    log_format = '[%(asctime)s - %(name)s - %(levelname)s] %(message)s'
+    log_format = '[%(asctime)s %(levelname)s - %(name)s : %(lineno)d] %(message)s'
     date_format = '%Y-%m-%d %H:%M:%S'
 
     root_logger = logging.getLogger()

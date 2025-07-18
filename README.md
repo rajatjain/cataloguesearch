@@ -82,8 +82,10 @@ graph TD
 ```
 
 2. **Create a virtual environment (recommended)**:  
+
+This code is tested using Python 3.11. Ensure you have Python 3.11 installed on your system.
 ```
-   python -m venv venv  
+   /opt/homebrew/bin/virtualenv -p python3.11 venv/  
    source venv/bin/activate
 ```
 

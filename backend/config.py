@@ -54,8 +54,10 @@ class Config:
         # Flatten the structure for easier access
         if name == "BASE_PDF_PATH":
             return self._settings.get("crawler", {}).get("base_pdf_path", None)
-        if name == "BASE_TEXT_PATH":
+        elif name == "BASE_TEXT_PATH":
             return self._settings.get("crawler", {}).get("base_text_path", None)
+        elif name == "TMP_IMAGES_PATH":
+            return self._settings.get("crawler", {}).get("tmp_images", None)
         elif name == "CHUNK_SIZE":
             return self._settings.get("index", {}).get("chunk_size", 500)
         elif name == "CHUNK_OVERLAP":

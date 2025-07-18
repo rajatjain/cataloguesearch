@@ -1,0 +1,20 @@
+# Core Libraries
+PyMuPDF==1.24.5 # For PDF parsing and text extraction
+pytesseract==0.3.10 # Python wrapper for Tesseract OCR
+opensearch-py==2.5.0 # OpenSearch Python client
+sentence-transformers==2.7.0 # For generating vector embeddings
+langchain-text-splitters==0.2.2 # For text chunking
+pyyaml==6.0.1 # For YAML file parsing
+
+# OCR Engine (Tesseract) dependency
+Pillow==10.4.0 # Required by pytesseract
+google-cloud-vision==3.10.2
+
+# Testing Libraries
+pytest==8.2.2 # Testing framework
+testcontainers[opensearch]==4.11.0 # Specific Testcontainers module for OpenSearch
+
+# Utilities
+python-dotenv==1.0.1 # For managing environment variables (optional, but good practice)
+
+protobuf~=6.31.1

@@ -4,6 +4,7 @@
 crawler:
   base_pdf_path: "{TEST_DATA_DIR}/cataloguesearch/pdfs"
   base_text_path: "{TEST_DATA_DIR}/cataloguesearch/text"
+  tmp_images_path: "{TEST_DATA_DIR}/cataloguesearch/tmp_images"
 
 index:
   chunk_size: 500
