@@ -1,292 +1,212 @@
-# **PDF Chatbot Search System**
+# **LLM/Chatbot Backend for PDF Search (Hindi & Gujarati)**
 
-This repository contains the design and future implementation of a PDF search chatbot system. The system is designed to index and search content within PDF files, primarily in Hindi and Gujarati languages, leveraging OCR for text extraction, OpenSearch for indexing and vector embeddings, and a Large Language Model (LLM) for transforming user queries. The chatbot will provide paginated search results with highlighted keywords.
+This repository contains the backend modules for an LLM/chatbot system designed to search data within PDF files, specifically supporting Hindi and Gujarati languages. The system automates the discovery, text extraction (including OCR), metadata management, and indexing of PDF documents into an OpenSearch cluster.
 
 ## **Table of Contents**
 
-1. [Introduction](https://www.google.com/search?q=%231-introduction)  
-2. [Overall Architecture](https://www.google.com/search?q=%232-overall-architecture)  
-3. [Modules](https://www.google.com/search?q=%233-modules)  
-   * [Discovery Module](https://www.google.com/search?q=%2331-discovery-module)  
-   * [Indexing and Embedding Module](https://www.google.com/search?q=%2332-indexing-and-embedding-module)  
-   * [LLM Chatbot and Search Module](https://www.google.com/search?q=%2333-llm-chatbot-and-search-module)  
-   * [UI Module](https://www.google.com/search?q=%2334-ui-module)  
-4. [Technology Stack](https://www.google.com/search?q=%234-technology-stack)  
-5. [Setup and Installation](https://www.google.com/search?q=%235-setup-and-installation)  
-   * [Prerequisites](https://www.google.com/search?q=%2351-prerequisites)  
-   * [OpenSearch Setup](https://www.google.com/search?q=%2352-opensearch-setup)  
-   * [Backend Setup](https://www.google.com/search?q=%2353-backend-setup)  
-   * [Frontend Setup](https://www.google.com/search?q=%2354-frontend-setup)  
-6. [Usage](https://www.google.com/search?q=%236-usage)  
-   * [Discovery Module Execution](https://www.google.com/search?q=%2361-discovery-module-execution)  
-   * [Chatbot Interaction](https://www.google.com/search?q=%2362-chatbot-interaction)  
-7. [Logging](https://www.google.com/search?q=%237-logging)  
-8. [Testing](https://www.google.com/search?q=%238-testing)  
-9. [Future Enhancements](https://www.google.com/search?q=%239-future-enhancements)  
-10. [Contributing](https://www.google.com/search?q=%2310-contributing)  
-11. [License](https://www.google.com/search?q=%2311-license)
+* [1. Features](https://www.google.com/search?q=%231-features)  
+* [2. High-Level Architecture](https://www.google.com/search?q=%232-high-level-architecture)  
+* [3. Setup](https://www.google.com/search?q=%233-setup)  
+  * [3.1. Prerequisites](https://www.google.com/search?q=%2331-prerequisites)  
+  * [3.2. Installation](https://www.google.com/search?q=%2332-installation)  
+  * [3.3. OpenSearch Setup (for running discovery_module.py directly)](https://www.google.com/search?q=%2333-opensearch-setup-for-running-discovery_modulepy-directly)  
+* [4. Usage](https://www.google.com/search?q=%234-usage)  
+  * [4.1. Directory Structure for PDFs and Configs](https://www.google.com/search?q=%2341-directory-structure-for-pdfs-and-configs)  
+  * [4.2. Running the Discovery Module](https://www.google.com/search?q=%2342-running-the-discovery-module)  
+  * [4.3. Output Directories](https://www.google.com/search?q=%2343-output-directories)  
+* [5. Testing](https://www.google.com/search?q=%235-testing)  
+  * [5.1. Running Tests](https://www.google.com/search?q=%2351-running-tests)  
+* [6. Project Structure](https://www.google.com/search?q=%236-project-structure)  
+* [7. Future Enhancements](https://www.google.com/search?q=%237-future-enhancements)
 
-## **1\. Introduction**
+## **1. Features**
 
-The PDF Chatbot Search System aims to provide an intelligent way to search and retrieve information from a collection of PDF documents. It's particularly focused on handling content in Hindi and Gujarati, making it a valuable tool for multilingual document repositories.
+* **Discovery Module**:  
+  * Scans a base folder and its sub-folders for PDF files.  
+  * Detects new PDF files and changes in existing PDF content.  
+  * Identifies changes in document-specific or folder-level configurations.  
+  * Orchestrates OCR and text extraction for PDF pages.  
+  * Extracts PDF bookmarks as additional metadata.  
+  * Manages a persistent state to track indexed files and their configurations for incremental updates.  
+* **Indexing & Embedding Module**:  
+  * Connects to OpenSearch 3.0 for both text indexing and vector embeddings.  
+  * Supports pluggable text chunking algorithms.  
+  * Supports pluggable vector embedding algorithms (using Sentence Transformers).  
+  * Performs full-text indexing with language-specific stop word removal (Hindi, Gujarati).  
+  * Generates and stores vector embeddings for semantic search.  
+  * Handles metadata-only re-indexing for configuration changes, optimizing performance.  
+* **Configuration Management**:  
+  * Recursively merges config.json files from root, sub-folders, and file-specific JSONs, with deeper configurations overriding shallower ones.  
+* **Logging**:  
+  * Centralized logging setup with separate log files for each module and optional console output.
 
-## **2\. Overall Architecture**
+## **2. High-Level Architecture**
 
-The system is structured into four main modules:
+The system operates in a pipeline fashion:
 
-* **Discovery Module:** Scans, OCRs, and prepares PDF content and metadata.  
-* **Indexing & Embedding Module:** Chunks text, generates vector embeddings, and indexes data into OpenSearch.  
-* **LLM Chatbot & Search Module:** Processes user queries, performs searches, and formats results.  
-* **UI Module:** Provides the interactive user interface.
+1. **PDF Storage**: PDF files are stored in a designated base folder with a hierarchical structure, potentially alongside config.json files.  
+2. **Discovery Module**: Scans the PDF folder, performs OCR on PDFs to extract text, extracts bookmarks, and merges configuration data. It determines if a file is new, its content has changed, or its configuration has changed.  
+3. **Indexing & Embedding Module**: Receives processed text and metadata from the Discovery Module. It chunks the text, generates vector embeddings, and indexes both the text content and embeddings into OpenSearch.  
+4. **OpenSearch 3.0**: Serves as the primary data store for all indexed text, metadata, and vector embeddings, enabling efficient search and retrieval.
 
 ```
-
 graph TD  
-    subgraph Data Ingestion  
-        A [Base PDF Folder] --> B{Discovery Module};  
-        B --> C [PDF Files (Hindi/Gujarati)];  
-        B --> D [Config Files (.json)];  
-        C --> E [OCR Processor];  
-        E --> F [Text Files (Page-wise)];  
-        D --> F;  
-        F --> G{Indexing & Embedding Module};  
-    end
-
-    subgraph Search & Chatbot  
-        H [User Input (Hindi/Gujarati)] --> I{UI Module};  
-        I --> J{LLM Chatbot & Search Module};  
-        J --> K [OpenSearch Cluster];  
-        K --> J;  
-        J --> I;  
-        I --> L [Paginated Search Results];  
-    end
-
-    G --> K;
+    A[Base PDF Folder --> B{Discovery Module};  
+    B -- New/Updated PDFs --> C[OCR Processing ;  
+    C --> D[Page-wise Text Files ;  
+    B -- Metadata (from config.json & Bookmarks) --> E[Metadata Processor ;  
+    D & E --> F{Indexing & Embedding Module};  
+    F -- Text & Vectors --> G[OpenSearch 3.0 ;  
+    F -- Last Index Timestamp Update --> H[Tracking Database/File ;  
+    G -- Indexed Data & Embeddings --> I[LLM/Chatbot (Future Module) ;
 ```
 
-## **3. Modules**
+## **3. Setup**
 
-### **3.1. Discovery Module**
+### **3.1. Prerequisites**
 
-This module is responsible for scanning the designated base folder for PDF files, performing OCR to extract text, processing associated metadata from JSON config files, and preparing the data for indexing. It also handles detecting changes in files or configurations to trigger re-indexing.
+* **Python 3.9+**: The project is developed using Python.  
+* **Docker**: Required for running the OpenSearch 3.0 container, especially for testing with Testcontainers.  
+* **Tesseract OCR**:  
+  * Install Tesseract OCR engine on your system.  
+  * Install Hindi (hin) and Gujarati (guj) language packs for Tesseract.  
+  * **Windows**: You might need to add Tesseract to your system's PATH, or specify the path to tesseract.exe in the DiscoveryModule initialization (e.g., tesseract_cmd_path=r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe').  
+  * **Linux/macOS**: Typically installed via package managers (e.g., sudo apt-get install tesseract-ocr tesseract-ocr-hin tesseract-ocr-guj on Debian/Ubuntu, brew install tesseract tesseract-lang on macOS).
 
-**Key Features:**
+### **3.2. Installation**
 
-* Recursive folder scanning.  
-* OCR for Hindi and Gujarati PDFs.  
-* Recursive config file merging.  
-* PDF bookmark extraction.  
-* Page-wise text file conversion.  
-* Change detection for files and configurations.
-
-### **3.2. Indexing and Embedding Module**
-
-This module takes the processed text and metadata from the Discovery Module, chunks the text, generates vector embeddings, and stores everything in OpenSearch. It's designed to be modular, allowing for different chunking and embedding algorithms.
-
-**Key Features:**
-
-* Configurable text chunking.  
-* Pluggable vector embedding algorithms.  
-* OpenSearch integration for indexing.  
-* Stop word filtering for text indexing.  
-* Tracking of `last_indexed_timestamp`.
-
-### **3.3. LLM Chatbot and Search Module**
-
-This is the core intelligence module, handling user queries. It uses an LLM (Gemini API) to transform natural language queries into vector search queries, performs searches in OpenSearch (both vector and optionally lexical), and formats the results for the UI.
-
-**Key Features:**
-
-* Hindi and Gujarati query language detection.  
-* LLM-powered query transformation.  
-* Combined vector and lexical search capabilities.  
-* Dynamic result count determination (up to 50).  
-* Formatted search snippets with highlighted keywords.  
-* Pagination support.
-
-### **3.4. UI Module**
-
-The user interface provides a simple and intuitive way for users to interact with the chatbot. It displays a search bar, a search button, and paginated search results with highlighted keywords.
-
-**Key Features:**
-
-* Top banner and informational text.  
-* Search input field and button.  
-* Paginated search results display.  
-* Highlighting of keywords in snippets.  
-* Results grouped by file and page number.  
-* **Light theme for the UI.**
-
-## **4. Technology Stack**
-
-* **Backend (Python 3.9+):**  
-  * pytesseract (for OCR)  
-  * PyPDF2 or pdfminer.six (for PDF parsing)  
-  * opensearch-py (OpenSearch client)  
-  * requests or httpx (for Gemini API calls)  
-  * logging (for logging)  
-  * json (for config files)  
-* **Database/Search Engine:** OpenSearch  
-* **Frontend:**  
-  * React  
-  * Tailwind CSS  
-  * lucide-react or inline SVGs (for icons)  
-* **Containerization for Testing:** Docker / Testcontainers
-
-## **5. Setup and Installation**
-
-### **5.1. Prerequisites**
-
-* Python 3.9+  
-* Docker (for OpenSearch and testing)  
-* Tesseract OCR engine installed on your system (ensure it supports Hindi and Gujarati language packs).  
-  * For Debian/Ubuntu: sudo apt-get install tesseract-ocr tesseract-ocr-hin tesseract-ocr-guj  
-  * For macOS (using Homebrew): brew install tesseract tesseract-lang (then download hin.traineddata and guj.traineddata and place them in Tesseract's tessdata directory).
-
-### **5.2. OpenSearch Setup**
-
-The easiest way to run OpenSearch for development and testing is using Docker.
-
-1. **Create a docker-compose.yml file:**
+1. **Clone the repository**:  
 ```
-   version: '3.8'  
-   services:  
-     opensearch:  
-       image: opensearchproject/opensearch:2.11.0  
-       container_name: opensearch-chatbot  
-       environment:  
-         - discovery.type=single-node  
-         - plugins.security.disabled=true # Disable security for local development  
-         - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" # Adjust memory as needed  
-       ports:  
-         - "9200:9200"  
-         - "9600:9600" # For Performance Analyzer  
-       volumes:  
-         - opensearch_data:/usr/share/opensearch/data  
-       ulimits:  
-         memlock:  
-           soft: -1  
-           hard: -1  
-       healthcheck:  
-         test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health?wait_for_status=yellow || exit 1"]  
-         interval: 10s  
-         timeout: 10s  
-         retries: 5  
-   volumes:  
-     opensearch_data:
+   git clone <repository_url>  
+   cd <repository_name>
 ```
 
-2. **Start OpenSearch:**  
- 
-   ```
-   docker-compose up -d
-   ```
-
-    Wait for OpenSearch to be healthy before proceeding. You can check its status with `docker-compose ps` or `docker-compose logs opensearch`.
-
-### **5.3. Backend Setup**
-
-1. **Clone the repository:**
+2. **Create a virtual environment (recommended)**:  
 ```
-   git clone git@github.com:rajatjain/cataloguesearch.git  
-   cd cataloguesearch
-```
-
-2. **Create a virtual environment:**  
-```
-   python3 -m venv venv  
+   python -m venv venv  
    source venv/bin/activate
 ```
 
-3. **Install dependencies:**  
+3. **Install dependencies**:  
 ```
    pip install -r requirements.txt
 ```
-   
-4. Configuration:  
-   Create a `config.ini` or `config.json` file to configure paths, OpenSearch connection details, and Gemini API key.
 
-### **5.4. Frontend Setup**
+### **3.3. OpenSearch Setup (for running discovery_module.py directly)**
 
-1. **Navigate to the frontend directory:**  
-```
-   cd frontend
-```
-
-3. **Install Node.js dependencies:**  
-```
-   npm install  
-   # or yarn install
-```
-
-4. **Start the frontend development server:**  
-```
-   npm start  
-   # or yarn start
-```
-
-  This will typically open the application in your browser at `http://localhost:3000`.
-
-## **6. Usage**
-
-### **6.1. Discovery Module Execution**
-
-The Discovery Module is designed to be run manually.
-
-1. **Prepare your PDF files:** Place your Hindi and Gujarati PDF files within the `base_pdf_folder` (as configured in your backend settings). Create sub-folders and corresponding `config.json` files as needed.  
-   * Example structure:
-```
-     data/  
-     ├── config.json  
-     ├── folder_a/  
-     │   ├── config.json  
-     │   ├── doc_a.pdf  
-     │   └── doc_a_config.json  
-     └── folder_b/  
-         ├── config.json  
-         └── doc_b.pdf
-```
-
-2. **Run the Discovery script:**  
-```
-   python backend/discovery_module/run_discovery.py
-```
-
-   This will scan for new files, perform OCR, generate page-wise text files, and trigger indexing into OpenSearch. Subsequent runs will detect changes and re-index only what's necessary.
-
-### **6.2. Chatbot Interaction**
-
-1. Ensure both the OpenSearch container and the backend server are running.  
-2. Access the UI in your web browser (e.g., `http://localhost:3000`).  
-3. Enter your search query in Hindi or Gujarati into the search bar and click "Search".  
-4. The results will be displayed below, paginated, with relevant keywords highlighted.
-
-## **7. Logging**
-
-The system uses Python's standard logging module. Logging levels (INFO, WARNING, ERROR, CRITICAL, DEBUG) and output destinations (console, file) can be configured. Refer to the `logging_config.py` file in the backend for details.
-
-## **8. Testing**
-
-Unit tests are provided for each module. These tests utilize Docker/Testcontainers for OpenSearch integration tests and programmatic file system setup for the Discovery Module, avoiding the use of mock objects.
-
-To run tests:
+For direct execution of discovery_module.py, you'll need a running OpenSearch instance. You can use Docker:
 
 ```
-python -m pytest
+docker run -p 9200:9200 -p 9600:9600 \  
+  -e "discovery.type=single-node" \  
+  -e "OPENSEARCH_USERNAME=admin" \  
+  -e "OPENSEARCH_PASSWORD=admin" \  
+  -e "OPENSEARCH_INITIAL_ADMIN_PASSWORD=admin" \  
+  --name opensearch-test \  
+  opensearchproject/opensearch:3.0.0
 ```
 
-## **9. Future Enhancements**
+Wait for OpenSearch to start (it might take a minute or two). You can check its health at `https://localhost:9200` (use admin/admin credentials).
 
-* **Scalability:** Implement distributed processing for large datasets.  
-* **Advanced OCR:** Integrate with more robust commercial or open-source OCR solutions for improved accuracy.  
-* **Fine-tuned Embeddings:** Explore domain-specific embedding model fine-tuning.  
-* **User Authentication:** Add user authentication and authorization features.  
-* **Monitoring:** Implement comprehensive monitoring and alerting for system health and performance.
+## **4. Usage**
 
-## **10. Contributing**
+The `discovery_module.py` file can be run directly to initiate the scanning and indexing process.
 
-Contributions are welcome! Please refer to CONTRIBUTING.md (to be created) for guidelines.
+### **4.1. Directory Structure for PDFs and Configs**
 
-## **11. License**
+Organize your PDF files and config.json files as follows:
 
-This project is licensed under the [MIT License](https://www.google.com/search?q=LICENSE) (to be created).
+```
+<base_pdf_folder>/  
+├── config.json             # Global config  
+├── subfolder1/  
+│   ├── config.json         # Subfolder1 config (overrides global)  
+│   ├── documentA.pdf  
+│   └── documentA_config.json # Document A specific config (overrides subfolder1 and global)  
+├── subfolder2/  
+│   ├── config.json         # Subfolder2 config  
+│   └── documentB.pdf  
+└── documentC.pdf
+```
+
+### **4.2. Running the Discovery Module**
+
+You can run the `discovery_module.py` directly. Ensure your OpenSearch instance is running and accessible.
+
+```
+python discovery_module.py
+```
+
+The if `__name__ == "__main__":` block in `discovery_module.py` provides a demonstration of:
+
+* **Initial Scan**: Indexes new PDFs.  
+* **No Change Scan**: Skips re-indexing if no changes are detected.  
+* **Content Change Scan**: Triggers full re-indexing if PDF content changes.  
+* **Config Change Scan**: Triggers metadata-only re-indexing if a config file changes.  
+* **New PDF Scan**: Indexes newly added PDFs.
+
+Environment Variables (Optional but Recommended):  
+For production or more flexible local setup, you can set OpenSearch connection details as environment variables:  
+```
+export OPENSEARCH_HOST="localhost"  
+export OPENSEARCH_PORT="9200"  
+export OPENSEARCH_USER="admin"  
+export OPENSEARCH_PASSWORD="admin"  
+```
+
+Now run
+
+```
+python discovery_module.py
+```
+
+### **4.3. Output Directories**
+
+* **discovery_test_pdfs/**: This is the example `BASE_PDF_FOLDER` where you place your PDF files and config files.  
+* **discovery_extracted_texts/**: This is the `OUTPUT_TEXT_BASE_DIR` where the page-wise text files extracted from PDFs will be stored, mirroring the original folder structure.  
+* **discovery_state/state.json**: This file stores the internal state of the Discovery Module, tracking which files have been indexed, their checksums, and config hashes.
+
+## **5. Testing**
+
+Unit tests are provided for each module and utilize pytest and testcontainers to spin up a clean OpenSearch 3.0 instance for each test run, ensuring isolated and reliable testing.
+
+### **5.1. Running Tests**
+
+1. **Ensure Docker is running** on your system.  
+2. **Run pytest** from the root of the repository:  
+   pytest
+
+This will automatically:
+
+* Spin up an OpenSearch 3.0 Docker container.  
+* Run all tests, including those that interact with OpenSearch.  
+* Tear down the OpenSearch container after tests are complete.  
+* Generate log files in the test_logs/ directory.
+
+**Note on Tesseract for Tests**: If your tests involve OCR (e.g., test_pdf_processor.py), ensure Tesseract OCR and its Hindi/Gujarati language packs are correctly installed and accessible in your environment. Tests that require Tesseract will be skipped if it's not detected.
+
+## **6. Project Structure**
+
+```
+.  
+├── requirements.txt                # Python dependencies  
+├── logger_config.py                # Centralized logging configuration  
+├── config_parser.py                # Handles recursive config merging  
+├── pdf_processor.py                # Extracts text from PDFs (with OCR) and bookmarks  
+├── indexing_embedding_module.py    # Chunks text, generates embeddings, indexes into OpenSearch  
+├── discovery_module.py             # Orchestrates scanning, change detection, and indexing  
+├── test_config_parser.py           # Unit tests for config_parser.py  
+├── test_pdf_processor.py           # Unit tests for pdf_processor.py  
+├── test_indexing_embedding_module.py # Unit tests for indexing_embedding_module.py (uses Testcontainers)  
+├── test_discovery_module.py        # Unit tests for discovery_module.py (uses Testcontainers)  
+└── logs/                           # Directory for module-specific log files (created on run)
+```
+
+## **7. Future Enhancements**
+
+* **Document Deletion**: Implement logic in DiscoveryModule and IndexingEmbeddingModule to remove documents from OpenSearch if they are deleted from the file system.  
+* **Scheduled Scans**: Automate the scan_and_index process to run periodically.  
+* **REST API**: Develop a RESTful API to expose indexing and search functionalities.  
+* **LLM/Chatbot Integration**: Integrate with a frontend LLM/chatbot application for natural language querying.  
+* **Advanced Chunking/Embedding**: Explore more sophisticated chunking strategies (e.g., semantic chunking) and fine-tuned embedding models for Hindi/Gujarati.  
+* **Monitoring and Alerting**: Add metrics and alerts for indexing failures or performance issues.
