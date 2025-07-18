@@ -18,7 +18,7 @@ def test_process_pdf_direct_text_extraction(initialise, config):
     """
     Tests direct text extraction from a PDF with embeddable text.
     """
-    processor = PDFProcessor() # Pass tesseract_cmd_path if needed
+    processor = PDFProcessor(config)
 
     pdf_dir = "%s/data/pdfs" % get_test_base_dir()
     texts_dir = "%s/data/text" % get_test_base_dir()
