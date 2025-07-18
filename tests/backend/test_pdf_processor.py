@@ -12,6 +12,8 @@ from tests.backend.test_config import config
 # Setup logging once for all tests
 log_handle = logging.getLogger(__name__)
 
+@pytest.mark.skip("Run this test only when you want to test the PDFProcessor directly. "
+                  "This requires google vision images to be called, and the process is time consuming.")
 def test_process_pdf_direct_text_extraction(initialise, config):
     """
     Tests direct text extraction from a PDF with embeddable text.
