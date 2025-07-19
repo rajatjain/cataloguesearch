@@ -2,6 +2,7 @@ import os
 import json
 import hashlib
 import sys
+import traceback
 from datetime import datetime
 
 from backend.processor.pdf_processor import PDFProcessor
@@ -19,11 +20,13 @@ log_handle = logging.getLogger(__name__)
 class SingleFileProcessor:
     def __init__(self, config: Config,
                  file_path: str,
+                 indexing_mod: IndexingEmbeddingModule,
                  index_state: IndexState,
                  pdf_processor: PDFProcessor,
                  scan_time: str):
         self._file_path = os.path.abspath(file_path)
         self._base_pdf_folder = config.BASE_PDF_PATH
+        self._indexing_module = indexing_mod
         self._index_state = index_state
         self._output_text_base_dir = config.BASE_TEXT_PATH
         self._pdf_processor = pdf_processor
@@ -37,6 +40,7 @@ class SingleFileProcessor:
         config = {}
         while True:
             folders = [current] + folders
+            log_handle.debug(f"Current folder: {current}, Base folder: {self._base_pdf_folder}")
             if os.path.samefile(current, self._base_pdf_folder):
                 break
             parent = os.path.dirname(current)
@@ -77,11 +81,10 @@ class SingleFileProcessor:
         """Generates a SHA256 hash for a config dictionary."""
         # Ensure consistent order for hashing by sorting keys
         sorted_config_str = json_dumps(
-            config_data, sort_keys=True, ensure_ascii=False)
+            config_data, sort_keys=True)
         return hashlib.sha256(sorted_config_str.encode('utf-8')).hexdigest()
 
     def _save_state(self, document_id: str, state: dict):
-        # TODO(rajatjain): Reimplement this.
         """Saves the current indexed state to a JSON file."""
         self._index_state.update_state(document_id, state)
 
@@ -117,28 +120,32 @@ class SingleFileProcessor:
             try:
                 output_text_dir = self._get_output_text_dir()
                 # Process PDF (OCR, page-wise text, bookmarks)
-                page_text_paths, bookmarks = self.pdf_processor.process_pdf(
-                    self._file_path, output_text_dir
+                page_text_paths, bookmarks = self._pdf_processor.process_pdf(
+                    self._file_path, output_text_dir, self._images_folder
                 )
                 # Index into OpenSearch
-                self.indexing_module.index_document(
-                    document_id, self._file_name,
+                self._indexing_module.index_document(
+                    document_id, self._file_path,
                     page_text_paths, current_config, bookmarks,
                     reindex_metadata_only=False
                 )
+                log_handle.info(f"Full re-index of {self._file_path} completed successfully.")
             except Exception as e:
-                log_handle.error(f"Failed to full index document {pdf_file_path}: {e}")
+                traceback.print_exc()
+                log_handle.error(f"Failed to full index document {self._file_path}: {e}")
         elif should_metadata_reindex:
             try:
                 # For metadata-only, we don't need to re-process PDF pages, just update metadata
                 # We still need bookmarks, so re-extract them.
                 bookmarks = self._pdf_processor.fetch_bookmarks(self._file_path)
-                self.indexing_module.index_document(
-                    document_id, self._file_name, [], current_config, bookmarks,
+                self._indexing_module.index_document(
+                    document_id, self._file_path, [], current_config, bookmarks,
                     reindex_metadata_only=True
                 )
+                log_handle.info(f"Metadata re-index of {self._file_path} completed successfully.")
             except Exception as e:
-                log_handle.error(f"Failed to metadata re-index document {pdf_file_path}: {e}")
+                traceback.print_exc()
+                log_handle.error(f"Failed to metadata re-index document {self._file_path}: {e}")
 
         self._save_state(
             document_id,
@@ -158,7 +165,7 @@ class Discovery:
     changed content is re-indexed.
     """
     def __init__(self, config: Config,
-                 indexing_module: IndexingEmbeddingModule,
+                 indexing_mod: IndexingEmbeddingModule,
                  pdf_processor: PDFProcessor,
                  index_state : IndexState):
         """
@@ -166,19 +173,19 @@ class Discovery:
 
         Args:
             config (Config): Configuration instance containing settings for discovery.
-            indexing_module (IndexingEmbeddingModule): Instance responsible for indexing documents.
+            indexing_mod (IndexingEmbeddingModule): Instance responsible for indexing documents.
             pdf_processor (PDFProcessor): Instance responsible for processing PDF files.
         """
         self._config = config
-        self.indexing_module = indexing_module
-        self.pdf_processor = pdf_processor
+        self._indexing_module = indexing_mod
+        self._pdf_processor = pdf_processor
         self._index_state = index_state
 
         # Ensure required components are initialized
-        if not self.indexing_module:
+        if not self._indexing_module:
             log_handle.critical("IndexingEmbeddingModule not provided. Exiting.")
             sys.exit(1)
-        if not self.pdf_processor:
+        if not self._pdf_processor:
             log_handle.critical("PDFProcessor not provided. Exiting.")
             sys.exit(1)
 
@@ -189,11 +196,11 @@ class Discovery:
         os.makedirs(self.base_pdf_folder, exist_ok=True)
         os.makedirs(self.output_text_base_dir, exist_ok=True)
 
-        self.indexing_module.create_index_if_not_exists() # Ensure index is ready
+        self._indexing_module.create_index_if_not_exists() # Ensure index is ready
         log_handle.info(f"DiscoveryModule initialized for base folder: {self.base_pdf_folder}")
 
 
-    def scan_and_index(self):
+    def crawl(self):
         """
         Scans the base PDF folder, identifies new or changed files/configs,
         and triggers indexing or re-indexing.
@@ -206,31 +213,22 @@ class Discovery:
         for root, _, files in os.walk(self.base_pdf_folder):
             for file_name in files:
                 if not file_name.lower().endswith(".pdf"):
-                    logging.verbose(f"Skipping file {file_name} (not a PDF)")
+                    log_handle.verbose(f"Skipping file {file_name} (not a PDF)")
                     continue
                 pdf_file_path = os.path.abspath(os.path.join(root, file_name))
 
                 single_file_processor = SingleFileProcessor(
                     config=self._config,
                     file_path=pdf_file_path,
+                    indexing_mod=self._indexing_module,
                     index_state=self._index_state,
-                    pdf_processor=self.pdf_processor,
+                    pdf_processor=self._pdf_processor,
                     scan_time=current_scan_time
                 )
                 single_file_processor.process()
 
-
-        # Remove state for files that no longer exist in the base folder
-        documents_to_remove = []
-
-        for doc_id in self.indexed_files_state.keys():
-            if doc_id not in files_found_in_scan:
-                documents_to_remove.append(doc_id)
-                log_handle.info(f"Document {self.indexed_files_state[doc_id].get('file_path', doc_id)} no longer exists. Consider removing from index.")
-                # TODO: Implement logic to remove documents from OpenSearch if they are deleted from file system
-                # This would involve querying OpenSearch for chunks with this document_id and deleting them.
-                # self.indexing_module.delete_document_from_index(document_id) # Needs to be implemented in IndexingEmbeddingModule
-
         self._index_state.garbage_collect()
+
+        # TODO(rajatjain): Delete files from OpenSearch index if they no longer exist in the filesystem.
 
         log_handle.info(f"Scan and index process completed. Start: {current_scan_time}, End: {datetime.now().isoformat()}")

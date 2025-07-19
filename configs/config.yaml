@@ -3,7 +3,7 @@ crawler:
   base_pdf_path: {HOME}/cataloguesearch/pdf
   base_text_path: {HOME}/cataloguesearch/text
   tmp_images_path: {HOME}/cataloguesearch/tmp_images
-  sqllite_db_path: {HOME}/cataloguesearch/db/cataloguesearch.db
+  sqlite_db_path: {HOME}/cataloguesearch/db/cataloguesearch.db
 
 index:
   chunk_size: 500
