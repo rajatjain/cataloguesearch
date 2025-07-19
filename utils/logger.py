@@ -23,7 +23,7 @@ def setup_logging(logs_dir="logs",
 
     # Added %(filename)s to show the source file and %(funcName)s for the function.
     # Replaced %(name)s with the more informative filename.
-    log_format = '[%(asctime)s %(levelname)s - %(filename)s:%(funcName)s - %(lineno)d()] %(message)s'
+    log_format = '[%(asctime)s %(levelname)s - %(filename)s:%(funcName)s : %(lineno)d] %(message)s'
     date_format = '%Y-%m-%d %H:%M:%S'
 
     root_logger = logging.getLogger()

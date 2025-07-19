@@ -4,10 +4,11 @@ from opensearchpy import OpenSearch, RequestsHttpConnection, AWSV4SignerAuth
 # from requests_aws4auth import AWS4Auth # More robust for signing requests
 from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from backend.index.opensearch_utils import get_opensearch_client, get_embedding_model
 import json
 import hashlib
 import yaml
-from datetime import datetime
+from datetime import datetime, timezone
 
 from backend.config import Config
 
@@ -20,34 +21,15 @@ class IndexingEmbeddingModule:
     Supports pluggable chunking and embedding algorithms.
     """
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, opensearch_client: OpenSearch):
         self._config = config
         self._opensearch_config_path = config.OPENSEARCH_CONFIG_PATH
-        self._opensearch_host = config.OPENSEARCH_HOST
-        self._opensearch_port = config.OPENSEARCH_PORT
-        self._opensearch_user = config.OPENSEARCH_USER
-        self._opensearch_password = config.OPENSEARCH_PASSWORD
-        self._index_name = config.INDEX_NAME
-        self._embedding_model_name = config.EMBEDDING_MODEL_NAME
+        self._index_name = config.OPENSEARCH_INDEX_NAME
         self._chunk_size = config.CHUNK_SIZE
         self._chunk_overlap = config.CHUNK_OVERLAP
         self._opensearch_settings = {}
-        self._embedding_model = None
-
-        # Initialize OpenSearch client
-        self._opensearch_client = self._get_opensearch_client(
-            self._opensearch_host, self._opensearch_port,
-            self._opensearch_user, self._opensearch_password)
-
-        log_handle.info(f"OpenSearch client initialized for {self._opensearch_host}:{self._opensearch_port}.")
-
-        # Initialize embedding model
-        try:
-            self._embedding_model = SentenceTransformer(self._embedding_model_name)
-            log_handle.info(f"Embedding model '{self._embedding_model_name}' loaded successfully.")
-        except Exception as e:
-            log_handle.error(f"Failed to load embedding model '{self._embedding_model_name}': {e}")
-            raise
+        self._embedding_model = get_embedding_model(config)
+        self._opensearch_client = opensearch_client
 
         # Initialize text splitter
         self._text_splitter = RecursiveCharacterTextSplitter(
@@ -58,52 +40,6 @@ class IndexingEmbeddingModule:
         )
         log_handle.info(
             f"Text splitter initialized with chunk_size={self._chunk_size}, chunk_overlap={self._chunk_overlap}.")
-
-    def _get_opensearch_client(self, host, port, user, password):
-        """
-        Helper method to get an OpenSearch client instance.
-        """
-        # Basic authentication for local/test setup. For production, consider IAM roles or more robust methods.
-        auth = (user, password)
-        client = OpenSearch(
-            hosts=[{'host': host, 'port': port}],
-            http_auth=auth,
-            use_ssl=True,
-            verify_certs=False, # Set to True for production with proper CA certs
-            ssl_assert_hostname=False,
-            ssl_show_warn=False,
-            timeout=30 # Increased timeout for potential slow operations
-        )
-        return client
-
-    def create_index_if_not_exists(self):
-        """
-        Creates the OpenSearch index with a predefined mapping if it doesn't already exist.
-        Includes settings for k-NN and analyzers for Hindi/Gujarati.
-        """
-        if not self._opensearch_config_path or not os.path.exists(self._opensearch_config_path):
-            log_handle.critical(
-                f"OpenSearch config file not found at {self._opensearch_config_path}. Exiting.")
-            raise FileNotFoundError(
-                f"OpenSearch config file not found: {self._opensearch_config_path}")
-
-        log_handle.info(f"Loading OpenSearch config from {self._opensearch_config_path}")
-        with open(self._opensearch_config_path, 'r', encoding='utf-8') as f:
-            self._opensearch_settings = yaml.safe_load(f)
-
-        self._opensearch_settings['settings']['vector_embedding']['dimension'] = \
-            self._embedding_model.get_sentence_embedding_dimension()
-
-        try:
-            if not self._opensearch_client.indices.exists(self._index_name):
-                response = self._opensearch_client.indices.create(
-                    self._index_name, body=self._opensearch_settings)
-                log_handle.info(f"Index '{self.index_name}' created: {response}")
-            else:
-                log_handle.info(f"Index '{self.index_name}' already exists.")
-        except Exception as e:
-            log_handle.critical(f"Error creating index '{self.index_name}': {e}")
-            raise
 
     def _generate_embedding(self, text: str) -> list[float]:
         """
@@ -152,7 +88,7 @@ class IndexingEmbeddingModule:
 
     def index_document(
             self, document_id: str, original_filename: str,
-            page_text_paths: list[str], metadata: dict, bookmarks: list[dict],
+            page_text_paths: list[str], metadata: dict, bookmarks: dict[int: str],
             reindex_metadata_only: bool = False):
         """
         Indexes a document (its pages/chunks) and associated metadata into OpenSearch.
@@ -162,13 +98,13 @@ class IndexingEmbeddingModule:
             original_filename (str): The original filename of the PDF.
             page_text_paths (list[str]): List of file paths to the page-wise text files.
             metadata (dict): Merged configuration metadata for the document.
-            bookmarks (list[dict]): List of extracted bookmarks.
+            bookmarks (dict): Dict of extracted bookmarks.
             reindex_metadata_only (bool): If True, only updates metadata for existing chunks,
                                           skipping text re-chunking and embedding.
         """
         log_handle.info(
             f"Indexing document: {document_id}, reindex_metadata_only: {reindex_metadata_only}")
-        timestamp = datetime.now(datetime.UTC).isoformat() + "Z" # ISO 8601 format with Z for UTC
+        timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
         if reindex_metadata_only:
             # For metadata-only re-indexing, we need to find existing chunks for this document
@@ -177,14 +113,15 @@ class IndexingEmbeddingModule:
                 query = {
                     "query": {
                         "term": {
-                            "document_id.keyword": document_id
+                            "document_id": document_id
                         }
                     },
                     "size": 10000 # Max results to retrieve
                 }
                 response = self._opensearch_client.search(index=self._index_name, body=query)
                 hits = response['hits']['hits']
-                log_handle.info(f"Found {len(hits)} existing chunks for document {document_id} for metadata update.")
+                log_handle.info(
+                    f"Found {len(hits)} existing chunks for document {document_id} for metadata update.")
 
                 for hit in hits:
                     doc_id = hit['_id']
@@ -193,7 +130,7 @@ class IndexingEmbeddingModule:
                     update_body = {
                         "doc": {
                             "metadata": metadata,
-                            "bookmarks": bookmarks[page_number + 1] if page_number + 1 < len(bookmarks) else None,
+                            "bookmarks": bookmarks[page_number] if page_number <= len(bookmarks) else None,
                             "timestamp_indexed": timestamp
                         }
                     }
@@ -206,8 +143,11 @@ class IndexingEmbeddingModule:
 
         # Full indexing path (new file or content changed)
         for page_num_idx, page_path in enumerate(page_text_paths):
+            log_handle.verbose(f"bookmarks: {bookmarks}")
             page_number = page_num_idx + 1 # 1-indexed page number
-            page_bookmark = bookmarks[page_number] if page_number < len(bookmarks) else None
+            page_bookmark = bookmarks[page_number] if page_number <= len(bookmarks) else None
+            log_handle.verbose(
+                f"page_number: {page_number}, page_bookmark: {page_bookmark}, page_path: {page_path}")
             try:
                 with open(page_path, 'r', encoding='utf-8') as f:
                     page_content = f.read()
@@ -254,4 +194,4 @@ class IndexingEmbeddingModule:
                 log_handle.error(f"Page text file not found: {page_path}. Skipping.")
             except Exception as e:
                 log_handle.error(f"Error processing page {page_path} for indexing: {e}")
-        log_handle.info(f"Finished full indexing for document {document_id}.")
+            log_handle.info(f"Finished full indexing for document {document_id}.")

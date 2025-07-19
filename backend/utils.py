@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import copy
 from typing import List, Dict, Any, Tuple, Optional
 
 from opensearchpy import OpenSearch
@@ -22,7 +23,7 @@ def get_opensearch_client(config: Any) -> OpenSearch:
     Initializes and returns an OpenSearch client.
     """
     client = OpenSearch(
-        hosts=[{'host': config.OPENSEARCH_HOST, 'port': config.OPENSEARCH_PORT}],
+        hosts=[{'scheme': 'https', 'host': config.OPENSEARCH_HOST, 'port': config.OPENSEARCH_PORT}],
         http_auth=(config.OPENSEARCH_USERNAME, config.OPENSEARCH_PASSWORD),
         use_ssl=True,
         verify_certs=False, # Set to True in production with proper CA certs
@@ -162,8 +163,56 @@ def remove_highlight_tags(text: str, pre_tag: str = "**", post_tag: str = "**") 
     """
     return text.replace(pre_tag, "").replace(post_tag, "")
 
+def _recursive_truncate(obj, fields_to_truncate):
+    """
+    A helper function to recursively traverse a data structure and truncate
+    the values of specified fields.
+    """
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if key in fields_to_truncate:
+                if isinstance(value, list):
+                    obj[key] = f"<list of {len(value)} items truncated>"
+                else:
+                    # You can customize this for other types if needed
+                    obj[key] = f"<value truncated>"
+            else:
+                _recursive_truncate(value, fields_to_truncate)
+    elif isinstance(obj, list):
+        for item in obj:
+            _recursive_truncate(item, fields_to_truncate)
+    return obj
+
 def json_dump(obj, fp, **kwargs):
-    return json.dump(obj, fp, ensure_ascii=False, indent=4, **kwargs)
+    """
+    Dumps an object to a file-like object in JSON format, with an option to truncate fields.
+
+    To truncate fields, pass a list of keys:
+    json_dump(data, f, truncate_fields=['vector_embedding'])
+    """
+    truncate_fields = kwargs.pop('truncate_fields', None)
+
+    if truncate_fields:
+        # Process a copy to avoid side effects
+        obj_copy = copy.deepcopy(obj)
+        processed_obj = _recursive_truncate(obj_copy, truncate_fields)
+        return json.dump(processed_obj, fp, ensure_ascii=False, indent=4, **kwargs)
+    else:
+        return json.dump(obj, fp, ensure_ascii=False, indent=4, **kwargs)
 
 def json_dumps(obj, **kwargs):
-    return json.dumps(obj, ensure_ascii=False, indent=4, **kwargs)
+    """
+    Serializes an object to a JSON formatted string, with an option to truncate fields.
+
+    To truncate fields, pass a list of keys:
+    json_dumps(data, truncate_fields=['vector_embedding'])
+    """
+    truncate_fields = kwargs.pop('truncate_fields', None)
+
+    if truncate_fields:
+        # Process a copy to avoid side effects
+        obj_copy = copy.deepcopy(obj)
+        processed_obj = _recursive_truncate(obj_copy, truncate_fields)
+        return json.dumps(processed_obj, ensure_ascii=False, indent=4, **kwargs)
+    else:
+        return json.dumps(obj, ensure_ascii=False, indent=4, **kwargs)

@@ -9,18 +9,18 @@ crawler:
 
 index:
   opensearch_config: "{TEST_DATA_DIR}/configs/opensearch-config.yaml"
-  chunk_size: 500
-  chunk_overlap: 50
+  chunk_size: 100
+  chunk_overlap: 20
 
 opensearch:
   host: localhost
   port: 9200
   username: admin
-  password: password
+  password: Admin@Password123!
   index_name: document_chunks_unit_test
 
 embedding_model:
-  name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  name: sentence-transformers/all-MiniLM-L6-v2 # faster module for testing
 
 llm_model:
   name: gemini-2.0-flash

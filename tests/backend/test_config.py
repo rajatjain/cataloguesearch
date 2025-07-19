@@ -36,12 +36,12 @@ def test_config_instance(config):
     assert isinstance(config, Config)
     assert config.BASE_PDF_PATH == "%s/cataloguesearch/pdfs" % TEST_DATA_DIR
     assert config.BASE_TEXT_PATH == "%s/cataloguesearch/text" % TEST_DATA_DIR
-    assert config.CHUNK_SIZE == 500
-    assert config.CHUNK_OVERLAP == 50
+    assert config.CHUNK_SIZE == 100
+    assert config.CHUNK_OVERLAP == 20
     assert config.OPENSEARCH_HOST == "localhost"
     assert config.OPENSEARCH_PORT == 9200
     assert config.OPENSEARCH_USERNAME == "admin"
-    assert config.OPENSEARCH_PASSWORD == "password"
+    assert config.OPENSEARCH_PASSWORD == "Admin@Password123!"
     assert config.OPENSEARCH_INDEX_NAME == "document_chunks_unit_test"
-    assert config.EMBEDDING_MODEL_NAME == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    assert config.EMBEDDING_MODEL_NAME == "sentence-transformers/all-MiniLM-L6-v2"
     assert config.LLM_MODEL_NAME == "gemini-2.0-flash"
