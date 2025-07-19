@@ -124,8 +124,9 @@ class SingleFileProcessor:
                     self._file_path, output_text_dir, self._images_folder
                 )
                 # Index into OpenSearch
+                relative_path = os.path.relpath(self._file_path, self._base_pdf_folder)
                 self._indexing_module.index_document(
-                    document_id, self._file_path,
+                    document_id, relative_path,
                     page_text_paths, current_config, bookmarks,
                     reindex_metadata_only=False
                 )

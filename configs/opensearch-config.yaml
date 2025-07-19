@@ -1,0 +1,70 @@
+# Settings for the OpenSearch index
+settings:
+  index:
+    knn: true
+    knn.space_type: l2
+    number_of_shards: 1
+    number_of_replicas: 0
+    analysis:
+      analyzer:
+        hindi_analyzer:
+          tokenizer: standard
+          filter:
+            - lowercase
+            - hindi_stop
+            - indic_normalization
+        gujarati_analyzer:
+          tokenizer: standard
+          filter:
+            - lowercase
+            - gujarati_stop
+            - indic_normalization
+      filter:
+        hindi_stop:
+          type: stop
+          # OpenSearch built-in Hindi stopwords
+          stopwords: "_hindi_"
+        gujarati_stop:
+          type: "stop"
+          # OpenSearch built-in Gujarati stopwords
+          stopwords: "_gujarati_"
+        indic_normalization:
+          type: icu_normalization
+          name: nfkc_cf
+
+# Mappings define the schema for documents in the index
+mappings:
+  properties:
+    document_id:
+      type: keyword
+    original_filename:
+      type: keyword
+    page_number:
+      type: integer
+    chunk_id:
+      type: keyword
+    text_content:
+      type: text
+      # Use standard analyzer, or consider language detection for dynamic analyzer
+      analyzer: standard
+    text_content_hindi:
+      # Specific field for Hindi text with the Hindi analyzer
+      type: text
+      analyzer: hindi_analyzer
+    text_content_gujarati:
+      # Specific field for Gujarati text with the Gujarati analyzer
+      type: text
+      analyzer: gujarati_analyzer
+    metadata:
+      # Stores the entire metadata JSON object as a single field
+      type: flattened
+    bookmarks:
+      # Stored as a single string, or could be an array of keywords if needed
+      type: text
+    timestamp_indexed:
+      type: date
+    vector_embedding:
+      type: knn_vector
+      # Note: This value is set dynamically by your application code.
+      # In a static YAML file, you would use a placeholder.
+      dimension: <set_by_embedding_model>

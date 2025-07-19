@@ -8,6 +8,7 @@ crawler:
   sqlite_db_path: "{TEST_DATA_DIR}/cataloguesearch/db/cataloguesearch.db"
 
 index:
+  opensearch_config: "{TEST_DATA_DIR}/configs/opensearch-config.yaml"
   chunk_size: 500
   chunk_overlap: 50
 

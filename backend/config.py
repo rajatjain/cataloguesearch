@@ -34,6 +34,10 @@ class Config:
         Loads configuration from a YAML file.
         If config_file_path is None or file not found, uses default values.
         """
+        BASE_DIR = os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__)))
+        
+        os.environ["BASE_DIR"] = BASE_DIR
         if config_file_path and os.path.exists(config_file_path):
             print(f"Loading configuration from {config_file_path}")
             with open(config_file_path, 'r', encoding='utf-8') as f:
@@ -60,6 +64,8 @@ class Config:
             return self._settings.get("crawler", {}).get("tmp_images", None)
         elif name == "SQLITE_DB_PATH":
             return self._settings.get("crawler", {}).get("sqlite_db_path", None)
+        elif name == "OPENSEARCH_CONFIG_PATH":
+            return self._settings.get("index", {}).get("opensearch_config", None)
         elif name == "CHUNK_SIZE":
             return self._settings.get("index", {}).get("chunk_size", 500)
         elif name == "CHUNK_OVERLAP":
