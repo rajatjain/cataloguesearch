@@ -1,7 +1,11 @@
+import logging
 import os
 import pytest
 import shutil
 from dotenv import load_dotenv
+
+from backend.config import Config
+from backend.utils import json_dumps
 from utils import logger
 
 initialized = False
@@ -41,10 +45,23 @@ def initialise():
     TEST_BASE_DIR = os.getenv("TEST_BASE_DIR")
     TEST_LOGS_DIR = "%s/test_logs" % TEST_BASE_DIR
 
+    if TEST_BASE_DIR is None or TEST_LOGS_DIR is None:
+        raise ValueError(
+            f"TEST_BASE_DIR or TEST_LOGS_DIR is not set. "
+            f"Please set these in your .env file."
+            f".env file should be in the same directory from where you run the tests.")
+
+    # initialize the config
+    config = Config("%s/data/configs/test_config.yaml" % TEST_BASE_DIR)
+
     # Setup logging once for all tests
     logger.setup_logging(
         logs_dir=TEST_LOGS_DIR, console_level=logger.VERBOSE_LEVEL_NUM,
-        file_level=logger.VERBOSE_LEVEL_NUM)
+        file_level=logger.VERBOSE_LEVEL_NUM, console_only=True)
+
+    logging.getLogger(__name__).info(
+        f"Config initialised: {json_dumps(config._settings)}"
+    )
 
     yield
 

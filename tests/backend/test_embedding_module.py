@@ -11,15 +11,16 @@ from backend.index.embedding_module import IndexingEmbeddingModule
 
 from backend.common.opensearch import get_opensearch_client
 from backend.utils import json_dumps
-from tests.backend.test_config import *
+from tests.backend.base import *
 
 log_handle = logging.getLogger(__name__)
 
 @pytest.fixture(scope="function")
-def indexing_module(config):
+def indexing_module(initialise):
     """
     Provides an initialized IndexingEmbeddingModule instance for testing.
     """
+    config = Config()
     opensearch_client = get_opensearch_client(config)
     try:
         if opensearch_client.indices.exists(config.OPENSEARCH_INDEX_NAME):
@@ -98,11 +99,12 @@ def get_all_documents(config, max_results: int = 1000) -> list:
         return []
 
 
-def test_index_document_full_indexing(config, indexing_module):
+def test_index_document_full_indexing(initialise, indexing_module):
     """
     Tests full indexing of a document, including text, embeddings, and metadata.
     """
     # Re-use the client from above
+    config = Config()
     opensearch_client = get_opensearch_client(config, force_clean=True)
     tmp_path = tempfile.mkdtemp()
     doc_id, filename, page_paths = dummy_text_files(tmp_path)
@@ -165,10 +167,11 @@ def test_index_document_full_indexing(config, indexing_module):
     assert found_page_two
     assert found_page_three
 
-def test_index_document_metadata_only_reindex(config, indexing_module):
+def test_index_document_metadata_only_reindex(initialise, indexing_module):
     """
     Tests metadata-only re-indexing for an existing document.
     """
+    config = Config()
     opensearch_client = get_opensearch_client(config, force_clean=True)
     tmp_path = tempfile.mkdtemp()
     doc_id, filename, page_paths = dummy_text_files(tmp_path)
@@ -244,10 +247,11 @@ def test_index_document_metadata_only_reindex(config, indexing_module):
     updated_hits = response['hits']['hits']
     assert len(updated_hits) == 2
 
-def test_create_index_if_not_exists(config, indexing_module):
+def test_create_index_if_not_exists(initialise, indexing_module):
     """
     Tests that the index is created correctly with the specified mappings and settings.
     """
+    config = Config()
     opensearch_client = get_opensearch_client(config)
     index_name = indexing_module._index_name
     assert opensearch_client.indices.exists(index_name)
@@ -264,15 +268,16 @@ def test_create_index_if_not_exists(config, indexing_module):
     assert 'text_content_hindi' in mappings and mappings['text_content_hindi']['analyzer'] == 'hindi_analyzer'
     assert 'text_content_gujarati' in mappings and mappings['text_content_gujarati']['analyzer'] == 'gujarati_analyzer'
 
-def test_generate_embedding_empty_text(config, indexing_module):
+def test_generate_embedding_empty_text(initialise, indexing_module):
     """
     Tests embedding generation for empty text.
     """
+    config = Config()
     embedding = get_embedding(config.EMBEDDING_MODEL_NAME, "")
     assert len(embedding) == \
            get_embedding_model(config.EMBEDDING_MODEL_NAME).get_sentence_embedding_dimension()
 
-def test_chunk_text_basic(indexing_module):
+def test_chunk_text_basic(initialise, indexing_module):
     """
     Tests basic text chunking.
     """

@@ -13,7 +13,6 @@ from backend.index.embedding_module import IndexingEmbeddingModule
 from backend.processor.pdf_processor import PDFProcessor, log_handle
 from backend.utils import json_dump, json_dumps
 from tests.backend.base import *
-from tests.backend.test_config import config
 
 """
 Test Setup:
@@ -134,7 +133,8 @@ def setup(base_dir):
 
     return doc_ids
 
-def test_get_metadata(initialise, config):
+def test_get_metadata(initialise):
+    config = Config()
     # create temp dir
     tmp_dir = tempfile.mkdtemp(prefix="test_discovery_")
     pdf_dir = "%s/data/pdfs" % tmp_dir
@@ -187,7 +187,8 @@ def test_get_metadata(initialise, config):
     meta = xbg.get_metadata()
     assert meta == {'category': 'x', 'type': 't3', 'new': 'c4'}
 
-def test_crawl(initialise, config):
+def test_crawl(initialise):
+    config = Config()
     # create temp dir
     tmp_dir = tempfile.mkdtemp(prefix="test_crawl_")
     pdf_dir = "%s/data/pdfs" % tmp_dir

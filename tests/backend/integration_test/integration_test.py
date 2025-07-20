@@ -24,7 +24,7 @@ log_handle = logging.getLogger(__name__)
 # comment it out if you need to debug something.
 logging.getLogger('opensearch').setLevel(logging.WARNING)
 
-def integration_test_config(initialize):
+def integration_test_config():
     load_dotenv(
         dotenv_path="%s/.env" % os.path.dirname(__file__),
         verbose=True,
@@ -155,7 +155,7 @@ def setup(base_dir):
 
 @pytest.mark.integration
 def test_full_integration(initialise):
-    config = integration_test_config(initialise)
+    config = integration_test_config()
     assert config.OPENSEARCH_INDEX_NAME == os.getenv("INDEX_NAME")
 
     test_dir = tempfile.mkdtemp(prefix="test_integration_test_")
