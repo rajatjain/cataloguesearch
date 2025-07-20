@@ -1,13 +1,8 @@
-import os
 import logging
-from opensearchpy import OpenSearch, RequestsHttpConnection, AWSV4SignerAuth
-# from requests_aws4auth import AWS4Auth # More robust for signing requests
-from sentence_transformers import SentenceTransformer
+from opensearchpy import OpenSearch
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from backend.index.opensearch_utils import get_opensearch_client, get_embedding_model
-import json
+from backend.common.embedding_models import get_embedding
 import hashlib
-import yaml
 from datetime import datetime, timezone
 
 from backend.config import Config
@@ -28,7 +23,7 @@ class IndexingEmbeddingModule:
         self._chunk_size = config.CHUNK_SIZE
         self._chunk_overlap = config.CHUNK_OVERLAP
         self._opensearch_settings = {}
-        self._embedding_model = get_embedding_model(config)
+        self._embedding_model_name = config.EMBEDDING_MODEL_NAME
         self._opensearch_client = opensearch_client
 
         # Initialize text splitter
@@ -40,24 +35,6 @@ class IndexingEmbeddingModule:
         )
         log_handle.info(
             f"Text splitter initialized with chunk_size={self._chunk_size}, chunk_overlap={self._chunk_overlap}.")
-
-    def _generate_embedding(self, text: str) -> list[float]:
-        """
-        Generates a vector embedding for the given text using the loaded model.
-
-        Args:
-            text (str): The text to embed.
-
-        Returns:
-            list[float]: The dense vector embedding.
-        """
-        try:
-            embedding = self._embedding_model.encode(text)
-            return embedding.tolist()
-        except Exception as e:
-            log_handle.error(
-                f"Error generating embedding for text (first 50 chars: '{text[:50]}...'): {e}")
-            return []
 
     def _chunk_text(self, text_content: str) -> list[str]:
         """
@@ -158,7 +135,7 @@ class IndexingEmbeddingModule:
                     # Generate a stable chunk_id
                     chunk_id = self._get_document_hash(document_id, page_number, chunk_idx, chunk_text)
 
-                    embedding = self._generate_embedding(chunk_text)
+                    embedding = get_embedding(self._embedding_model_name, chunk_text)
                     if not embedding:
                         log_handle.warning(f"Skipping indexing for chunk {chunk_id} due to embedding failure.")
                         continue

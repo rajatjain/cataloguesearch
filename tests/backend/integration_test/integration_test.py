@@ -11,7 +11,7 @@ from backend.config import Config
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
 from backend.index.embedding_module import IndexingEmbeddingModule
-from backend.index.opensearch_utils import get_opensearch_client
+from backend.common.opensearch import get_opensearch_client
 from backend.processor.pdf_processor import PDFProcessor
 from backend.utils import json_dump, json_dumps
 from tests.backend.base import *
