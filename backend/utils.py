@@ -18,20 +18,6 @@ firebase_config = json.loads(firebase_config_str)
 initial_auth_token = os.environ.get('__initial_auth_token')
 
 
-def get_opensearch_client(config: Any) -> OpenSearch:
-    """
-    Initializes and returns an OpenSearch client.
-    """
-    client = OpenSearch(
-        hosts=[{'scheme': 'https', 'host': config.OPENSEARCH_HOST, 'port': config.OPENSEARCH_PORT}],
-        http_auth=(config.OPENSEARCH_USERNAME, config.OPENSEARCH_PASSWORD),
-        use_ssl=True,
-        verify_certs=False, # Set to True in production with proper CA certs
-        ssl_assert_hostname=False,
-        ssl_show_warn=False,
-    )
-    return client
-
 _embedding_model_cache = {}
 
 def load_embedding_model(model_name: str) -> SentenceTransformer:

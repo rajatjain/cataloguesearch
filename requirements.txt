@@ -20,3 +20,7 @@ protobuf~=6.31.1
 
 # Docker
 docker==7.1.0 # Docker SDK for Python, useful for container management in tests
+
+# Search
+langdetect==1.0.9 # Or a compatible version
+Flask==2.3.3 # Or a compatible version
