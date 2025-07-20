@@ -118,11 +118,19 @@ class SingleFileProcessor:
 
         if should_full_reindex:
             try:
-                output_text_dir = self._get_output_text_dir()
+                output_text_dir = "%s/%s" % (
+                    self._output_text_base_dir,
+                    os.path.splitext(relative_pdf_path)[0])
+                os.makedirs(output_text_dir, exist_ok=True)
                 # Process PDF (OCR, page-wise text, bookmarks)
+                log_handle.info(
+                    f"file_path: {self._file_path}, output_text_dir: {output_text_dir}, images_folder: {self._images_folder}"
+                )
                 page_text_paths, bookmarks = self._pdf_processor.process_pdf(
                     self._file_path, output_text_dir, self._images_folder
                 )
+                log_handle.info(f"Processed PDF: {self._file_path}")
+                log_handle.verbose(f"page_text_paths: {page_text_paths}, bookmarks: {bookmarks}")
                 # Index into OpenSearch
                 relative_path = os.path.relpath(self._file_path, self._base_pdf_folder)
                 self._indexing_module.index_document(
@@ -197,7 +205,6 @@ class Discovery:
         os.makedirs(self.base_pdf_folder, exist_ok=True)
         os.makedirs(self.output_text_base_dir, exist_ok=True)
 
-        self._indexing_module.create_index_if_not_exists() # Ensure index is ready
         log_handle.info(f"DiscoveryModule initialized for base folder: {self.base_pdf_folder}")
 
 

@@ -61,7 +61,7 @@ class Config:
         elif name == "BASE_TEXT_PATH":
             return self._settings.get("crawler", {}).get("base_text_path", None)
         elif name == "TMP_IMAGES_PATH":
-            return self._settings.get("crawler", {}).get("tmp_images", None)
+            return self._settings.get("crawler", {}).get("tmp_images_path", None)
         elif name == "SQLITE_DB_PATH":
             return self._settings.get("crawler", {}).get("sqlite_db_path", None)
         elif name == "OPENSEARCH_CONFIG_PATH":

@@ -17,7 +17,7 @@ opensearch:
   port: 9200
   username: admin
   password: Admin@Password123!
-  index_name: document_chunks_unit_test
+  index_name: "{INDEX_NAME}"
 
 embedding_model:
   name: sentence-transformers/all-MiniLM-L6-v2 # faster module for testing

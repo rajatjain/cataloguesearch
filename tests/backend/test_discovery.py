@@ -80,11 +80,11 @@ def setup(base_dir):
     TEST_BASE_DIR = os.getenv("TEST_BASE_DIR")
 
     # copy files
-    pdf_path = os.path.join(TEST_BASE_DIR, "data", "pdfs")
-    bangalore_hindi = os.path.join(pdf_path, "bangalore_hindi.pdf")
-    bangalore_gujarati = os.path.join(pdf_path, "bangalore_gujarati.pdf")
-    bangalore_english = os.path.join(pdf_path, "bangalore_english.pdf")
-    multi_language_document = os.path.join(pdf_path, "multi_language_document.pdf")
+    data_pdf_path = os.path.join(TEST_BASE_DIR, "data", "pdfs")
+    bangalore_hindi = os.path.join(data_pdf_path, "bangalore_hindi.pdf")
+    bangalore_gujarati = os.path.join(data_pdf_path, "bangalore_gujarati.pdf")
+    bangalore_english = os.path.join(data_pdf_path, "bangalore_english.pdf")
+    multi_language_document = os.path.join(data_pdf_path, "multi_language_document.pdf")
 
     abcbh = "%s/a/b/c/bangalore_hindi.pdf" % base_dir
     abcbg = "%s/a/b/c/bangalore_gujarati.pdf" % base_dir
@@ -137,11 +137,12 @@ def setup(base_dir):
 def test_get_metadata(initialise, config):
     # create temp dir
     tmp_dir = tempfile.mkdtemp(prefix="test_discovery_")
-    config.settings()["crawler"]["base_pdf_path"] = tmp_dir
-    setup(tmp_dir)
+    pdf_dir = "%s/data/pdfs" % tmp_dir
+    config.settings()["crawler"]["base_pdf_path"] = pdf_dir
+    setup(pdf_dir)
 
     sfp = SingleFileProcessor(
-        config, "%s/a/b/c/bangalore_hindi.pdf" % tmp_dir,
+        config, "%s/a/b/c/bangalore_hindi.pdf" % pdf_dir,
         None, None,
         MockPDFProcessor(),
         datetime.datetime.now().isoformat()
@@ -151,7 +152,7 @@ def test_get_metadata(initialise, config):
     assert meta == {'category': 'b', 'type': 't2', 'new': 'c3'}
 
     sfp = SingleFileProcessor(
-        config, "%s/a/b/c/bangalore_gujarati.pdf" % tmp_dir,
+        config, "%s/a/b/c/bangalore_gujarati.pdf" % pdf_dir,
         None, None,
         MockPDFProcessor(),
         datetime.datetime.now().isoformat()
@@ -160,7 +161,7 @@ def test_get_metadata(initialise, config):
     assert meta == {'category': 'b', 'type': 't1'}
 
     sfp = SingleFileProcessor(
-        config, "%s/a/b/bangalore_english.pdf" % tmp_dir,
+        config, "%s/a/b/bangalore_english.pdf" % pdf_dir,
         None, None,
         MockPDFProcessor(),
         datetime.datetime.now().isoformat()
@@ -169,7 +170,7 @@ def test_get_metadata(initialise, config):
     assert meta == {'category': 'b', 'type': 't1'}
 
     abdmld = SingleFileProcessor(
-        config, "%s/a/b/d/multi_language_document.pdf" % tmp_dir,
+        config, "%s/a/b/d/multi_language_document.pdf" % pdf_dir,
         None, None,
         MockPDFProcessor(),
         datetime.datetime.now().isoformat()
@@ -178,7 +179,7 @@ def test_get_metadata(initialise, config):
     assert meta == {'category': 'b', 'type': 't1'}
 
     xbg = SingleFileProcessor(
-        config, "%s/x/bangalore_gujarati.pdf" % tmp_dir,
+        config, "%s/x/bangalore_gujarati.pdf" % pdf_dir,
         None, None,
         MockPDFProcessor(),
         datetime.datetime.now().isoformat()
@@ -189,8 +190,9 @@ def test_get_metadata(initialise, config):
 def test_crawl(initialise, config):
     # create temp dir
     tmp_dir = tempfile.mkdtemp(prefix="test_crawl_")
-    config.settings()["crawler"]["base_pdf_path"] = tmp_dir
-    doc_ids = setup(tmp_dir)
+    pdf_dir = "%s/data/pdfs" % tmp_dir
+    config.settings()["crawler"]["base_pdf_path"] = pdf_dir
+    doc_ids = setup(pdf_dir)
 
     tmp_db_dir = tempfile.mkdtemp(prefix="test_crawl_db_")
     config.settings()["crawler"]["sqlite_db_path"] = "%s/crawl_state.db" % tmp_db_dir
@@ -211,7 +213,7 @@ def test_crawl(initialise, config):
 
     # change the file "a/b/config.json"
     new_config = { "category": "c", "type": "t1", "new": "blah1" }
-    write_config_file("%s/a/b/config.json" % tmp_dir, new_config)
+    write_config_file("%s/a/b/config.json" % pdf_dir, new_config)
     # re-crawl
 
     log_handle.info(f"Test 1: re-crawling after changing config file")

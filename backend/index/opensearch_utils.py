@@ -108,6 +108,8 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
     """
     global _client
     if _client:
+        if force_clean:
+            delete_index(config)
         create_index_if_not_exists(config, _client)
         return _client
 
@@ -138,6 +140,9 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
         # Cache the successfully created client in our module-level variable
         _client = client
         log_handle.info("OpenSearch client initialized and cached successfully.")
+
+        if force_clean:
+            delete_index(config)
 
         # Initialize embedding_model
         get_embedding_model(config)
