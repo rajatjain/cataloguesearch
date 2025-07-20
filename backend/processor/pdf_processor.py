@@ -75,7 +75,7 @@ class PDFProcessor:
                 text = ''
         else:
             text = ''
-            print("Unable to convert filename %s. Please check offline." % (image_file_path))
+            log_handle.error("Unable to convert filename %s. Please check offline." % (image_file_path))
 
         fh = open(txt_file_path, 'w')
         fh.write(text)
