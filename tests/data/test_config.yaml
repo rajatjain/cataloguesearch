@@ -1,0 +1,27 @@
+# Make sure to set the TEST_DATA_DIR and TEST_LLM_API_KEY
+# environment variables before running the tests.
+
+crawler:
+  base_pdf_path: "{TEST_DATA_DIR}/cataloguesearch/pdfs"
+  base_text_path: "{TEST_DATA_DIR}/cataloguesearch/text"
+  tmp_images_path: "{TEST_DATA_DIR}/cataloguesearch/tmp_images"
+  sqlite_db_path: "{TEST_DATA_DIR}/cataloguesearch/db/cataloguesearch.db"
+
+index:
+  opensearch_config: "{TEST_DATA_DIR}/configs/opensearch-config.yaml"
+  chunk_size: 100
+  chunk_overlap: 20
+
+opensearch:
+  host: localhost
+  port: 19200
+  username: admin
+  password: Admin@Password123!
+  index_name: "{INDEX_NAME}"
+
+embedding_model:
+  name: sentence-transformers/all-MiniLM-L6-v2 # faster module for testing
+
+llm_model:
+  name: gemini-2.0-flash
+  api_key: "{TEST_LLM_API_KEY}" # This will be loaded as an environment variable

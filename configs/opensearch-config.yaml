@@ -1,0 +1,62 @@
+# Settings for the OpenSearch index
+settings:
+  # The knn settings must be prefixed with 'index.' and be at the top level
+  "index.knn": true
+
+  # Standard index settings do not have a prefix
+  number_of_shards: 1
+  number_of_replicas: 0
+  analysis:
+    analyzer:
+      hindi_analyzer:
+        tokenizer: standard
+        filter:
+          - lowercase
+          - hindi_stop
+          - indic_normalizer
+      gujarati_analyzer:
+        tokenizer: standard
+        filter:
+          - lowercase
+          - gujarati_stop
+          - indic_normalizer
+    filter:
+      hindi_stop:
+        type: stop
+        stopwords: "_hindi_"
+      gujarati_stop:
+        type: "stop"
+        stopwords: "_gujarati_"
+      indic_normalizer:
+        type: icu_normalizer
+        name: nfkc_cf
+
+# Mappings define the schema for documents in the index
+mappings:
+  properties:
+    document_id:
+      type: keyword
+    original_filename:
+      type: keyword
+    page_number:
+      type: integer
+    chunk_id:
+      type: keyword
+    text_content:
+      type: text
+      analyzer: standard
+    text_content_hindi:
+      type: text
+      analyzer: hindi_analyzer
+    text_content_gujarati:
+      type: text
+      analyzer: gujarati_analyzer
+    metadata:
+      type: object
+    bookmarks:
+      type: text
+    timestamp_indexed:
+      type: date
+    vector_embedding:
+      type: knn_vector
+      dimension: <set_by_embedding_model>
