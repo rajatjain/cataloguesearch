@@ -14,7 +14,7 @@ index:
 
 opensearch:
   host: localhost
-  port: 9200
+  port: 19200
   username: admin
   password: Admin@Password123!
   index_name: "{INDEX_NAME}"
