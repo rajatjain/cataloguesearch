@@ -7,7 +7,10 @@ logging.addLevelName(VERBOSE_LEVEL_NUM, "VERBOSE")
 
 def verbose(self, message, *args, **kws):
     if self.isEnabledFor(VERBOSE_LEVEL_NUM):
-        self._log(VERBOSE_LEVEL_NUM, message, args, **kws)
+        # Call self.log with stacklevel=2. This tells the logging module to go
+        # two frames up the call stack (past this function) to find the
+        # original call site for getting the correct filename and line number.
+        self.log(VERBOSE_LEVEL_NUM, message, *args, stacklevel=2, **kws)
 
 logging.Logger.verbose = verbose
 
@@ -18,11 +21,13 @@ def setup_logging(logs_dir="logs",
     if not os.path.exists(logs_dir):
         os.makedirs(logs_dir)
 
-    log_format = '[%(asctime)s %(levelname)s - %(name)s : %(lineno)d] %(message)s'
+    # Added %(filename)s to show the source file and %(funcName)s for the function.
+    # Replaced %(name)s with the more informative filename.
+    log_format = '[%(asctime)s %(levelname)s - %(filename)s:%(funcName)s : %(lineno)d] %(message)s'
     date_format = '%Y-%m-%d %H:%M:%S'
 
     root_logger = logging.getLogger()
-    root_logger.setLevel(min(console_level, file_level))
+    root_logger.setLevel(min(console_level, file_level, VERBOSE_LEVEL_NUM))
 
     # Clear existing handlers
     if root_logger.hasHandlers():
@@ -44,7 +49,7 @@ def setup_logging(logs_dir="logs",
             log_file_path = os.path.join(logs_dir, f"{module_name}.log")
             file_handler = RotatingFileHandler(
                 log_file_path,
-                maxBytes=10*1024*1024,
+                maxBytes=5*1024*1024,
                 backupCount=5
             )
             file_handler.setLevel(file_level)

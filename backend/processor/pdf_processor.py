@@ -146,6 +146,7 @@ class PDFProcessor:
         """
         saved_text_file_paths = []
         pdf_name = os.path.splitext(os.path.basename(pdf_path))[0]
+        log_handle.verbose(f"pdf_name: {pdf_name} output_dir: {output_dir} images_dir: {images_dir}")
         if not os.path.exists(output_dir):
             log_handle.critical(f"output_dir {output_dir} does not exist. Exiting.")
             return [], {}
@@ -155,7 +156,7 @@ class PDFProcessor:
             log_handle.info(f"Creating image directory: {image_dir}")
             os.makedirs(image_dir, exist_ok=True)
 
-        log_handle.info(f"Processing PDF: {pdf_path}")
+        log_handle.info(f"Converting PDF: {pdf_path}")
 
         try:
             self._convert_pdf_to_images(

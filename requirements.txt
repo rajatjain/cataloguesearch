@@ -12,9 +12,11 @@ google-cloud-vision==3.10.2
 
 # Testing Libraries
 pytest==8.2.2 # Testing framework
-testcontainers[opensearch]==4.11.0 # Specific Testcontainers module for OpenSearch
 
 # Utilities
 python-dotenv==1.0.1 # For managing environment variables (optional, but good practice)
 
 protobuf~=6.31.1
+
+# Docker
+docker==7.1.0 # Docker SDK for Python, useful for container management in tests
