@@ -45,7 +45,7 @@ def test_config_instance(config):
     assert config.CHUNK_SIZE == 100
     assert config.CHUNK_OVERLAP == 20
     assert config.OPENSEARCH_HOST == "localhost"
-    assert config.OPENSEARCH_PORT == 9200
+    assert config.OPENSEARCH_PORT == 19200
     assert config.OPENSEARCH_USERNAME == "admin"
     assert config.OPENSEARCH_PASSWORD == "Admin@Password123!"
     assert config.OPENSEARCH_INDEX_NAME == "document_chunks_unit_test"
