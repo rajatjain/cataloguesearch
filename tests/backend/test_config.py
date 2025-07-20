@@ -24,7 +24,6 @@ def config(initialise):
         os.environ["INDEX_NAME"] = "document_chunks_unit_test"
     log_handle.info(f"INDEX_NAME set to {os.getenv('INDEX_NAME')}")
 
-
     config_file_path = "%s/test_config.yaml" % TEST_DATA_DIR
     if not os.path.exists(config_file_path):
         raise FileNotFoundError(f"Config file not found: {config_file_path}")

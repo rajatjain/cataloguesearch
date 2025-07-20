@@ -4,9 +4,6 @@ import re
 import sys
 
 import yaml
-import logging
-
-logger = logging.getLogger(__name__)
 
 class Config:
     _instance = None
@@ -29,13 +26,33 @@ class Config:
         else:
             return obj
 
+    @staticmethod
+    def _get_project_root():
+        """
+        Returns the root directory of the project.
+        """
+        current_path = os.path.abspath(__file__)
+        dir_path = os.path.dirname(current_path)
+
+        # Define common marker files/directories
+        marker_files = [
+            "pyproject.toml", ".git", "setup.py", "requirements.txt", "LICENSE"
+        ]
+
+        while dir_path != os.path.dirname(dir_path):
+            for marker in marker_files:
+                if os.path.exists(os.path.join(dir_path, marker)):
+                    return dir_path
+            dir_path = os.path.dirname(dir_path)
+        return None
+
     def _load_config(self, config_file_path: str):
         """
         Loads configuration from a YAML file.
         If config_file_path is None or file not found, uses default values.
         """
-        BASE_DIR = os.path.dirname(
-            os.path.dirname(os.path.abspath(__file__)))
+        BASE_DIR = Config._get_project_root()
+        config_file_path = os.path.join(BASE_DIR, config_file_path)
         
         os.environ["BASE_DIR"] = BASE_DIR
         if config_file_path and os.path.exists(config_file_path):
@@ -43,11 +60,12 @@ class Config:
             with open(config_file_path, 'r', encoding='utf-8') as f:
                 self._settings = yaml.safe_load(f)
         else:
-            logger.critical(f"Config file not found at {config_file_path}. Exiting.")
+            print(f"Config file not found at {config_file_path}. Exiting.")
             sys.exit(1)
 
         # Replace placeholders
         self._settings = Config._replace_env_placeholders(self._settings)
+        print(f"Loaded config: {self._settings}")
 
 
     def __getattr__(self, name):

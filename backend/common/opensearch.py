@@ -6,35 +6,28 @@ import yaml
 from opensearchpy import OpenSearch, ConnectionError
 from backend.config import Config  # Adjust the import path as needed
 from sentence_transformers import SentenceTransformer
+from backend.common.embedding_models import get_embedding_model
 
 # --- Module-level variables ---
 # This variable will hold our single, cached client instance.
 _client: OpenSearch | None = None
-_embedding_model: SentenceTransformer | None = None
 _opensearch_settings: dict | None = None
+
 log_handle = logging.getLogger(__name__)
 
-def get_embedding_model(config: Config) -> SentenceTransformer:
-    global _embedding_model
-    if _embedding_model:
-        return _embedding_model
-    model_name = config.EMBEDDING_MODEL_NAME
-    try:
-        _embedding_model = SentenceTransformer(model_name)
-        log_handle.info(f"Embedding model '{model_name}' loaded successfully.")
-        return _embedding_model
-    except Exception as e:
-        log_handle.error(f"Failed to load embedding model '{model_name}': {e}")
-        raise
-
-def create_index_if_not_exists(config, opensearch_client):
+def get_opensearch_config(config: Config) -> dict:
     """
-    Creates the OpenSearch index with a predefined mapping if it doesn't already exist.
-    Includes settings for k-NN and analyzers for Hindi/Gujarati.
+    Loads the OpenSearch configuration from the specified YAML file.
+    If the file does not exist, raises a FileNotFoundError.
+
+    Args:
+        config: Config object containing OpenSearch settings
+
+    Returns:
+        A dictionary containing the OpenSearch configuration settings.
     """
     global _opensearch_settings
     opensearch_config_path = config.OPENSEARCH_CONFIG_PATH
-    index_name = config.OPENSEARCH_INDEX_NAME
     if not opensearch_config_path or not os.path.exists(opensearch_config_path):
         log_handle.critical(
             f"OpenSearch config file not found at {opensearch_config_path}. Exiting.")
@@ -45,13 +38,24 @@ def create_index_if_not_exists(config, opensearch_client):
         log_handle.info(f"Loading OpenSearch config from {opensearch_config_path}")
         with open(opensearch_config_path, 'r', encoding='utf-8') as f:
             _opensearch_settings = yaml.safe_load(f)
-
-    embedding_model_name = get_embedding_model(config).get_sentence_embedding_dimension()
+        log_handle.info(f"Loaded OpenSearch config from {opensearch_config_path}")
+        log_handle.info(f"Open Search settings is {_opensearch_settings}")
 
     _opensearch_settings['mappings']['properties']['vector_embedding']['dimension'] = \
-        embedding_model_name
-    settings = _opensearch_settings.get('settings', {})
-    mappings = _opensearch_settings.get('mappings', {})
+        get_embedding_model(config.EMBEDDING_MODEL_NAME).get_sentence_embedding_dimension()
+
+    return _opensearch_settings
+
+
+def create_index_if_not_exists(config, opensearch_client):
+    """
+    Creates the OpenSearch index with a predefined mapping if it doesn't already exist.
+    Includes settings for k-NN and analyzers for Hindi/Gujarati.
+    """
+    opensearch_config = get_opensearch_config(config)
+    index_name = config.OPENSEARCH_INDEX_NAME
+    settings = opensearch_config.get('settings', {})
+    mappings = opensearch_config.get('mappings', {})
 
     try:
         if not opensearch_client.indices.exists(index_name):
@@ -99,6 +103,9 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
     Args:
         config: A Config object with the OpenSearch connection details.
                 This is only used on the very first call.
+        force_clean: If True, deletes the existing index before creating a new one.
+                     IMPORTANT: ONLY USE THIS PARAM WHILE RUNNING TESTS. OR IF YOU
+                     KNOW WHAT YOU ARE DOING. THIS WILL DELETE ALL DATA IN THE INDEX.
 
     Returns:
         An initialized and connected OpenSearch client.
@@ -145,7 +152,7 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
             delete_index(config)
 
         # Initialize embedding_model
-        get_embedding_model(config)
+        get_embedding_model(config.EMBEDDING_MODEL_NAME)
     except Exception as e:
         traceback.print_exc()
         log_handle.critical(f"Failed to initialize OpenSearch client: {e}")
