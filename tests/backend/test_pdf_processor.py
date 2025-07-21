@@ -11,7 +11,7 @@ from backend.config import Config
 log_handle = logging.getLogger(__name__)
 
 @pytest.mark.slow
-def test_process_pdf_direct_text_extraction(initialise):
+def test_process_pdf_direct_text_extraction():
     """
     Tests direct text extraction from a PDF with embeddable text.
     """

@@ -16,7 +16,7 @@ from tests.backend.base import *
 log_handle = logging.getLogger(__name__)
 
 @pytest.fixture(scope="function")
-def indexing_module(initialise):
+def indexing_module():
     """
     Provides an initialized IndexingEmbeddingModule instance for testing.
     """
@@ -99,7 +99,7 @@ def get_all_documents(config, max_results: int = 1000) -> list:
         return []
 
 
-def test_index_document_full_indexing(initialise, indexing_module):
+def test_index_document_full_indexing(indexing_module):
     """
     Tests full indexing of a document, including text, embeddings, and metadata.
     """
@@ -167,7 +167,7 @@ def test_index_document_full_indexing(initialise, indexing_module):
     assert found_page_two
     assert found_page_three
 
-def test_index_document_metadata_only_reindex(initialise, indexing_module):
+def test_index_document_metadata_only_reindex(indexing_module):
     """
     Tests metadata-only re-indexing for an existing document.
     """
@@ -247,7 +247,7 @@ def test_index_document_metadata_only_reindex(initialise, indexing_module):
     updated_hits = response['hits']['hits']
     assert len(updated_hits) == 2
 
-def test_create_index_if_not_exists(initialise, indexing_module):
+def test_create_index_if_not_exists(indexing_module):
     """
     Tests that the index is created correctly with the specified mappings and settings.
     """
@@ -268,7 +268,7 @@ def test_create_index_if_not_exists(initialise, indexing_module):
     assert 'text_content_hindi' in mappings and mappings['text_content_hindi']['analyzer'] == 'hindi_analyzer'
     assert 'text_content_gujarati' in mappings and mappings['text_content_gujarati']['analyzer'] == 'gujarati_analyzer'
 
-def test_generate_embedding_empty_text(initialise, indexing_module):
+def test_generate_embedding_empty_text(indexing_module):
     """
     Tests embedding generation for empty text.
     """
@@ -277,7 +277,7 @@ def test_generate_embedding_empty_text(initialise, indexing_module):
     assert len(embedding) == \
            get_embedding_model(config.EMBEDDING_MODEL_NAME).get_sentence_embedding_dimension()
 
-def test_chunk_text_basic(initialise, indexing_module):
+def test_chunk_text_basic(indexing_module):
     """
     Tests basic text chunking.
     """

@@ -133,7 +133,7 @@ def setup(base_dir):
 
     return doc_ids
 
-def test_get_metadata(initialise):
+def test_get_metadata():
     config = Config()
     # create temp dir
     tmp_dir = tempfile.mkdtemp(prefix="test_discovery_")
@@ -187,7 +187,7 @@ def test_get_metadata(initialise):
     meta = xbg.get_metadata()
     assert meta == {'category': 'x', 'type': 't3', 'new': 'c4'}
 
-def test_crawl(initialise):
+def test_crawl():
     config = Config()
     # create temp dir
     tmp_dir = tempfile.mkdtemp(prefix="test_crawl_")

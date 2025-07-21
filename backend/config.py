@@ -110,3 +110,11 @@ class Config:
     def settings(self):
         """Returns the raw dictionary of loaded settings."""
         return self._settings
+    
+    @classmethod
+    def reset(cls):
+        """Reset the singleton instance for testing.
+        IMPORTANT: Use it wisely. Mostly for testing purposes only.
+        """
+        cls._instance = None
+        cls._settings = {}

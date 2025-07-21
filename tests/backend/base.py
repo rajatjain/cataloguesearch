@@ -8,22 +8,34 @@ from backend.config import Config
 from backend.utils import json_dumps
 from utils import logger
 
-initialized = False
-
 TEST_BASE_DIR = None
 TEST_LOGS_DIR = None
+TEST_DATA_DIR = None
 
 def get_test_base_dir():
     """
     Returns the base directory for tests.
     This is set in the .env file.
     """
+    global TEST_BASE_DIR
     if TEST_BASE_DIR is None:
         raise ValueError("TEST_BASE_DIR is not set. Please check your .env file.")
     return TEST_BASE_DIR
 
-@pytest.fixture(scope="session", autouse=True)
+def get_test_data_dir():
+    """
+    Returns the data directory for tests.
+    This is set in the .env file.
+    """
+    global TEST_DATA_DIR
+    if TEST_DATA_DIR is None:
+        raise ValueError("TEST_DATA_DIR is not set. Please check your .env file.")
+    return TEST_DATA_DIR
+
+@pytest.fixture(scope="module", autouse=True) 
 def initialise():
+    # Reset Config singleton for each test module
+    Config.reset()
     """
     Sample .env file content:
     ROOT_DIR=${HOME}/cataloguesearch # set the full directory path, not just the var
@@ -33,9 +45,7 @@ def initialise():
     global initialized
     global TEST_BASE_DIR
     global TEST_LOGS_DIR
-
-    if initialized:
-        return
+    global TEST_DATA_DIR
 
     load_dotenv(
         dotenv_path="%s/.env" % os.path.dirname(
@@ -44,6 +54,7 @@ def initialise():
 
     TEST_BASE_DIR = os.getenv("TEST_BASE_DIR")
     TEST_LOGS_DIR = "%s/test_logs" % TEST_BASE_DIR
+    TEST_DATA_DIR = "%s/data" % TEST_BASE_DIR
 
     if TEST_BASE_DIR is None or TEST_LOGS_DIR is None:
         raise ValueError(

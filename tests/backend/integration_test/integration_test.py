@@ -154,7 +154,7 @@ def setup(base_dir):
     return doc_ids
 
 @pytest.mark.integration
-def test_full_integration(initialise):
+def test_full_integration():
     config = integration_test_config()
     assert config.OPENSEARCH_INDEX_NAME == os.getenv("INDEX_NAME")
 
