@@ -4,11 +4,11 @@ This document outlines the design of an API for querying an OpenSearch index, in
 
 ## Table of Contents
 
-1. [API Endpoint Definition](#api-endpoint-definition)
-2. [Request Payload Structure](#request-payload-structure)
-3. [Response Payload Structure](#response-payload-structure)
-4. [High-Level Architecture & Flow](#high-level-architecture--flow)
-5. [Detailed Component Design](#detailed-component-design)
+- [API Endpoint Definition](#api-endpoint-definition)
+- [Request Payload Structure](#request-payload-structure)
+- [Response Payload Structure](#response-payload-structure)
+- [High-Level Architecture & Flow](#high-level-architecture--flow)
+- [Detailed Component Design](#detailed-component-design)
     - [Language Detection Module](#51-language-detection-module)
     - [OpenSearch Query Builder (Lexical)](#52-opensearch-query-builder-lexical)
     - [Embedding Module (Vector)](#53-embedding-module-vector)
@@ -18,7 +18,7 @@ This document outlines the design of an API for querying an OpenSearch index, in
 
 ---
 
-## 1. API Endpoint Definition
+## API Endpoint Definition
 
 - **Endpoint:** `/search`
 - **Method:** `POST`
@@ -26,7 +26,7 @@ This document outlines the design of an API for querying an OpenSearch index, in
 
 ---
 
-## 2. Request Payload Structure
+## Request Payload Structure
 
 The API accepts a JSON payload with the following structure:
 
@@ -52,7 +52,7 @@ The API accepts a JSON payload with the following structure:
 
 ---
 
-## 3. Response Payload Structure
+## Response Payload Structure
 
 The API returns a JSON payload structured as follows:
 
@@ -96,7 +96,7 @@ The API returns a JSON payload structured as follows:
 
 ---
 
-## 4. High-Level Architecture & Flow
+## High-Level Architecture & Flow
 
 The search API follows these steps:
 
@@ -144,9 +144,9 @@ graph TD
 
 ---
 
-## 5. Detailed Component Design
+## Detailed Component Design
 
-### 5.1. Language Detection Module
+### Language Detection Module
 
 - **Purpose:** Identify the primary language of the input keywords (Hindi, Gujarati, or English).
 - **Approach:**
@@ -156,7 +156,7 @@ graph TD
 
 ---
 
-### 5.2. OpenSearch Query Builder (Lexical)
+### OpenSearch Lexical Query Builder
 
 - **Purpose:** Construct the OpenSearch DSL query for lexical search.
 - **Logic:**
@@ -167,7 +167,7 @@ graph TD
 
 ---
 
-### 5.3. Embedding Module (Vector)
+### Vector Embedding Module
 
 - **Purpose:** Convert input keywords into a vector embedding.
 - **Logic:**
@@ -177,7 +177,7 @@ graph TD
 
 ---
 
-### 5.4. OpenSearch Query Builder (Vector)
+### OpenSearch Vector Query Builder
 
 - **Purpose:** Construct OpenSearch DSL query for vector (k-NN) search.
 - **Logic:**
@@ -188,7 +188,7 @@ graph TD
 
 ---
 
-### 5.5. Result Collation and Ranking Module
+### Result Collation and Ranking Module
 
 - **Purpose:** Combine and rank results from lexical and vector searches.
 - **Logic:**
@@ -199,7 +199,7 @@ graph TD
 
 ---
 
-### 5.6. Highlight Word Extraction
+### Highlight Word Extraction
 
 - **Purpose:** Provide a list of words to highlight in the UI.
 - **Logic:**
