@@ -11,9 +11,9 @@ from backend.crawler.discovery import SingleFileProcessor, Discovery
 from backend.crawler.index_state import IndexState
 from backend.index.embedding_module import IndexingEmbeddingModule
 from backend.processor.pdf_processor import PDFProcessor, log_handle
-from backend.utils import json_dump, json_dumps
+from backend.utils import json_dumps
 from tests.backend.base import *
-from tests.backend.test_config import config
+from tests.backend.common import setup, write_config_file
 
 """
 Test Setup:
@@ -58,88 +58,10 @@ class MockPDFProcessor(PDFProcessor):
     ) -> tuple[list[str], dict[int: str]]:
         return [], {}
 
-def write_config_file(file_name, config_data):
-    """
-    Write the given config data to a JSON file.
-    """
-    with open(file_name, 'w') as f:
-        json_dump(config_data, f)
-    log_handle.info(f"Config file written: {file_name}")
-
-def get_doc_id(base_dir, file_path):
-    relative_path = os.path.relpath(file_path, base_dir)
-    doc_id = str(
-        uuid.uuid5(uuid.NAMESPACE_URL, relative_path))
-    return doc_id
-
-def setup(base_dir):
-    os.makedirs("%s/a/b/c" % base_dir, exist_ok=True)
-    os.makedirs("%s/a/b/d" % base_dir, exist_ok=True)
-    os.makedirs("%s/x/y/z" % base_dir, exist_ok=True)
-
-    TEST_BASE_DIR = os.getenv("TEST_BASE_DIR")
-
-    # copy files
-    data_pdf_path = os.path.join(TEST_BASE_DIR, "data", "pdfs")
-    bangalore_hindi = os.path.join(data_pdf_path, "bangalore_hindi.pdf")
-    bangalore_gujarati = os.path.join(data_pdf_path, "bangalore_gujarati.pdf")
-    bangalore_english = os.path.join(data_pdf_path, "bangalore_english.pdf")
-    multi_language_document = os.path.join(data_pdf_path, "multi_language_document.pdf")
-
-    abcbh = "%s/a/b/c/bangalore_hindi.pdf" % base_dir
-    abcbg = "%s/a/b/c/bangalore_gujarati.pdf" % base_dir
-    abbeng = "%s/a/b/bangalore_english.pdf" % base_dir
-    xyzmld = "%s/x/y/z/multi_language_document.pdf" % base_dir
-    abdmld = "%s/a/b/d/multi_language_document.pdf" % base_dir
-    abh = "%s/a/bangalore_hindi.pdf" % base_dir
-    xbg = "%s/x/bangalore_gujarati.pdf" % base_dir
-
-    doc_ids = {
-        "abcbh": [abcbh, get_doc_id(base_dir, abcbh)],
-        "abcbg": [abcbg, get_doc_id(base_dir, abcbg)],
-        "abbeng": [abbeng, get_doc_id(base_dir, abbeng)],
-        "xyzmld": [xyzmld, get_doc_id(base_dir, xyzmld)],
-        "abdmld": [abdmld, get_doc_id(base_dir, abdmld)],
-        "abh": [abh, get_doc_id(base_dir, abh)],
-        "xbg": [xbg, get_doc_id(base_dir, xbg)]
-    }
-
-    shutil.copy(bangalore_hindi, abcbh)
-    shutil.copy(bangalore_gujarati, abcbg)
-    shutil.copy(bangalore_english, abbeng)
-    shutil.copy(multi_language_document, xyzmld)
-    shutil.copy(multi_language_document, abdmld)
-    shutil.copy(bangalore_hindi, abh)
-    shutil.copy(bangalore_gujarati, xbg)
-
-    # create config files
-    a = { "category": "a", "type": "t" }
-    b = { "category": "b", "type": "t1" }
-    # dir c is empty
-    bhc = { "type": "t2", "new": "c3" }
-
-    # dir d is empty
-
-    x = { "category": "x", "type": "tx" }
-    z = { "category": "z", "type": "tz" }
-    bgx = { "type": "t3", "new": "c4" }
-
-    write_config_file("%s/a/config.json" % base_dir, a)
-    write_config_file("%s/a/b/config.json" % base_dir, b)
-    write_config_file("%s/a/b/c/bangalore_hindi_config.json" % base_dir, bhc)
-
-    write_config_file("%s/x/config.json" % base_dir, x)
-    write_config_file("%s/x/y/z/config.json" % base_dir, z)
-    write_config_file("%s/x/bangalore_gujarati_config.json" % base_dir, bgx)
-
-    return doc_ids
-
-def test_get_metadata(initialise, config):
-    # create temp dir
-    tmp_dir = tempfile.mkdtemp(prefix="test_discovery_")
-    pdf_dir = "%s/data/pdfs" % tmp_dir
-    config.settings()["crawler"]["base_pdf_path"] = pdf_dir
-    setup(pdf_dir)
+def test_get_metadata():
+    setup()
+    config = Config()
+    pdf_dir = config.BASE_PDF_PATH
 
     sfp = SingleFileProcessor(
         config, "%s/a/b/c/bangalore_hindi.pdf" % pdf_dir,
@@ -187,15 +109,10 @@ def test_get_metadata(initialise, config):
     meta = xbg.get_metadata()
     assert meta == {'category': 'x', 'type': 't3', 'new': 'c4'}
 
-def test_crawl(initialise, config):
+def test_crawl():
+    config = Config()
     # create temp dir
-    tmp_dir = tempfile.mkdtemp(prefix="test_crawl_")
-    pdf_dir = "%s/data/pdfs" % tmp_dir
-    config.settings()["crawler"]["base_pdf_path"] = pdf_dir
-    doc_ids = setup(pdf_dir)
-
-    tmp_db_dir = tempfile.mkdtemp(prefix="test_crawl_db_")
-    config.settings()["crawler"]["sqlite_db_path"] = "%s/crawl_state.db" % tmp_db_dir
+    doc_ids = setup()
 
     index_state = IndexState(config.SQLITE_DB_PATH)
 
@@ -213,7 +130,7 @@ def test_crawl(initialise, config):
 
     # change the file "a/b/config.json"
     new_config = { "category": "c", "type": "t1", "new": "blah1" }
-    write_config_file("%s/a/b/config.json" % pdf_dir, new_config)
+    write_config_file("%s/a/b/config.json" % config.BASE_PDF_PATH, new_config)
     # re-crawl
 
     log_handle.info(f"Test 1: re-crawling after changing config file")

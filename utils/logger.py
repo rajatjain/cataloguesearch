@@ -39,19 +39,21 @@ def setup_logging(logs_dir="logs",
     console_handler.setFormatter(logging.Formatter(log_format, date_format))
     root_logger.addHandler(console_handler)
 
-    # Module-specific loggers and file handlers
-    modules = ["discovery_module", "indexing_embedding_module", "config_parser", "pdf_processor"]
-    for module_name in modules:
-        logger = logging.getLogger(module_name)
-        logger.setLevel(min(console_level, file_level))
+    if not console_only:
+        # Set up two file handlers: one for INFO+, one for VERBOSE+
+        info_log_path = os.path.join(logs_dir, "info.log")
+        verbose_log_path = os.path.join(logs_dir, "verbose.log")
 
-        if not console_only:
-            log_file_path = os.path.join(logs_dir, f"{module_name}.log")
-            file_handler = RotatingFileHandler(
-                log_file_path,
-                maxBytes=5*1024*1024,
-                backupCount=5
-            )
-            file_handler.setLevel(file_level)
-            file_handler.setFormatter(logging.Formatter(log_format, date_format))
-            logger.addHandler(file_handler)
+        info_handler = RotatingFileHandler(
+            info_log_path, maxBytes=5*1024*1024, backupCount=5
+        )
+        info_handler.setLevel(logging.INFO)
+        info_handler.setFormatter(logging.Formatter(log_format, date_format))
+        root_logger.addHandler(info_handler)
+
+        verbose_handler = RotatingFileHandler(
+            verbose_log_path, maxBytes=5*1024*1024, backupCount=5
+        )
+        verbose_handler.setLevel(VERBOSE_LEVEL_NUM)
+        verbose_handler.setFormatter(logging.Formatter(log_format, date_format))
+        root_logger.addHandler(verbose_handler)

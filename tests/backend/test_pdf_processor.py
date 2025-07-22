@@ -4,20 +4,18 @@ import shutil
 import pytest
 import os
 import tempfile
-from PIL import Image, ImageDraw, ImageFont # For creating dummy images for OCR
-import pytesseract # To check if Tesseract is available
 from backend.processor.pdf_processor import PDFProcessor
 from tests.backend.base import *
-from tests.backend.test_config import config
-
+from backend.config import Config
 # Setup logging once for all tests
 log_handle = logging.getLogger(__name__)
 
 @pytest.mark.slow
-def test_process_pdf_direct_text_extraction(initialise, config):
+def test_process_pdf_direct_text_extraction():
     """
     Tests direct text extraction from a PDF with embeddable text.
     """
+    config = Config()
     processor = PDFProcessor(config)
 
     temp_base_dir = tempfile.mkdtemp(prefix="pdf_processor_test_")

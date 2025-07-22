@@ -4,25 +4,23 @@ import traceback
 from pathlib import Path
 import pytest
 import os
-import shutil
-import json
 import logging
-from opensearchpy import OpenSearch
-from testcontainers import opensearch
-from backend.index.embedding_module import IndexingEmbeddingModule
-from datetime import datetime, timedelta
 
-from backend.index.opensearch_utils import get_opensearch_client
+from backend.common.embedding_models import get_embedding_model, get_embedding
+from backend.index.embedding_module import IndexingEmbeddingModule
+
+from backend.common.opensearch import get_opensearch_client
 from backend.utils import json_dumps
-from tests.backend.test_config import *
+from tests.backend.base import *
 
 log_handle = logging.getLogger(__name__)
 
 @pytest.fixture(scope="function")
-def indexing_module(config):
+def indexing_module():
     """
     Provides an initialized IndexingEmbeddingModule instance for testing.
     """
+    config = Config()
     opensearch_client = get_opensearch_client(config)
     try:
         if opensearch_client.indices.exists(config.OPENSEARCH_INDEX_NAME):
@@ -101,11 +99,12 @@ def get_all_documents(config, max_results: int = 1000) -> list:
         return []
 
 
-def test_index_document_full_indexing(config, indexing_module):
+def test_index_document_full_indexing(indexing_module):
     """
     Tests full indexing of a document, including text, embeddings, and metadata.
     """
     # Re-use the client from above
+    config = Config()
     opensearch_client = get_opensearch_client(config, force_clean=True)
     tmp_path = tempfile.mkdtemp()
     doc_id, filename, page_paths = dummy_text_files(tmp_path)
@@ -143,7 +142,7 @@ def test_index_document_full_indexing(config, indexing_module):
     assert all('vector_embedding' in hit['_source'] for hit in hits)
     assert all(isinstance(hit['_source']['vector_embedding'], list) for hit in hits)
     assert all(len(hit['_source']['vector_embedding']) == \
-               indexing_module._embedding_model.get_sentence_embedding_dimension() for hit in hits)
+               get_embedding_model(config.EMBEDDING_MODEL_NAME).get_sentence_embedding_dimension() for hit in hits)
 
     # Check metadata and text content
     found_page_one = False
@@ -168,10 +167,11 @@ def test_index_document_full_indexing(config, indexing_module):
     assert found_page_two
     assert found_page_three
 
-def test_index_document_metadata_only_reindex(config, indexing_module):
+def test_index_document_metadata_only_reindex(indexing_module):
     """
     Tests metadata-only re-indexing for an existing document.
     """
+    config = Config()
     opensearch_client = get_opensearch_client(config, force_clean=True)
     tmp_path = tempfile.mkdtemp()
     doc_id, filename, page_paths = dummy_text_files(tmp_path)
@@ -247,10 +247,11 @@ def test_index_document_metadata_only_reindex(config, indexing_module):
     updated_hits = response['hits']['hits']
     assert len(updated_hits) == 2
 
-def test_create_index_if_not_exists(config, indexing_module):
+def test_create_index_if_not_exists(indexing_module):
     """
     Tests that the index is created correctly with the specified mappings and settings.
     """
+    config = Config()
     opensearch_client = get_opensearch_client(config)
     index_name = indexing_module._index_name
     assert opensearch_client.indices.exists(index_name)
@@ -263,7 +264,7 @@ def test_create_index_if_not_exists(config, indexing_module):
     assert 'document_id' in mappings and mappings['document_id']['type'] == 'keyword'
     assert 'vector_embedding' in mappings and mappings['vector_embedding']['type'] == 'knn_vector'
     assert mappings['vector_embedding']['dimension'] == \
-           indexing_module._embedding_model.get_sentence_embedding_dimension()
+           get_embedding_model(config.EMBEDDING_MODEL_NAME).get_sentence_embedding_dimension()
     assert 'text_content_hindi' in mappings and mappings['text_content_hindi']['analyzer'] == 'hindi_analyzer'
     assert 'text_content_gujarati' in mappings and mappings['text_content_gujarati']['analyzer'] == 'gujarati_analyzer'
 
@@ -271,9 +272,10 @@ def test_generate_embedding_empty_text(indexing_module):
     """
     Tests embedding generation for empty text.
     """
-    embedding = indexing_module._generate_embedding("")
+    config = Config()
+    embedding = get_embedding(config.EMBEDDING_MODEL_NAME, "")
     assert len(embedding) == \
-           indexing_module._embedding_model.get_sentence_embedding_dimension()
+           get_embedding_model(config.EMBEDDING_MODEL_NAME).get_sentence_embedding_dimension()
 
 def test_chunk_text_basic(indexing_module):
     """

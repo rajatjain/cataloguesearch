@@ -11,12 +11,11 @@ from backend.config import Config
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
 from backend.index.embedding_module import IndexingEmbeddingModule
-from backend.index.opensearch_utils import get_opensearch_client
+from backend.common.opensearch import get_opensearch_client
 from backend.processor.pdf_processor import PDFProcessor
 from backend.utils import json_dump, json_dumps
 from tests.backend.base import *
-
-# TODO(rajatjain): De-duplicate the code between this files and test_discovery.py
+from tests.backend import common
 
 log_handle = logging.getLogger(__name__)
 
@@ -24,153 +23,14 @@ log_handle = logging.getLogger(__name__)
 # comment it out if you need to debug something.
 logging.getLogger('opensearch').setLevel(logging.WARNING)
 
-def integration_test_config(initialize):
-    load_dotenv(
-        dotenv_path="%s/.env" % os.path.dirname(__file__),
-        verbose=True,
-    )
-    config_file_path = "%s/test_config.yaml" % os.getenv("TEST_DATA_DIR")
-    log_handle.info(f"Using config file: {config_file_path}")
-    log_handle.info(f"Using index name: {os.getenv('INDEX_NAME')}")
-
-    return Config(config_file_path)
-
-def get_doc_id(base_dir, file_path):
-    relative_path = os.path.relpath(file_path, base_dir)
-    doc_id = str(
-        uuid.uuid5(uuid.NAMESPACE_URL, relative_path))
-    return doc_id
-
-def write_config_file(file_name, config_data):
-    """
-    Write the given config data to a JSON file.
-    """
-    with open(file_name, 'w') as f:
-        json_dump(config_data, f)
-    log_handle.info(f"Config file written: {file_name}")
-
-def get_all_documents(config, max_results: int = 1000) -> list:
-    """
-    Retrieves all documents from the configured OpenSearch index.
-
-    Args:
-        config: The application configuration object, which contains OpenSearch settings.
-        max_results: The maximum number of documents to return. Be aware that
-                     very large numbers can impact performance. For retrieving
-                     all documents from a large index, consider implementing
-                     the OpenSearch Scroll API.
-
-    Returns:
-        A list of the documents found in the index. Each document is a dictionary.
-        Returns an empty list if an error occurs.
-    """
-    try:
-        # Initialize the OpenSearch client and get the index name from the config
-        opensearch_client = get_opensearch_client(config)
-        index_name = config.OPENSEARCH_INDEX_NAME
-
-        # Define the search query to match all documents
-        search_body = {
-            "size": max_results,
-            "query": {
-                "match_all": {}
-            }
-        }
-
-        # Execute the search query
-        response = opensearch_client.search(
-            index=index_name,
-            body=search_body
-        )
-
-        # The search results are in the 'hits' field of the response
-        return response['hits']['hits']
-
-    except Exception as e:
-        print(f"An error occurred while querying OpenSearch: {e}")
-        return []
-
-
-def setup(base_dir):
-    os.makedirs("%s/a/b/c" % base_dir, exist_ok=True)
-    os.makedirs("%s/a/b/d" % base_dir, exist_ok=True)
-    os.makedirs("%s/x/y/z" % base_dir, exist_ok=True)
-
-    TEST_BASE_DIR = os.getenv("TEST_BASE_DIR")
-
-    # copy files
-    data_pdf_path = os.path.join(TEST_BASE_DIR, "data", "pdfs")
-    bangalore_hindi = os.path.join(data_pdf_path, "bangalore_hindi.pdf")
-    bangalore_gujarati = os.path.join(data_pdf_path, "bangalore_gujarati.pdf")
-    bangalore_english = os.path.join(data_pdf_path, "bangalore_english.pdf")
-    multi_language_document = os.path.join(data_pdf_path, "multi_language_document.pdf")
-
-    abcbh = "%s/a/b/c/bangalore_hindi.pdf" % base_dir
-    abcbg = "%s/a/b/c/bangalore_gujarati.pdf" % base_dir
-    abbeng = "%s/a/b/bangalore_english.pdf" % base_dir
-    xyzmld = "%s/x/y/z/multi_language_document.pdf" % base_dir
-    abdmld = "%s/a/b/d/multi_language_document.pdf" % base_dir
-    abh = "%s/a/bangalore_hindi.pdf" % base_dir
-    xbg = "%s/x/bangalore_gujarati.pdf" % base_dir
-
-    doc_ids = {
-        "abcbh": [abcbh, get_doc_id(base_dir, abcbh)],
-        "abcbg": [abcbg, get_doc_id(base_dir, abcbg)],
-        "abbeng": [abbeng, get_doc_id(base_dir, abbeng)],
-        "xyzmld": [xyzmld, get_doc_id(base_dir, xyzmld)],
-        "abdmld": [abdmld, get_doc_id(base_dir, abdmld)],
-        "abh": [abh, get_doc_id(base_dir, abh)],
-        "xbg": [xbg, get_doc_id(base_dir, xbg)]
-    }
-
-    shutil.copy(bangalore_hindi, abcbh)
-    shutil.copy(bangalore_gujarati, abcbg)
-    shutil.copy(bangalore_english, abbeng)
-    shutil.copy(multi_language_document, xyzmld)
-    shutil.copy(multi_language_document, abdmld)
-    shutil.copy(bangalore_hindi, abh)
-    shutil.copy(bangalore_gujarati, xbg)
-
-    # create config files
-    a = { "category": "a", "type": "t" }
-    b = { "category": "b", "type": "t1" }
-    # dir c is empty
-    bhc = { "type": "t2", "new": "c3" }
-
-    # dir d is empty
-
-    x = { "category": "x", "type": "tx" }
-    z = { "category": "z", "type": "tz" }
-    bgx = { "type": "t3", "new": "c4" }
-
-    write_config_file("%s/a/config.json" % base_dir, a)
-    write_config_file("%s/a/b/config.json" % base_dir, b)
-    write_config_file("%s/a/b/c/bangalore_hindi_config.json" % base_dir, bhc)
-
-    write_config_file("%s/x/config.json" % base_dir, x)
-    write_config_file("%s/x/y/z/config.json" % base_dir, z)
-    write_config_file("%s/x/bangalore_gujarati_config.json" % base_dir, bgx)
-
-    return doc_ids
-
 @pytest.mark.integration
-def test_full_integration(initialise):
-    config = integration_test_config(initialise)
-    assert config.OPENSEARCH_INDEX_NAME == os.getenv("INDEX_NAME")
-
-    test_dir = tempfile.mkdtemp(prefix="test_integration_test_")
-    pdf_dir = "%s/data/pdfs" % test_dir
-    config.settings()["crawler"]["base_pdf_path"] = pdf_dir
-    config.settings()["crawler"]["base_text_path"] = "%s/data/text" % test_dir
-    config.settings()["crawler"]["tmp_images_path"] = "%s/data/images" % test_dir
-    doc_ids = setup(pdf_dir)
-
-    tmp_db_dir = tempfile.mkdtemp(prefix="test_integration_test_db_")
-    config.settings()["crawler"]["sqlite_db_path"] = "%s/crawl_state.db" % tmp_db_dir
-
+def test_full_integration():
+    config = Config()
+    doc_ids = common.setup()
     index_state = IndexState(config.SQLITE_DB_PATH)
-
     opensearch_client = get_opensearch_client(config, force_clean=True)
+
+    log_handle.info(f"Starting discovery with config: {json_dumps(config._settings)}")
 
     discovery = Discovery(
         config,
@@ -279,8 +139,8 @@ def test_full_integration(initialise):
     # change metadata file of one folder. reindex. confirm that things have changed.
     log_handle.info(f"Test 4: re-crawling after changing metadata")
     new_config = {"category": "updated_category", "type": "t1", "new": "blah"}
-    write_config_file("%s/a/b/config.json" % pdf_dir, new_config)
-    os_old_docs = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)
+    common.write_config_file("%s/a/b/config.json" % config.BASE_PDF_PATH, new_config)
+    os_old_docs = common.get_all_documents()
     discovery.crawl()
 
     changed_keys = [
@@ -290,7 +150,7 @@ def test_full_integration(initialise):
         doc_ids["abdmld"][1]
     ]
     opensearch_client.indices.refresh(index=config.OPENSEARCH_INDEX_NAME)
-    os_new_docs = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)
+    os_new_docs = common.get_all_documents()
     validate_changed_docs_timestamp(
         os_old_docs, os_new_docs, changed_keys, None,
     )
@@ -331,13 +191,13 @@ def test_full_integration(initialise):
     xbg = { "category": "c", "type": "t3", "new": "blah2" }
     fname = doc_ids["xbg"][0]
     config_fname = fname.replace(".pdf", "_config.json")
-    write_config_file(config_fname, xbg)
+    common.write_config_file(config_fname, xbg)
 
     changed_keys = [doc_ids["xbg"][1]]
-    os_old_docs = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)
+    os_old_docs = common.get_all_documents()
     discovery.crawl()
     opensearch_client.indices.refresh(index=config.OPENSEARCH_INDEX_NAME)
-    os_new_docs = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)
+    os_new_docs = common.get_all_documents()
     validate_changed_docs_timestamp(
         os_old_docs, os_new_docs, changed_keys, None,
     )
@@ -451,14 +311,14 @@ def test_full_integration(initialise):
 
     # add a file. it should be indexed
     log_handle.info(f"Test 8: re-crawling after adding a file")
-    new_file_path = "%s/x/y/test_8_file.pdf" % pdf_dir
+    new_file_path = "%s/x/y/test_8_file.pdf" % config.BASE_PDF_PATH
     shutil.copy(doc_ids["abdmld"][0], new_file_path)
 
-    os_all_docs_old = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)
+    os_all_docs_old = common.get_all_documents()
     validate_total_num_docs(os_all_docs_old, 7)
     discovery.crawl()
     opensearch_client.indices.refresh(index=config.OPENSEARCH_INDEX_NAME)
-    os_all_docs_new = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)
+    os_all_docs_new = common.get_all_documents()
     validate_total_num_docs(os_all_docs_new, 8)
     validate_changed_docs_timestamp(
         os_all_docs_old, os_all_docs_new, None, [doc_ids["abdmld"][1]]
