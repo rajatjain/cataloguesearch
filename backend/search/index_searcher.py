@@ -161,6 +161,7 @@ class IndexSearcher:
             f"Vector query: {json_dumps(query_body, truncate_fields=['vector'])}")
 
         category_filters = self._build_category_filters(categories)
+        log_handle.verbose(f"Category filters: {category_filters}")
         if category_filters:
             # k-NN with filters requires a 'post_filter' or combining with a 'bool' query
             # For simplicity, we'll use a bool query with filter.
@@ -179,7 +180,7 @@ class IndexSearcher:
 
     def _extract_results(
             self, hits: List[Dict[str, Any]],
-            is_lexical: bool = True) -> List[Dict[str, Any]]:
+            is_lexical: bool = True, language=None) -> List[Dict[str, Any]]:
         """
         Extracts relevant information from OpenSearch hits.
 
@@ -211,8 +212,10 @@ class IndexSearcher:
                     log_handle.warning(f"No highlight found for expected text fields in hit {document_id}. Using raw content.")
                     content_snippet = source.get(self._text_fields.get('en'), '') + '...' # Fallback to raw snippet
 
-            elif not is_lexical: # For vector search, we might just take a snippet of the content
-                content_snippet = source.get(self._text_fields.get('en'), '') + '...' # Fallback to raw snippet
+            elif not is_lexical:
+                # For vector search, we might just take a snippet of the content
+                field = self._text_fields.get('en')
+                content_snippet = source.get(field)
 
             # Extract metadata, handling potential missing 'metadata' key
             metadata = source.get(self._metadata_prefix, {})
@@ -227,7 +230,6 @@ class IndexSearcher:
                 "page_number": source.get('page_number'),
                 "content_snippet": content_snippet,
                 "score": score,
-                "source_file": source.get('source_file'),
                 "metadata": source.get(self._metadata_prefix, {})
             })
         return extracted
@@ -269,7 +271,7 @@ class IndexSearcher:
 
     def perform_vector_search(
             self, embedding: List[float], categories: Dict[str, List[str]],
-            page_size: int, page_number: int) -> Tuple[List[Dict[str, Any]], int]:
+            page_size: int, page_number: int, language) -> Tuple[List[Dict[str, Any]], int]:
         """
         Performs a vector (k-NN) search in OpenSearch.
 
@@ -293,12 +295,11 @@ class IndexSearcher:
                 from_=from_
             )
             hits = response.get('hits', {}).get('hits', [])
+            log_handle.verbose(f"Vector search response: {json_dumps(response, truncate_fields=['vector_embedding'])}")
             total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
             log_handle.info(f"Vector search executed. Total hits: {total_hits}.")
-            return self._extract_results(hits, is_lexical=False), total_hits
+            return self._extract_results(hits, is_lexical=False, language=language), total_hits
         except Exception as e:
             log_handle.error(f"Error during vector search: {e}", exc_info=True)
             return [], 0
-
-
 

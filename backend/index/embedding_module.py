@@ -166,13 +166,14 @@ class IndexingEmbeddingModule:
                     language = metadata.get("language", None)
                     if language is None:
                         language = language_detector.LanguageDetector.detect_language(chunk_text)
-                        log_handle.debug(f"Detected language {language} for chunk {chunk_id}: {chunk_text[:50]}...")
                     doc["language"] = language
                     if "language" == "hi+gu":
                         doc[self._index_keys_per_lang["hi"]] = chunk_text
                         doc[self._index_keys_per_lang["gu"]] = chunk_text
+                        log_handle.verbose(f"Hindi and Gujarati text for chunk {chunk_id}: {chunk_text[:50]}...")
                     else:
                         doc[self._index_keys_per_lang[language]] = chunk_text
+                        log_handle.verbose(f"{language.upper()} text for chunk {chunk_id}: {chunk_text[:50]}...")
 
                     # Index the document
                     try:

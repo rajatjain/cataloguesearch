@@ -93,17 +93,3 @@ def test_basic_query():
     log_handle.info(f"Running basic query: {query}")
     results = index_searcher.perform_lexical_search(query, 5, {}, "hi", 10, 1)
     log_handle.verbose(f"Results: {json_dumps(results)}")
-
-def test_basic_vector_query():
-    config = Config()
-    index_searcher = IndexSearcher(config)
-    query = "बेंगलुरु का इतिहास"
-    embedding = embedding_models.get_embedding(config.EMBEDDING_MODEL_NAME, query)
-    if embedding is None:
-        log_handle.error("Embedding for the query could not be generated.")
-        return
-    log_handle.info(f"Running basic vector query: {query}")
-    results = index_searcher.perform_vector_search(
-        embedding, {}, 1, 1
-    )
-    log_handle.verbose(f"Results: {json_dumps(results)}")

@@ -114,12 +114,12 @@ def vector_search(query):
         log_handle.error("Embedding for the query could not be generated.")
         return
     log_handle.info(f"Running basic vector query: {query}")
-    results = index_searcher.perform_vector_search(
-        embedding, {}, 1, 1)
+    results, _ = index_searcher.perform_vector_search(
+        embedding, {}, 10, 1, "hi")
     log_handle.info(f"Results: {json_dumps(results)}")
 
-# init()
-# build_index()
+init()
+build_index()
 
 
-vector_search("बेंगलुरु और मैसूर में संबंध")
+vector_search("बंगलुरु को गार्डन सिटी क्यों कहते है?")
