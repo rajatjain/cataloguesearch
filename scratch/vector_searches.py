@@ -114,12 +114,23 @@ def vector_search(query):
         log_handle.error("Embedding for the query could not be generated.")
         return
     log_handle.info(f"Running basic vector query: {query}")
-    results = index_searcher.perform_vector_search(
-        embedding, {}, 1, 1)
+    results, _ = index_searcher.perform_vector_search(
+        embedding, {}, 10, 1, "hi")
+    log_handle.info(f"Results: {json_dumps(results)}")
+
+def lexical_search(query, categories={}):
+    init()
+    config = Config()
+    index_searcher = IndexSearcher(config)
+    log_handle.info(f"Index Name: {config.OPENSEARCH_INDEX_NAME}")
+
+    log_handle.info(f"Running basic lexical query: {query}")
+    results, _ = index_searcher.perform_lexical_search(
+        query, 30, categories, "hi", 10, 1)
     log_handle.info(f"Results: {json_dumps(results)}")
 
 # init()
 # build_index()
 
-
-vector_search("बेंगलुरु और मैसूर में संबंध")
+query = "बढ़ते जलवायु"
+lexical_search(query, categories={"type": ["tx"]})

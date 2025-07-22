@@ -1,5 +1,6 @@
 import tempfile
 import traceback
+import uuid
 
 from pathlib import Path
 import pytest
@@ -292,3 +293,115 @@ def test_chunk_text_basic(indexing_module):
     assert all(len(chunk) <= indexing_module._chunk_size for chunk in chunks)
     assert chunks[0].startswith("a a a a a")
     assert chunks[1].startswith("a a a a a") # Should have overlap
+
+
+def test_index_with_language_metadata(indexing_module):
+    # clean index
+    config = Config()
+    opensearch_client = get_opensearch_client(config, force_clean=True)
+    text_data_dir = config.BASE_TEXT_PATH
+    bangalore_hindi = os.path.join(text_data_dir, "bangalore_hindi")
+    bangalore_gujarati = os.path.join(text_data_dir, "bangalore_gujarati")
+    log_handle.info(f"text_data_dir: {text_data_dir}")
+    log_handle.info(f"bangalore_hindi: {bangalore_hindi}")
+    log_handle.info(f"bangalore_gujarati: {bangalore_gujarati}")
+
+    # iterate through the text files in the directory
+    bangalore_hindi_files = []
+    for root, dirs, files in os.walk(bangalore_hindi):
+        for file in files:
+            if file.endswith(".txt"):
+                bangalore_hindi_files.append(os.path.join(root, file))
+
+    bangalore_gujarati_files = []
+    for root, dirs, files in os.walk(bangalore_gujarati):
+        for file in files:
+            if file.endswith(".txt"):
+                bangalore_gujarati_files.append(os.path.join(root, file))
+
+    # Index Hindi document
+    doc_id_hindi = str(uuid.uuid5(uuid.NAMESPACE_DNS, "bangalore_hindi.pdf"))
+    doc_id_gujarati = str(uuid.uuid5(uuid.NAMESPACE_DNS, "bangalore_gujarati.pdf"))
+
+    log_handle.info(f"bangalore_hindi_files: {bangalore_hindi_files}")
+    log_handle.info(f"bangalore_gujarati_files: {bangalore_gujarati_files}")
+    # index documents
+    indexing_module.index_document(
+        doc_id_hindi, "bangalore_hindi.pdf", bangalore_hindi_files,
+        {"language": "hi"}, {}, reindex_metadata_only=False)
+
+    indexing_module.index_document(
+        doc_id_gujarati, "bangalore_gujarati.pdf", bangalore_gujarati_files,
+        {"language": "gu"}, {}, reindex_metadata_only=False)
+
+    # get all docs
+    all_docs = get_all_documents(config)
+
+    for doc in all_docs:
+        log_handle.info(f"Document: {json_dumps(doc, truncate_fields=['vector_embedding'])}")
+        source = doc['_source']
+        if source['document_id'] == doc_id_hindi:
+            assert source['metadata']['language'] == 'hi'
+            assert 'text_content_hindi' in source
+            assert 'text_content_gujarati' not in source
+        elif source['document_id'] == doc_id_gujarati:
+            assert source['metadata']['language'] == 'gu'
+            assert 'text_content_gujarati' in source
+            assert 'text_content_hindi' not in source
+        else:
+            pytest.fail(f"Unexpected document ID: {source['document_id']}")
+
+
+def test_index_with_language_detection(indexing_module):
+    # clean index
+    config = Config()
+    opensearch_client = get_opensearch_client(config, force_clean=True)
+    text_data_dir = config.BASE_TEXT_PATH
+    bangalore_hindi = os.path.join(text_data_dir, "bangalore_hindi")
+    bangalore_gujarati = os.path.join(text_data_dir, "bangalore_gujarati")
+    log_handle.info(f"text_data_dir: {text_data_dir}")
+    log_handle.info(f"bangalore_hindi: {bangalore_hindi}")
+    log_handle.info(f"bangalore_gujarati: {bangalore_gujarati}")
+
+    # iterate through the text files in the directory
+    bangalore_hindi_files = []
+    for root, dirs, files in os.walk(bangalore_hindi):
+        for file in files:
+            if file.endswith(".txt"):
+                bangalore_hindi_files.append(os.path.join(root, file))
+
+    bangalore_gujarati_files = []
+    for root, dirs, files in os.walk(bangalore_gujarati):
+        for file in files:
+            if file.endswith(".txt"):
+                bangalore_gujarati_files.append(os.path.join(root, file))
+
+    # Index Hindi document
+    doc_id_hindi = str(uuid.uuid5(uuid.NAMESPACE_DNS, "bangalore_hindi.pdf"))
+    doc_id_gujarati = str(uuid.uuid5(uuid.NAMESPACE_DNS, "bangalore_gujarati.pdf"))
+
+    log_handle.info(f"bangalore_hindi_files: {bangalore_hindi_files}")
+    log_handle.info(f"bangalore_gujarati_files: {bangalore_gujarati_files}")
+    # index documents
+    indexing_module.index_document(
+        doc_id_hindi, "bangalore_hindi.pdf", bangalore_hindi_files,
+        {}, {}, reindex_metadata_only=False)
+
+    indexing_module.index_document(
+        doc_id_gujarati, "bangalore_gujarati.pdf", bangalore_gujarati_files,
+        {}, {}, reindex_metadata_only=False)
+
+    # get all docs
+    all_docs = get_all_documents(config)
+
+    for doc in all_docs:
+        log_handle.info(f"Document: {json_dumps(doc, truncate_fields=['vector_embedding'])}")
+        source = doc['_source']
+        if source['document_id'] == doc_id_hindi:
+            assert 'text_content_hindi' in source
+            assert 'text_content_gujarati' not in source
+        elif source['document_id'] == doc_id_gujarati:
+            assert 'text_content_gujarati' in source
+            assert 'text_content_hindi' not in source
+        else:
+            pytest.fail(f"Unexpected document ID: {source['document_id']}")

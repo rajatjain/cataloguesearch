@@ -24,7 +24,7 @@ log_handle = logging.getLogger(__name__)
 logging.getLogger('opensearch').setLevel(logging.WARNING)
 
 @pytest.mark.integration
-def test_full_integration():
+def test_full_integration(initialise):
     config = Config()
     doc_ids = common.setup()
     index_state = IndexState(config.SQLITE_DB_PATH)
@@ -386,11 +386,13 @@ def parse_opensearch_hits(hits_list):
             timestamp_str = source.get("timestamp_indexed")
             bookmarks = source.get("bookmarks")
             document_id = source.get("document_id") # Keep this for special comparison
+            filename = source.get("original_filename")
 
             parsed_data[_id] = {
                 "timestamp_indexed": timestamp_str,
                 "bookmarks": bookmarks,
-                "document_id": document_id # Store it for later special handling
+                "document_id": document_id,
+                "filename": filename
             }
     return parsed_data
 
@@ -433,15 +435,16 @@ def validate_changed_docs_timestamp(
     parsed_old_hits = parse_opensearch_hits(old_hits)
     parsed_new_hits = parse_opensearch_hits(new_hits)
 
+
     for doc_id in parsed_old_hits:
         if ignore_keys and doc_id in ignore_keys:
             continue
         old_data = parsed_old_hits[doc_id]
         new_data = parsed_new_hits[doc_id]
 
-        if changed_keys and doc_id in changed_keys:
-            assert old_data["indexed_timestamp"] != new_data["indexed_timestamp"], \
+        if changed_keys and old_data["document_id"] in changed_keys:
+            assert old_data["timestamp_indexed"] != new_data["timestamp_indexed"], \
                 f"Timestamp for {doc_id} did not change as expected."
         else:
-            assert old_data["indexed_timestamp"] == new_data["indexed_timestamp"], \
+            assert old_data["timestamp_indexed"] == new_data["timestamp_indexed"], \
                 f"Timestamp for {doc_id} changed unexpectedly."

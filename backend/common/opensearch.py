@@ -65,8 +65,6 @@ def create_index_if_not_exists(config, opensearch_client):
                     "mappings": mappings,
                 })
             log_handle.info(f"Index '{index_name}' created: {response}")
-        else:
-            log_handle.info(f"Index '{index_name}' already exists.")
     except Exception as e:
         log_handle.critical(f"Error creating index '{index_name}': {e}")
         raise

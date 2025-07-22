@@ -1,9 +1,13 @@
 import logging
+import traceback
+
+import langdetect
 from opensearchpy import OpenSearch
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from backend.common.embedding_models import get_embedding
 import hashlib
 from datetime import datetime, timezone
+from backend.common import language_detector
 
 from backend.config import Config
 
@@ -33,6 +37,12 @@ class IndexingEmbeddingModule:
             length_function=len,
             is_separator_regex=False,
         )
+
+        self._index_keys_per_lang = {
+            "hi": "text_content_hindi",
+            "en": "text_content",
+            "gu": "text_content_gujarati"
+        }
         log_handle.info(
             f"Text splitter initialized with chunk_size={self._chunk_size}, chunk_overlap={self._chunk_overlap}.")
 
@@ -147,13 +157,23 @@ class IndexingEmbeddingModule:
                         "page_number": page_number,
                         "chunk_id": chunk_id,
                         "text_content": chunk_text,
-                        "text_content_hindi": chunk_text, # For Hindi analyzer
-                        "text_content_gujarati": chunk_text, # For Gujarati analyzer
                         "metadata": metadata,
                         "bookmarks": page_bookmark,
                         "timestamp_indexed": timestamp,
                         "vector_embedding": embedding
                     }
+
+                    language = metadata.get("language", None)
+                    if language is None:
+                        language = language_detector.LanguageDetector.detect_language(chunk_text)
+                    doc["language"] = language
+                    if "language" == "hi+gu":
+                        doc[self._index_keys_per_lang["hi"]] = chunk_text
+                        doc[self._index_keys_per_lang["gu"]] = chunk_text
+                        log_handle.verbose(f"Hindi and Gujarati text for chunk {chunk_id}: {chunk_text[:50]}...")
+                    else:
+                        doc[self._index_keys_per_lang[language]] = chunk_text
+                        log_handle.verbose(f"{language.upper()} text for chunk {chunk_id}: {chunk_text[:50]}...")
 
                     # Index the document
                     try:
@@ -170,5 +190,6 @@ class IndexingEmbeddingModule:
             except FileNotFoundError:
                 log_handle.error(f"Page text file not found: {page_path}. Skipping.")
             except Exception as e:
+                traceback.print_exc()
                 log_handle.error(f"Error processing page {page_path} for indexing: {e}")
             log_handle.info(f"Finished full indexing for document {document_id}.")

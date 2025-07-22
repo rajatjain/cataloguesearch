@@ -1,24 +1,58 @@
-import pytest
+from backend.common.language_detector import LanguageDetector
+from backend.common.opensearch import get_opensearch_client
+from backend.index.embedding_module import IndexingEmbeddingModule
+from tests.backend.base import *
+import logging
 
-from backend.search.language_detector import LanguageDetector
+log_handle = logging.getLogger(__name__)
 
 def test_language_detector_hindi():
     text = "यह एक हिंदी वाक्य है।"
     detected_language = LanguageDetector.detect_language(text)
-    assert detected_language == 'hindi'
+    assert detected_language == 'hi'
 
 def test_language_detector_gujarati():
     text = "આ એક ગુજરાતી વાક્ય છે."
     detected_language = LanguageDetector.detect_language(text)
-    assert detected_language == 'gujarati'
+    assert detected_language == 'gu'
 
 def test_language_detector_mixed():
     text = "This is an English sentence mixed with हिंदी."
     detected_language = LanguageDetector.detect_language(text)
-    assert detected_language == 'english'
+    assert detected_language == 'en'
 
 def test_language_detector_hindi_gujarati():
     text = "यह एक हिंदी वाक्य है। આ એક ગુજરાતી વાક્ય છે."
     detected_language = LanguageDetector.detect_language(text)
-    assert detected_language in ["hindi", "gujarati"]
+    assert detected_language in ["hi", "gu"]
 
+def test_language_detection_test_data_files():
+    bangalore_hindi_path = Config().BASE_TEXT_PATH + "/bangalore_hindi"
+    bangalore_gujarati_path = Config().BASE_TEXT_PATH + "/bangalore_gujarati"
+
+    bangalore_hindi_files = []
+    for root, dirs, files in os.walk(bangalore_hindi_path):
+        for file in files:
+            if file.endswith(".txt"):
+                bangalore_hindi_files.append(os.path.join(root, file))
+
+    bangalore_gujarati_files = []
+    for root, dirs, files in os.walk(bangalore_gujarati_path):
+        for file in files:
+            if file.endswith(".txt"):
+                bangalore_gujarati_files.append(os.path.join(root, file))
+
+    assert len(bangalore_hindi_files) > 0
+    assert len(bangalore_gujarati_files) > 0
+
+    indexing_module = IndexingEmbeddingModule(Config(), get_opensearch_client(Config()))
+    mp = {"hi": bangalore_hindi_files, "gu": bangalore_gujarati_files}
+    for lang in mp.keys():
+        files = mp[lang]
+        for file in files:
+            chunks = indexing_module._chunk_text(open(file, 'r', encoding='utf-8').read())
+            assert len(chunks) > 0
+            for chunk in chunks:
+                language = LanguageDetector.detect_language(chunk)
+                log_handle.info(f"detected language: {language} for chunk: {chunk[:50]}...")
+                assert language == lang, f"Detected language {language} for chunk: {chunk[:50]}..."
