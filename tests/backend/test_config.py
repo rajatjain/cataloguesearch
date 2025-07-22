@@ -16,10 +16,10 @@ def test_config_instance():
     index_name = os.getenv("INDEX_NAME")
 
     assert isinstance(config, Config)
-    assert config.BASE_PDF_PATH == "%s/cataloguesearch/pdfs" % get_test_data_dir()
-    assert config.BASE_TEXT_PATH == "%s/cataloguesearch/text" % get_test_data_dir()
-    assert config.CHUNK_SIZE == 100
-    assert config.CHUNK_OVERLAP == 20
+    assert config.BASE_PDF_PATH == "%s/pdfs" % get_test_data_dir()
+    assert config.BASE_TEXT_PATH == "%s/text" % get_test_data_dir()
+    assert config.CHUNK_SIZE == 500
+    assert config.CHUNK_OVERLAP == 50
     assert config.OPENSEARCH_HOST == "localhost"
     assert config.OPENSEARCH_PORT == 19200
     assert config.OPENSEARCH_USERNAME == "admin"

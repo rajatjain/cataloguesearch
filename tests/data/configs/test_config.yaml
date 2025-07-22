@@ -2,15 +2,15 @@
 # environment variables before running the tests.
 
 crawler:
-  base_pdf_path: "{TEST_DATA_DIR}/cataloguesearch/pdfs"
-  base_text_path: "{TEST_DATA_DIR}/cataloguesearch/text"
-  tmp_images_path: "{TEST_DATA_DIR}/cataloguesearch/tmp_images"
-  sqlite_db_path: "{TEST_DATA_DIR}/cataloguesearch/db/cataloguesearch.db"
+  base_pdf_path: "{TEST_DATA_DIR}/pdfs"
+  base_text_path: "{TEST_DATA_DIR}/text"
+  tmp_images_path: "{TEST_DATA_DIR}/tmp_images"
+  sqlite_db_path: "{TEST_DATA_DIR}/db/cataloguesearch.db"
 
 index:
   opensearch_config: "{TEST_DATA_DIR}/configs/opensearch-config.yaml"
-  chunk_size: 100
-  chunk_overlap: 20
+  chunk_size: 500
+  chunk_overlap: 50
 
 opensearch:
   host: localhost
