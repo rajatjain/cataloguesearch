@@ -93,3 +93,62 @@ def test_basic_query():
     log_handle.info(f"Running basic query: {query}")
     results = index_searcher.perform_lexical_search(query, 5, {}, "hi", 10, 1)
     log_handle.verbose(f"Results: {json_dumps(results)}")
+
+def test_multi_phrase_query():
+    config = Config()
+    index_searcher = IndexSearcher(config)
+    query = "बढ़ते जलवायु"
+
+    log_handle.info(f"Running multi-phrase query: {query}")
+    results, _ = index_searcher.perform_lexical_search(query, 30, {}, "hi", 10, 1)
+    log_handle.verbose(f"Results: {json_dumps(results)}")
+    assert len(results) == 2
+
+def test_category_query():
+    config = Config()
+    index_searcher = IndexSearcher(config)
+    query = "बेंगलुरु सुल्तान"
+
+    log_handle.info(f"Running category query: {query}")
+    results, _ = index_searcher.perform_lexical_search(
+        query, 30, {"type": ["t2"]}, "hi", 10, 1)
+    log_handle.verbose(f"Results: {json_dumps(results)}")
+    assert len(results) == 2
+
+def test_vector_search():
+    config = Config()
+    index_searcher = IndexSearcher(config)
+    query = "बढ़ते जलवायु"
+
+    log_handle.info(f"Running vector search for query: {query}")
+    embedding = embedding_models.get_embedding(config.EMBEDDING_MODEL_NAME, query)
+    if embedding is None:
+        log_handle.error("Embedding for the query could not be generated.")
+        return
+
+    results, _ = index_searcher.perform_vector_search(
+        embedding, {}, 10, 1, "hi")
+    log_handle.verbose(f"Vector Search Results: {json_dumps(results)}")
+    assert len(results) > 0
+
+def test_vector_search_with_categories():
+    config = Config()
+    index_searcher = IndexSearcher(config)
+    query = "बढ़ते जलवायु"
+
+    log_handle.info(f"Running vector search for query: {query}")
+    embedding = embedding_models.get_embedding(config.EMBEDDING_MODEL_NAME, query)
+    if embedding is None:
+        log_handle.error("Embedding for the query could not be generated.")
+        return
+
+    results, _ = index_searcher.perform_vector_search(
+        embedding, {"type": ["t2"]}, 10, 1, "hi")
+    log_handle.verbose(f"Vector Search Results with categories: {json_dumps(results)}")
+    assert len(results) == 2
+
+    results1, _ = index_searcher.perform_vector_search(
+        embedding, {}, 10, 1, "hi")
+    log_handle.verbose(
+        f"Vector Search Results without categories: {json_dumps(results1)}")
+    assert len(results1) == 10

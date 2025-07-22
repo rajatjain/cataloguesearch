@@ -198,6 +198,18 @@ class IndexSearcher:
             score = hit.get('_score')
             content_snippet = None
 
+            if is_lexical:
+                if language is None:
+                    language = 'en'
+                field = self._text_fields.get(language)
+                content_snippet = source.get(field, '')
+            elif not is_lexical:
+                # For vector search, we might just take a snippet of the content
+                field = self._text_fields.get('en')
+                content_snippet = source.get(field)
+
+            # TODO(rajatjain): Disable highlights for now. Just share the snippet
+            """
             if is_lexical and 'highlight' in hit and self._text_fields['en'] in hit['highlight']:
                 # Assuming English field is a good fallback for highlights if language-specific isn't present
                 # Or, ideally, use the detected language field from the original query
@@ -211,11 +223,7 @@ class IndexSearcher:
                 else:
                     log_handle.warning(f"No highlight found for expected text fields in hit {document_id}. Using raw content.")
                     content_snippet = source.get(self._text_fields.get('en'), '') + '...' # Fallback to raw snippet
-
-            elif not is_lexical:
-                # For vector search, we might just take a snippet of the content
-                field = self._text_fields.get('en')
-                content_snippet = source.get(field)
+            """
 
             # Extract metadata, handling potential missing 'metadata' key
             metadata = source.get(self._metadata_prefix, {})
@@ -264,7 +272,7 @@ class IndexSearcher:
             hits = response.get('hits', {}).get('hits', [])
             total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
             log_handle.info(f"Lexical search executed. Total hits: {total_hits}.")
-            return self._extract_results(hits, is_lexical=True), total_hits
+            return self._extract_results(hits, is_lexical=True, language=detected_language), total_hits
         except Exception as e:
             log_handle.error(f"Error during lexical search: {e}", exc_info=True)
             return [], 0

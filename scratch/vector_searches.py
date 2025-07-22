@@ -118,8 +118,19 @@ def vector_search(query):
         embedding, {}, 10, 1, "hi")
     log_handle.info(f"Results: {json_dumps(results)}")
 
-init()
-build_index()
+def lexical_search(query, categories={}):
+    init()
+    config = Config()
+    index_searcher = IndexSearcher(config)
+    log_handle.info(f"Index Name: {config.OPENSEARCH_INDEX_NAME}")
 
+    log_handle.info(f"Running basic lexical query: {query}")
+    results, _ = index_searcher.perform_lexical_search(
+        query, 30, categories, "hi", 10, 1)
+    log_handle.info(f"Results: {json_dumps(results)}")
 
-vector_search("बंगलुरु को गार्डन सिटी क्यों कहते है?")
+# init()
+# build_index()
+
+query = "बढ़ते जलवायु"
+lexical_search(query, categories={"type": ["tx"]})

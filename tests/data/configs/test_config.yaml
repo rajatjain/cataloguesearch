@@ -20,7 +20,8 @@ opensearch:
   index_name: "{INDEX_NAME}"
 
 embedding_model:
-  name: sentence-transformers/all-MiniLM-L6-v2 # faster module for testing
+  # Even though it is slow, but keep it in tests to have uniformity.
+  name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 
 llm_model:
   name: gemini-2.0-flash
