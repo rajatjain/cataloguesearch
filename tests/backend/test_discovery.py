@@ -11,7 +11,7 @@ from backend.crawler.discovery import SingleFileProcessor, Discovery
 from backend.crawler.index_state import IndexState
 from backend.index.embedding_module import IndexingEmbeddingModule
 from backend.processor.pdf_processor import PDFProcessor, log_handle
-from backend.utils import json_dump, json_dumps
+from backend.utils import json_dumps
 from tests.backend.base import *
 from tests.backend.common import setup, write_config_file
 

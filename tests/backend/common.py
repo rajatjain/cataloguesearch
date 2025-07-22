@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import uuid
 
+from backend.common.opensearch import get_opensearch_client
 from backend.config import Config
 from backend.utils import json_dump, json_dumps
 
@@ -23,13 +24,15 @@ def get_doc_id(base_dir, file_path):
         uuid.uuid5(uuid.NAMESPACE_URL, relative_path))
     return doc_id
 
-def setup():
+def setup(copy_text_files=False):
+    config = Config()
     base_dir = tempfile.mkdtemp(prefix="test_")
     pdf_dir = "%s/data/pdfs" % base_dir
-    Config().settings()["crawler"]["base_pdf_path"] = pdf_dir
-    Config().settings()["crawler"]["base_text_path"] = "%s/data/texts" % base_dir
-    Config().settings()["crawler"]["tmp_images_path"] = "%s/data/tmp_images" % base_dir
-    Config().settings()["crawler"]["sqlite_db_path"] = "%s/crawl_state.db" % base_dir
+    log_handle.info(f"Using base dir: {base_dir}, pdf dir: {pdf_dir}")
+    config.settings()["crawler"]["base_pdf_path"] = pdf_dir
+    config.settings()["crawler"]["base_text_path"] = "%s/data/texts" % base_dir
+    config.settings()["crawler"]["tmp_images_path"] = "%s/data/tmp_images" % base_dir
+    config.settings()["crawler"]["sqlite_db_path"] = "%s/crawl_state.db" % base_dir
 
     os.makedirs("%s/a/b/c" % pdf_dir, exist_ok=True)
     os.makedirs("%s/a/b/d" % pdf_dir, exist_ok=True)
@@ -90,4 +93,66 @@ def setup():
     write_config_file("%s/x/y/z/config.json" % pdf_dir, z)
     write_config_file("%s/x/bangalore_gujarati_config.json" % pdf_dir, bgx)
 
+    if copy_text_files:
+        # This is to simulate the text files that would be generated
+        # by the PDF processor. This option is useful for speeding
+        # up the tests by avoiding the need to process PDFs.
+        for file_path, _ in doc_ids.values():
+            log_handle.info(f"Processing file: {file_path}")
+            relpath = os.path.relpath(file_path, pdf_dir) # a/b/c/bangalore_hindi.pdf
+            relpath = os.path.splitext(relpath)[0] # a/b/c/bangalore_hindi
+            log_handle.info(f"Relative path: {relpath}")
+
+            src_folder = os.path.join(
+                TEST_BASE_DIR, "data", "text",
+                os.path.basename(relpath))
+            dest_folder = os.path.join(
+                config.BASE_TEXT_PATH,
+                relpath
+            )
+            log_handle.info(f"Copying text files from {src_folder} to {dest_folder}")
+            shutil.copytree(src_folder, dest_folder)
+
     return doc_ids
+
+def get_all_documents(max_results: int = 1000) -> list:
+    """
+    Retrieves all documents from the configured OpenSearch index.
+
+    Args:
+        max_results: The maximum number of documents to return. Be aware that
+                     very large numbers can impact performance. For retrieving
+                     all documents from a large index, consider implementing
+                     the OpenSearch Scroll API.
+
+    Returns:
+        A list of the documents found in the index. Each document is a dictionary.
+        Returns an empty list if an error occurs.
+    """
+    try:
+        # Initialize the OpenSearch client and get the index name from the config
+        config = Config()
+        opensearch_client = get_opensearch_client(config)
+        index_name = config.OPENSEARCH_INDEX_NAME
+
+        # Define the search query to match all documents
+        search_body = {
+            "size": max_results,
+            "query": {
+                "match_all": {}
+            }
+        }
+
+        # Execute the search query
+        response = opensearch_client.search(
+            index=index_name,
+            body=search_body
+        )
+
+        # The search results are in the 'hits' field of the response
+        return response['hits']['hits']
+
+    except Exception as e:
+        print(f"An error occurred while querying OpenSearch: {e}")
+        return []
+

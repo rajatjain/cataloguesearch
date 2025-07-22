@@ -15,7 +15,7 @@ from backend.common.opensearch import get_opensearch_client
 from backend.processor.pdf_processor import PDFProcessor
 from backend.utils import json_dump, json_dumps
 from tests.backend.base import *
-from tests.backend.common import setup, write_config_file
+from tests.backend import common
 
 log_handle = logging.getLogger(__name__)
 
@@ -23,52 +23,10 @@ log_handle = logging.getLogger(__name__)
 # comment it out if you need to debug something.
 logging.getLogger('opensearch').setLevel(logging.WARNING)
 
-def get_all_documents(config, max_results: int = 1000) -> list:
-    """
-    Retrieves all documents from the configured OpenSearch index.
-
-    Args:
-        config: The application configuration object, which contains OpenSearch settings.
-        max_results: The maximum number of documents to return. Be aware that
-                     very large numbers can impact performance. For retrieving
-                     all documents from a large index, consider implementing
-                     the OpenSearch Scroll API.
-
-    Returns:
-        A list of the documents found in the index. Each document is a dictionary.
-        Returns an empty list if an error occurs.
-    """
-    try:
-        # Initialize the OpenSearch client and get the index name from the config
-        opensearch_client = get_opensearch_client(config)
-        index_name = config.OPENSEARCH_INDEX_NAME
-
-        # Define the search query to match all documents
-        search_body = {
-            "size": max_results,
-            "query": {
-                "match_all": {}
-            }
-        }
-
-        # Execute the search query
-        response = opensearch_client.search(
-            index=index_name,
-            body=search_body
-        )
-
-        # The search results are in the 'hits' field of the response
-        return response['hits']['hits']
-
-    except Exception as e:
-        print(f"An error occurred while querying OpenSearch: {e}")
-        return []
-
-
 @pytest.mark.integration
 def test_full_integration():
     config = Config()
-    doc_ids = setup()
+    doc_ids = common.setup()
     index_state = IndexState(config.SQLITE_DB_PATH)
     opensearch_client = get_opensearch_client(config, force_clean=True)
 
@@ -181,8 +139,8 @@ def test_full_integration():
     # change metadata file of one folder. reindex. confirm that things have changed.
     log_handle.info(f"Test 4: re-crawling after changing metadata")
     new_config = {"category": "updated_category", "type": "t1", "new": "blah"}
-    write_config_file("%s/a/b/config.json" % config.BASE_PDF_PATH, new_config)
-    os_old_docs = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)
+    common.write_config_file("%s/a/b/config.json" % config.BASE_PDF_PATH, new_config)
+    os_old_docs = common.get_all_documents()
     discovery.crawl()
 
     changed_keys = [
@@ -192,7 +150,7 @@ def test_full_integration():
         doc_ids["abdmld"][1]
     ]
     opensearch_client.indices.refresh(index=config.OPENSEARCH_INDEX_NAME)
-    os_new_docs = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)
+    os_new_docs = common.get_all_documents()
     validate_changed_docs_timestamp(
         os_old_docs, os_new_docs, changed_keys, None,
     )
@@ -233,13 +191,13 @@ def test_full_integration():
     xbg = { "category": "c", "type": "t3", "new": "blah2" }
     fname = doc_ids["xbg"][0]
     config_fname = fname.replace(".pdf", "_config.json")
-    write_config_file(config_fname, xbg)
+    common.write_config_file(config_fname, xbg)
 
     changed_keys = [doc_ids["xbg"][1]]
-    os_old_docs = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)
+    os_old_docs = common.get_all_documents()
     discovery.crawl()
     opensearch_client.indices.refresh(index=config.OPENSEARCH_INDEX_NAME)
-    os_new_docs = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)
+    os_new_docs = common.get_all_documents()
     validate_changed_docs_timestamp(
         os_old_docs, os_new_docs, changed_keys, None,
     )
@@ -356,11 +314,11 @@ def test_full_integration():
     new_file_path = "%s/x/y/test_8_file.pdf" % config.BASE_PDF_PATH
     shutil.copy(doc_ids["abdmld"][0], new_file_path)
 
-    os_all_docs_old = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)
+    os_all_docs_old = common.get_all_documents()
     validate_total_num_docs(os_all_docs_old, 7)
     discovery.crawl()
     opensearch_client.indices.refresh(index=config.OPENSEARCH_INDEX_NAME)
-    os_all_docs_new = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)
+    os_all_docs_new = common.get_all_documents()
     validate_total_num_docs(os_all_docs_new, 8)
     validate_changed_docs_timestamp(
         os_all_docs_old, os_all_docs_new, None, [doc_ids["abdmld"][1]]
