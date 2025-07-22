@@ -131,8 +131,8 @@ graph TD
     D --> D2{Keyword Extraction}
     D1 & D2 --> E[Lexical Search Module]
     D1 & D2 --> F[Vector Embedding Module]
-    E --> G[OpenSearch Query Builder (Lexical)]
-    F --> H[OpenSearch Query Builder (Vector)]
+    E --> G[OpenSearch Lexical Query Builder]
+    F --> H[OpenSearch Vector Query Builder]
     G --> I[OpenSearch]
     H --> I
     I --> J[Lexical Search Results]
