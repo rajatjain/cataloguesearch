@@ -441,9 +441,6 @@ def validate_changed_docs_timestamp(
             continue
         old_data = parsed_old_hits[doc_id]
         new_data = parsed_new_hits[doc_id]
-        log_handle.info(f"Checking for doc_id: {doc_id}")
-        log_handle.info(f"old_data: {json_dumps(old_data)}")
-        log_handle.info(f"new_data: {json_dumps(new_data)}")
 
         if changed_keys and old_data["document_id"] in changed_keys:
             assert old_data["timestamp_indexed"] != new_data["timestamp_indexed"], \
