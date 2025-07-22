@@ -23,17 +23,6 @@ log_handle = logging.getLogger(__name__)
 # comment it out if you need to debug something.
 logging.getLogger('opensearch').setLevel(logging.WARNING)
 
-def integration_test_config():
-    load_dotenv(
-        dotenv_path="%s/.env" % os.path.dirname(__file__),
-        verbose=True,
-    )
-    config_file_path = "%s/test_config.yaml" % os.getenv("TEST_DATA_DIR")
-    log_handle.info(f"Using config file: {config_file_path}")
-    log_handle.info(f"Using index name: {os.getenv('INDEX_NAME')}")
-
-    return Config(config_file_path)
-
 def get_all_documents(config, max_results: int = 1000) -> list:
     """
     Retrieves all documents from the configured OpenSearch index.
@@ -78,22 +67,12 @@ def get_all_documents(config, max_results: int = 1000) -> list:
 
 @pytest.mark.integration
 def test_full_integration():
-    config = integration_test_config()
-    assert config.OPENSEARCH_INDEX_NAME == os.getenv("INDEX_NAME")
-
-    test_dir = tempfile.mkdtemp(prefix="test_integration_test_")
-    pdf_dir = "%s/data/pdfs" % test_dir
-    config.settings()["crawler"]["base_pdf_path"] = pdf_dir
-    config.settings()["crawler"]["base_text_path"] = "%s/data/text" % test_dir
-    config.settings()["crawler"]["tmp_images_path"] = "%s/data/images" % test_dir
-    doc_ids = setup(pdf_dir)
-
-    tmp_db_dir = tempfile.mkdtemp(prefix="test_integration_test_db_")
-    config.settings()["crawler"]["sqlite_db_path"] = "%s/crawl_state.db" % tmp_db_dir
-
+    config = Config()
+    doc_ids = setup()
     index_state = IndexState(config.SQLITE_DB_PATH)
-
     opensearch_client = get_opensearch_client(config, force_clean=True)
+
+    log_handle.info(f"Starting discovery with config: {json_dumps(config._settings)}")
 
     discovery = Discovery(
         config,
@@ -202,7 +181,7 @@ def test_full_integration():
     # change metadata file of one folder. reindex. confirm that things have changed.
     log_handle.info(f"Test 4: re-crawling after changing metadata")
     new_config = {"category": "updated_category", "type": "t1", "new": "blah"}
-    write_config_file("%s/a/b/config.json" % pdf_dir, new_config)
+    write_config_file("%s/a/b/config.json" % config.BASE_PDF_PATH, new_config)
     os_old_docs = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)
     discovery.crawl()
 
@@ -374,7 +353,7 @@ def test_full_integration():
 
     # add a file. it should be indexed
     log_handle.info(f"Test 8: re-crawling after adding a file")
-    new_file_path = "%s/x/y/test_8_file.pdf" % pdf_dir
+    new_file_path = "%s/x/y/test_8_file.pdf" % config.BASE_PDF_PATH
     shutil.copy(doc_ids["abdmld"][0], new_file_path)
 
     os_all_docs_old = get_all_documents(opensearch_client, config.OPENSEARCH_INDEX_NAME)

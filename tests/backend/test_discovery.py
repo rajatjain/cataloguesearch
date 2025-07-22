@@ -59,12 +59,9 @@ class MockPDFProcessor(PDFProcessor):
         return [], {}
 
 def test_get_metadata():
+    setup()
     config = Config()
-    # create temp dir
-    tmp_dir = tempfile.mkdtemp(prefix="test_discovery_")
-    pdf_dir = "%s/data/pdfs" % tmp_dir
-    config.settings()["crawler"]["base_pdf_path"] = pdf_dir
-    setup(pdf_dir)
+    pdf_dir = config.BASE_PDF_PATH
 
     sfp = SingleFileProcessor(
         config, "%s/a/b/c/bangalore_hindi.pdf" % pdf_dir,
@@ -115,13 +112,7 @@ def test_get_metadata():
 def test_crawl():
     config = Config()
     # create temp dir
-    tmp_dir = tempfile.mkdtemp(prefix="test_crawl_")
-    pdf_dir = "%s/data/pdfs" % tmp_dir
-    config.settings()["crawler"]["base_pdf_path"] = pdf_dir
-    doc_ids = setup(pdf_dir)
-
-    tmp_db_dir = tempfile.mkdtemp(prefix="test_crawl_db_")
-    config.settings()["crawler"]["sqlite_db_path"] = "%s/crawl_state.db" % tmp_db_dir
+    doc_ids = setup()
 
     index_state = IndexState(config.SQLITE_DB_PATH)
 
@@ -139,7 +130,7 @@ def test_crawl():
 
     # change the file "a/b/config.json"
     new_config = { "category": "c", "type": "t1", "new": "blah1" }
-    write_config_file("%s/a/b/config.json" % pdf_dir, new_config)
+    write_config_file("%s/a/b/config.json" % config.BASE_PDF_PATH, new_config)
     # re-crawl
 
     log_handle.info(f"Test 1: re-crawling after changing config file")
