@@ -1,4 +1,3 @@
-# backend/utils/language_detector.py
 import logging
 
 # You might need to install 'langdetect': pip install langdetect
@@ -30,7 +29,7 @@ class LanguageDetector:
         if not text:
             log_handle.warning(
                 "Empty text provided for language detection. Defaulting to 'english'.")
-            return 'english'
+            return 'en'
 
         try:
             # Attempt to detect language
@@ -38,19 +37,15 @@ class LanguageDetector:
             log_handle.debug(f"langdetect detected: {lang_code} for text: '{text[:50]}...'")
 
             # Map detected language codes to our internal representation
-            if lang_code == 'hi':
-                return 'hindi'
-            elif lang_code == 'gu':
-                return 'gujarati'
-            elif lang_code == 'en':
-                return 'english'
+            if lang_code in ['hi', 'gu', 'en']:
+                return lang_code
             else:
                 log_handle.warning(
                     f"Detected unsupported language '{lang_code}'. Defaulting to 'english'.")
-                return 'english'
+                return 'en'
         except LangDetectException as e:
             log_handle.error(f"Language detection failed for text: '{text[:50]}...'. Error: {e}. Defaulting to 'english'.")
-            return 'english'
+            return 'en'
         except Exception as e:
             log_handle.exception(f"An unexpected error occurred during language detection: {e}. Defaulting to 'english'.")
-            return 'english'
+            return 'en'

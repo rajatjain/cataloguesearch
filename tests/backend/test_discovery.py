@@ -70,7 +70,7 @@ def test_get_metadata():
         datetime.datetime.now().isoformat()
     )
 
-    meta = sfp.get_metadata()
+    meta = sfp._get_metadata()
     assert meta == {'category': 'b', 'type': 't2', 'new': 'c3'}
 
     sfp = SingleFileProcessor(
@@ -79,7 +79,7 @@ def test_get_metadata():
         MockPDFProcessor(),
         datetime.datetime.now().isoformat()
     )
-    meta = sfp.get_metadata()
+    meta = sfp._get_metadata()
     assert meta == {'category': 'b', 'type': 't1'}
 
     sfp = SingleFileProcessor(
@@ -88,7 +88,7 @@ def test_get_metadata():
         MockPDFProcessor(),
         datetime.datetime.now().isoformat()
     )
-    meta = sfp.get_metadata()
+    meta = sfp._get_metadata()
     assert meta == {'category': 'b', 'type': 't1'}
 
     abdmld = SingleFileProcessor(
@@ -97,7 +97,7 @@ def test_get_metadata():
         MockPDFProcessor(),
         datetime.datetime.now().isoformat()
     )
-    meta = abdmld.get_metadata()
+    meta = abdmld._get_metadata()
     assert meta == {'category': 'b', 'type': 't1'}
 
     xbg = SingleFileProcessor(
@@ -106,7 +106,7 @@ def test_get_metadata():
         MockPDFProcessor(),
         datetime.datetime.now().isoformat()
     )
-    meta = xbg.get_metadata()
+    meta = xbg._get_metadata()
     assert meta == {'category': 'x', 'type': 't3', 'new': 'c4'}
 
 def test_crawl():

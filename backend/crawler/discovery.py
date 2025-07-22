@@ -33,7 +33,7 @@ class SingleFileProcessor:
         self._images_folder = config.TMP_IMAGES_PATH
         self._scan_time = scan_time
 
-    def get_metadata(self) -> dict:
+    def _get_metadata(self) -> dict:
         # Collect all folders from base to PDF's folder
         folders = []
         current = os.path.dirname(self._file_path)
@@ -100,8 +100,8 @@ class SingleFileProcessor:
         last_state = self._index_state.get_state(document_id)
 
         current_file_checksum = self._get_file_checksum()
-        current_config = self.get_metadata()
-        current_config_hash = self._get_config_hash(current_config)
+        file_metadata = self._get_metadata()
+        file_metadata_hash = self._get_config_hash(file_metadata)
 
         should_full_reindex = False
         should_metadata_reindex = False
@@ -110,7 +110,7 @@ class SingleFileProcessor:
             should_full_reindex = True
         elif current_file_checksum != last_state["file_checksum"]:
             should_full_reindex = True
-        elif current_config_hash != last_state["config_hash"]:
+        elif file_metadata_hash != last_state["config_hash"]:
             should_metadata_reindex = True
         else:
             log_handle.info(f"No changes detected for {self._file_path}. Skipping.")
@@ -135,7 +135,7 @@ class SingleFileProcessor:
                 relative_path = os.path.relpath(self._file_path, self._base_pdf_folder)
                 self._indexing_module.index_document(
                     document_id, relative_path,
-                    page_text_paths, current_config, bookmarks,
+                    page_text_paths, file_metadata, bookmarks,
                     reindex_metadata_only=False
                 )
                 log_handle.info(f"Full re-index of {self._file_path} completed successfully.")
@@ -148,7 +148,7 @@ class SingleFileProcessor:
                 # We still need bookmarks, so re-extract them.
                 bookmarks = self._pdf_processor.fetch_bookmarks(self._file_path)
                 self._indexing_module.index_document(
-                    document_id, self._file_path, [], current_config, bookmarks,
+                    document_id, self._file_path, [], file_metadata, bookmarks,
                     reindex_metadata_only=True
                 )
                 log_handle.info(f"Metadata re-index of {self._file_path} completed successfully.")
@@ -162,7 +162,7 @@ class SingleFileProcessor:
                 "file_path": self._file_path,
                 "last_indexed_timestamp": self._scan_time,
                 "file_checksum": current_file_checksum,
-                "config_hash": current_config_hash
+                "config_hash": file_metadata_hash
             }
         )
 
