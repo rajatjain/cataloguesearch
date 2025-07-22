@@ -25,6 +25,6 @@ def test_config_instance():
     assert config.OPENSEARCH_USERNAME == "admin"
     assert config.OPENSEARCH_PASSWORD == "Admin@Password123!"
     assert config.OPENSEARCH_INDEX_NAME == index_name
-    assert config.EMBEDDING_MODEL_NAME == "sentence-transformers/all-MiniLM-L6-v2"
+    assert config.EMBEDDING_MODEL_NAME == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     assert config.LLM_MODEL_NAME == "gemini-2.0-flash"
     log_handle.info(f"END TEST_CONFIG_INSTANCE")
