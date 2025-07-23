@@ -54,7 +54,7 @@ class MockPDFProcessor(PDFProcessor):
 
     def process_pdf(
             self, pdf_path: str, output_dir: str,
-            images_dir: str,
+            images_dir: str, file_metadata: dict
     ) -> tuple[list[str], dict[int: str]]:
         return [], {}
 

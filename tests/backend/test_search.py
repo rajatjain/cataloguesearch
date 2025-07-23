@@ -27,7 +27,7 @@ class MockPDFProcessor(PDFProcessor):
         """
         super().__init__(config)
 
-    def process_pdf(self, pdf_path: str, output_dir: str, images_dir: str):
+    def process_pdf(self, pdf_path: str, output_dir: str, images_dir: str, file_metadata):
         """
         1. Return the page_text_paths from the BASE_TEXT_PATH
         2. Return the bookmarks of the PDF file
