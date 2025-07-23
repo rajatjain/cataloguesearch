@@ -5,6 +5,7 @@ import io
 import logging
 import subprocess
 from google.cloud import vision
+from PIL import Image
 
 from backend.config import Config
 
@@ -26,7 +27,7 @@ class PDFProcessor:
         self._images_folder = config.TMP_IMAGES_PATH
 
     def _convert_images_to_text(
-            self, images_folder, text_folder):
+            self, images_folder, text_folder, file_metadata: dict = None):
         """
         Converts images in the specified folder to text files using OCR.
         Args:
@@ -44,15 +45,23 @@ class PDFProcessor:
                 log_handle.info(f"Processing image: {image_path}")
                 txt_file_name = os.path.splitext(f)[0] + ".txt"
                 txt_file_path = "%s/%s" % (text_folder, txt_file_name)
-                self._detect_text(image_path, txt_file_path)
+                self._detect_text(image_path, txt_file_path, file_metadata)
                 file_paths.append(txt_file_path)
                 os.remove(image_path)
             else:
                 log_handle.warning(f"Skipping non-image file: {f}")
         return file_paths
 
+    def _detect_text(self, image_file_path: str, txt_file_path: str, file_metadata):
+        if file_metadata is not None and file_metadata.get("scanned"):
+            # Use google vision API for scanned images
+            return self._detect_text_google(image_file_path, txt_file_path)
+        else:
+            # Use pytesseract for regular images
+            return self._detect_text_pytesseract(
+                image_file_path, txt_file_path, lang=file_metadata.get("lang", "hi"))
 
-    def _detect_text(self, image_file_path: str, txt_file_path: str):
+    def _detect_text_google(self, image_file_path: str, txt_file_path: str):
         file_name = os.path.abspath(image_file_path)
         with io.open(file_name, 'rb') as image_file:
             content = image_file.read()
@@ -81,6 +90,30 @@ class PDFProcessor:
         fh.write(text)
         fh.close()
         log_handle.verbose("Text detection done for file %s" % image_file_path)
+
+    def _detect_text_pytesseract(
+            self, image_file_path: str, txt_file_path: str, lang: str = 'hi'):
+        """
+        Uses pytesseract to extract text from an image file and saves it to a text file.
+        Args:
+            image_file_path: Path to the image file.
+            txt_file_path: Path where the extracted text will be saved.
+        """
+        # Map language codes to Tesseract language codes
+        lang_dict = {
+            'hi': 'hin',
+            'hindi': 'hin',
+            'gu': 'guj',
+            'gujarati': 'guj',
+        }
+        try:
+            img = Image.open(image_file_path)
+            extracted_text = pytesseract.image_to_string(img, lang=lang_dict.get(lang, 'hin'))
+            with open(txt_file_path, 'w', encoding='utf-8') as f:
+                f.write(extracted_text)
+            log_handle.verbose(f"Text extracted and saved to {txt_file_path}")
+        except Exception as e:
+            log_handle.error(f"Error extracting text from {image_file_path}: {e}")
 
     def _convert_pdf_to_images(
             self,
@@ -128,7 +161,7 @@ class PDFProcessor:
 
     def process_pdf(
             self, pdf_path: str, output_dir: str,
-            images_dir: str,
+            images_dir: str, file_metadata: dict
             ) -> tuple[list[str], dict[int: str]]:
         """
         Processes a PDF file, extracts text page by page, saves them,
@@ -139,6 +172,7 @@ class PDFProcessor:
             output_dir (str): The base directory where page-wise text files will be saved.
                               It is assumed that this directory exists.
             images_dir (str): Directory where images will be temporarily stored.
+            file_metadata (dict): Metadata associated with the PDF file.
         Returns:
             tuple[list[str], list[dict]]: A tuple containing:
                 - A list of paths to the saved text files (one per page).
@@ -166,6 +200,7 @@ class PDFProcessor:
             saved_text_file_paths = self._convert_images_to_text(
                 images_folder=image_dir,
                 text_folder=output_dir,
+                file_metadata=file_metadata
             )
 
             # Extract bookmarks
