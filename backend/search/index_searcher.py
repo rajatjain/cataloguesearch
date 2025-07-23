@@ -238,6 +238,7 @@ class IndexSearcher:
                 "page_number": source.get('page_number'),
                 "content_snippet": content_snippet,
                 "score": score,
+                "bookmarks": source.get(self._bookmark_field, {}),
                 "metadata": source.get(self._metadata_prefix, {})
             })
         return extracted

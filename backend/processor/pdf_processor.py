@@ -4,8 +4,12 @@ import os
 import io
 import logging
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from google.cloud import vision
 from PIL import Image
+
+# Disable tokenizers parallelism to avoid fork conflicts
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 from backend.config import Config
 
@@ -39,18 +43,24 @@ class PDFProcessor:
             os.makedirs(text_folder, exist_ok=True)
             log_handle.info(f"Created text folder: {text_folder}")
 
-        for f in os.listdir(images_folder):
+        def process_image(f):
             if f.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp')):
                 image_path = os.path.join(images_folder, f)
                 log_handle.info(f"Processing image: {image_path}")
                 txt_file_name = os.path.splitext(f)[0] + ".txt"
                 txt_file_path = "%s/%s" % (text_folder, txt_file_name)
                 self._detect_text(image_path, txt_file_path, file_metadata)
-                file_paths.append(txt_file_path)
                 os.remove(image_path)
+                return txt_file_path
             else:
                 log_handle.warning(f"Skipping non-image file: {f}")
-        return file_paths
+                return None
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            results = list(executor.map(process_image, os.listdir(images_folder)))
+            file_paths = [path for path in results if path is not None]
+        
+        return sorted(file_paths)
 
     def _detect_text(self, image_file_path: str, txt_file_path: str, file_metadata):
         if file_metadata is not None and file_metadata.get("scanned"):
