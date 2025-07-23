@@ -127,7 +127,7 @@ class SingleFileProcessor:
                     f"file_path: {self._file_path}, output_text_dir: {output_text_dir}, images_folder: {self._images_folder}"
                 )
                 page_text_paths, bookmarks = self._pdf_processor.process_pdf(
-                    self._file_path, output_text_dir, self._images_folder
+                    self._file_path, output_text_dir, self._images_folder, file_metadata
                 )
                 log_handle.info(f"Processed PDF: {self._file_path}")
                 log_handle.verbose(f"page_text_paths: {page_text_paths}, bookmarks: {bookmarks}")

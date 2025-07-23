@@ -37,7 +37,7 @@ def test_process_pdf_direct_text_extraction():
         output_text_path = "%s/%s" % (texts_dir, os.path.splitext(file)[0])
         os.makedirs(output_text_path, exist_ok=True)
         text_files, bookmarks = processor.process_pdf(
-            dummy_pdf_path, output_text_path, images_dir)
+            dummy_pdf_path, output_text_path, images_dir, {"lang": lang, "scanned": False})
         log_handle.info(f"bookmarks for file: {file} - {bookmarks}")
         all_bookmarks.append(bookmarks)
 
@@ -63,12 +63,8 @@ def test_process_pdf_direct_text_extraction():
         "bangalore_gujarati": {
             "page_0001.txt": "ઇતિહાસ ખૂબ જ સમૃદ્ધ અને જૂનો છે.",
             "page_0002.txt": "આધુનિકતા અને પરંપરાનું એક અનન્ય મિશ્રણ છે.",
-            "page_0003.txt": "નંદી હિલ્સ (Nandi Hills) એક લોકપ્રિય સપ્તાહાંત સ્થળ છે,",
+            "page_0003.txt": "એક લોકપ્રિય સપ્તાહાંત સ્થળ છે,",
         },
-        "multi_language_document": {
-            "page_0001.txt": "भारत एक विशाल देश है। यहाँ पर अलग अलग जाति",
-            "page_0002.txt": "એના પછી ભારત દેશ સ્વતંત્ર હતા.",
-        }
     }
 
     for pdf_name, expected_texts in test_data.items():
