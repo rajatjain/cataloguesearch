@@ -1,0 +1,51 @@
+name: Integration Test
+
+on:
+  pull_request:
+    branches:
+      - test-github-wf # Or your default branch like 'master'
+
+jobs:
+  run_integration_tests:
+    runs-on: ubuntu-latest # Or your preferred runner environment
+
+    steps:
+    - name: ⬇️ Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11' # Specify your Python version
+
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest
+
+    - name: 🐳 Start OpenSearch Docker Container for Tests
+      run: |
+        python scripts/opensearch_controller.py --start --test
+      # Add a timeout here if the script can hang indefinitely
+
+    - name: ⏳ Wait for OpenSearch Server to Come Up
+      # This step might need a more robust check depending on OpenSearch startup time.
+      # A simple sleep or a health check loop can be used.
+      # For a more robust solution, you might want to implement a Python script
+      # that polls the OpenSearch health API until it's ready.
+      run: |
+        echo "Waiting for OpenSearch to be ready..."
+        # You might need to adjust the sleep duration or implement a health check
+        sleep 60 # Wait for 60 seconds (adjust as necessary)
+
+    - name: 🧪 Run Integration Tests
+      # Navigate to the 'tests' directory and run all pytest tests
+      run: |
+        cd tests
+        pytest --run-all -s
+
+    - name: 🛑 Stop OpenSearch Docker Container
+      if: always() # This ensures the container is stopped even if tests fail
+      run: |
+        python scripts/opensearch_controller.py --stop --test
