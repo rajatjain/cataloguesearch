@@ -59,17 +59,19 @@ const FilterIcon = () => (
 const Banner = () => (
     <div className="bg-sky-100 h-40 flex items-center justify-center rounded-lg mb-4">
         <img
-            src="https://placehold.co/1200x160/e0f2fe/0c4a6e?text=Catalogue+Search"
-            alt="Catalogue Search Banner"
-            className="w-full h-full object-cover rounded-lg"
+            src="/images/banner.jpg"
+            alt="Jain Catalogue Search Banner"
+            className="w-full h-full object-contain rounded-lg"
         />
     </div>
 );
 
 const Description = () => (
     <div className="text-center mb-8 px-4 text-gray-600 leading-relaxed">
-        <p>Welcome to the Catalogue Search utility, your gateway to exploring a vast archive of documents.</p>
-        <p>Use the powerful search bar to find specific terms and apply filters to refine your results.</p>
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">Jain Catalogue Search</h1>
+        <p></p>
+        <p>This interface allows a Mumukshu to search through a vast collection of sermons</p>
+        <p>delivered by Pujya Gurudev Shri Kanji Swami.</p>
     </div>
 );
 

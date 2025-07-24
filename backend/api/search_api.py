@@ -143,6 +143,9 @@ async def search(request_data: SearchRequest = Body(...)):
                         f"results (total: {lexical_total_hits}).")
 
         # Perform Vector Search
+        # Disable Vector Search for now.
+        # TODO(rajatjain): Enable vector search when embedding model is ready.
+        """
         model_name = config.EMBEDDING_MODEL_NAME
         query_embedding = get_embedding(model_name, keywords)
         if not query_embedding:
@@ -159,6 +162,8 @@ async def search(request_data: SearchRequest = Body(...)):
             log_handle.info(
                 f"Vector search returned {len(vector_results)} "
                 f"results (total: {vector_total_hits}).")
+        """
+        vector_results = []
 
 
         # Collate and Rank Results
