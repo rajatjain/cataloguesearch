@@ -81,11 +81,17 @@ def delete_index(config: Config):
         log_handle.error("Invalid config or missing index name")
         raise ValueError("Config and index name are required")
 
+    # Ensure client is initialized
+    if _client is None:
+        log_handle.info("OpenSearch client not initialized, initializing now...")
+        get_opensearch_client(config)
+    
     client = _client
     index_name = config.OPENSEARCH_INDEX_NAME
+    log_handle.info(f"Deleting index '{index_name}'...")
 
     try:
-        if client.indices.exists(index=index_name):
+        if client and client.indices.exists(index=index_name):
             response = client.indices.delete(index=index_name)
             log_handle.info(f"Index '{index_name}' deleted successfully: {response}")
         else:

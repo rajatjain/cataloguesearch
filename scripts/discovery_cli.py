@@ -13,7 +13,7 @@ import psutil
 from datetime import datetime
 from threading import Event
 
-from backend.common.opensearch import get_opensearch_client, get_metadata
+from backend.common.opensearch import get_opensearch_client, get_metadata, delete_index
 from backend.config import Config
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
@@ -171,10 +171,16 @@ class DiscoveryDaemon:
             logging.info("Discovery daemon stopped")
 
 
-def run_discovery_once(config: Config):
+def run_discovery_once(config: Config, delete_index_first: bool = False):
     """Run discovery once"""
     try:
         logging.info("Starting one-time discovery...")
+        
+        # Delete index if requested
+        if delete_index_first:
+            logging.info("Deleting existing index...")
+            delete_index_only(config)
+            logging.info("Index deleted successfully")
         
         # Initialize components
         index_state = IndexState(config.SQLITE_DB_PATH)
@@ -196,11 +202,35 @@ def run_discovery_once(config: Config):
         sys.exit(1)
 
 
+def delete_index_only(config: Config):
+    """Delete the OpenSearch index and clear all indexing state"""
+    try:
+        logging.info("Deleting OpenSearch index...")
+        delete_index(config)
+        logging.info("Index deleted successfully")
+        
+        # Clear all indexing state
+        index_state = IndexState(config.SQLITE_DB_PATH)
+        
+        # Clear metadata cache
+        index_state.update_metadata_cache({})
+        logging.info("Metadata cache cleared")
+        
+        # Clear indexed files state to force re-indexing
+        deleted_count = index_state.clear_all_indexed_files_state()
+        logging.info(f"Cleared indexed files state ({deleted_count} records)")
+        
+    except Exception as e:
+        logging.error(f"Failed to delete index: {e}")
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="CatalogueSearch Discovery CLI/Daemon")
     
-    parser.add_argument('command', choices=['discover'], help='Command to run')
+    parser.add_argument('command', choices=['discover', 'delete-index'], help='Command to run')
     parser.add_argument('--daemon', action='store_true', help='Run as daemon (every 6 hours)')
+    parser.add_argument('--delete-index', action='store_true', help='Delete existing index before running discovery')
 
     args = parser.parse_args()
 
@@ -225,7 +255,10 @@ def main():
             daemon = DiscoveryDaemon(config)
             daemon.start()
         else:
-            run_discovery_once(config)
+            run_discovery_once(config, delete_index_first=args.delete_index)
+    
+    elif args.command == 'delete-index':
+        delete_index_only(config)
 
 
 if __name__ == '__main__':

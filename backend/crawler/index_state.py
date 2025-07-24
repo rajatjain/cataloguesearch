@@ -187,3 +187,20 @@ class IndexState:
         conn.close()
         
         return count > 0
+
+    def clear_all_indexed_files_state(self):
+        """
+        Clears all indexed files state from the database.
+        This forces re-indexing of all files on next discovery run.
+        """
+        conn = sqlite3.connect(self.state_db_path)
+        c = conn.cursor()
+        
+        c.execute("DELETE FROM indexed_files_state")
+        deleted_count = c.rowcount
+        
+        conn.commit()
+        conn.close()
+        
+        log_handle.info(f"Cleared all indexed files state ({deleted_count} records deleted)")
+        return deleted_count
