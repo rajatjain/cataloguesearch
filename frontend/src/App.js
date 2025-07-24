@@ -197,9 +197,24 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity }) => {
 };
 
 
-const ResultCard = ({ result }) => {
+const ResultCard = ({ result, highlightWords = [] }) => {
     const highlightSnippet = (snippet) => {
-        const highlighted = snippet.replace(/\*\*(.*?)\*\*/g, `<strong class="bg-yellow-300 text-black px-1 rounded-sm">$1</strong>`);
+        if (!highlightWords || highlightWords.length === 0) {
+            return { __html: snippet };
+        }
+        
+        let highlighted = snippet;
+        // Sort words by length in descending order to avoid partial matches
+        const sortedWords = [...highlightWords].sort((a, b) => b.length - a.length);
+        
+        sortedWords.forEach(word => {
+            // Escape special regex characters
+            const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            // Use global case-insensitive search without word boundaries for Indic text
+            const regex = new RegExp(`(${escapedWord})`, 'giu');
+            highlighted = highlighted.replace(regex, `<span class="bg-yellow-300 text-black px-1 rounded-sm font-semibold">$1</span>`);
+        });
+        
         return { __html: highlighted };
     };
 
@@ -267,7 +282,11 @@ const Results = ({ searchData, isLoading, currentPage, onPageChange }) => {
             </div>
             <div className="space-y-6">
                 {searchData.results.map((result, index) => (
-                    <ResultCard key={`${result.original_filename}-${index}`} result={result} />
+                    <ResultCard 
+                        key={`${result.original_filename}-${index}`} 
+                        result={result} 
+                        highlightWords={searchData.highlight_words || []} 
+                    />
                 ))}
             </div>
             <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={onPageChange} />
