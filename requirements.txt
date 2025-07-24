@@ -28,6 +28,7 @@ fastapi==0.111.0
 uvicorn==0.30.1
 pydantic==2.8.2
 
+<<<<<<< HEAD
 # Indic NLP Library
 # Core library for Indic NLP tasks
 indic-nlp-library==0.92
@@ -37,3 +38,8 @@ morfessor==2.0.6
 numpy>=1.16.5
 pandas
 # The library also requires indic_nlp_resources, which should be downloaded separately.
+
+torch==2.3.1
+transformers==4.42.3
+
+sentencepiece==0.2.0

@@ -14,6 +14,8 @@ from datetime import datetime
 from threading import Event
 
 from backend.common.opensearch import get_opensearch_client, get_metadata
+from backend.common.embedding_models import get_embedding
+from backend.common.opensearch import get_opensearch_client, get_metadata, delete_index
 from backend.config import Config
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
@@ -220,12 +222,21 @@ def main():
             # Check existing daemon
             if not DaemonManager.check_existing_daemon():
                 sys.exit(1)
-            
+            # load the model
+            get_embedding(config.EMBEDDING_MODEL_NAME, "test text")
+
             # Start daemon
             daemon = DiscoveryDaemon(config)
             daemon.start()
         else:
             run_discovery_once(config)
+            # load the model
+            get_embedding(config.EMBEDDING_MODEL_NAME, "test text")
+            run_discovery_once(config, delete_index_first=args.delete_index)
+
+
+    elif args.command == 'delete-index':
+        delete_index_only(config)
 
 
 if __name__ == '__main__':

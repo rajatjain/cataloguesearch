@@ -59,4 +59,11 @@ mappings:
       type: date
     vector_embedding:
       type: knn_vector
-      dimension: <set_by_embedding_model>
+      dimension: 768
+      method:
+        name: hnsw
+        space_type: l2
+        engine: faiss
+        parameters:
+          ef_construction: 512
+          m: 64

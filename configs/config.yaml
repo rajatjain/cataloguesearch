@@ -18,7 +18,7 @@ opensearch:
   index_name: document_chunks_prod
 
 embedding_model:
-  name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  name: AI4Bharat/indic-bert
 
 llm_model:
   name: gemini-2.0-flash
