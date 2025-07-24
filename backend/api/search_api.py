@@ -4,18 +4,21 @@ from typing import Any, Dict, List
 
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, FileResponse
+from langdetect import detect
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.common.embedding_models import get_embedding_model
+from backend.common.embedding_models import get_embedding_model, get_embedding
 from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
 from backend.crawler.index_state import IndexState
 from backend.search.highlight_extractor import HighlightExtractor
 from backend.common.language_detector import LanguageDetector
+from backend.search.index_searcher import IndexSearcher
 from backend.search.result_ranker import ResultRanker
-from utils.logger import setup_logging
+from backend.utils import json_dumps
+from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
 
 log_handle = logging.getLogger(__name__)
 
@@ -58,7 +61,10 @@ def initialize():
     # Initialize logging
 
     logs_dir = os.environ.get("LOGS_DIR", "logs")
-    setup_logging(logs_dir=logs_dir, console_level=False)
+    setup_logging(
+        logs_dir=logs_dir, console_level=VERBOSE_LEVEL_NUM,
+        file_level=VERBOSE_LEVEL_NUM,
+        console_only=True)
 
     relative_config_path = "configs/config.yaml"
     config = Config(relative_config_path)
@@ -93,7 +99,7 @@ class SearchRequest(BaseModel):
     """
     Pydantic model for the search request payload.
     """
-    keywords: str = Field(..., example="Bangalore city history")
+    query: str = Field(..., example="Bangalore city history")
     proximity_distance: int = Field(30, ge=1, description="Max word distance for proximity search.")
     categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
     page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
@@ -107,23 +113,25 @@ async def search(request_data: SearchRequest = Body(...)):
     Performs lexical and vector searches, collates results, and returns paginated output.
     """
     # Initialize OpenSearch client and embedding module
-    keywords = request_data.keywords
+    config = Config()
+    index_searcher = IndexSearcher(Config())
+    keywords = request_data.query
     proximity_distance = request_data.proximity_distance
     categories = request_data.categories
     page_size = request_data.page_size
     page_number = request_data.page_number
 
-    log_handle.info(f"Received search request: keywords='{keywords}', "
-                    f"categories={categories}, page={page_number}, size={page_size}")
 
     try:
         # Language Detection
         detected_language = LanguageDetector.detect_language(keywords)
+        log_handle.info(f"Received search request: keywords='{keywords}', "
+                        f"categories={categories}, page={page_number}, size={page_size}")
         log_handle.info(f"Detected language for keywords '{keywords}': {detected_language}")
 
         # Perform Lexical Search
         opensearch_client = get_opensearch_client(Config())
-        lexical_results, lexical_total_hits = opensearch_client.perform_lexical_search(
+        lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
             keywords=keywords,
             proximity_distance=proximity_distance,
             categories=categories,
@@ -135,16 +143,18 @@ async def search(request_data: SearchRequest = Body(...)):
                         f"results (total: {lexical_total_hits}).")
 
         # Perform Vector Search
-        query_embedding = get_embedding_model().get_embedding(keywords)
+        model_name = config.EMBEDDING_MODEL_NAME
+        query_embedding = get_embedding(model_name, keywords)
         if not query_embedding:
             log_handle.warning("Could not generate embedding for query. Vector search skipped.")
             vector_results = []
         else:
-            vector_results, vector_total_hits = opensearch_client.perform_vector_search(
+            vector_results, vector_total_hits = index_searcher.perform_vector_search(
                 embedding=query_embedding,
                 categories=categories,
                 page_size=page_size,
-                page_number=page_number
+                page_number=page_number,
+                language=detected_language
             )
             log_handle.info(
                 f"Vector search returned {len(vector_results)} "
@@ -166,8 +176,8 @@ async def search(request_data: SearchRequest = Body(...)):
             "page_size": page_size,
             "page_number": page_number,
             "results": final_results,
-            "highlight_words": highlight_words
         }
+        log_handle.info(f"Search response: {json_dumps(response)}")
         return JSONResponse(content=response, status_code=200)
 
     except Exception as e:

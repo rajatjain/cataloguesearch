@@ -206,16 +206,14 @@ const ResultCard = ({ result }) => {
     return (
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 transition-shadow hover:shadow-md">
             <div className="border-b border-gray-200 pb-3 mb-4 text-sm text-gray-500 flex flex-wrap gap-x-4 gap-y-2">
-                <span className="font-semibold text-gray-800">📄 {result.original_file_name}</span>
-                <span>Page: {result.page_no}</span>
+                <span className="font-semibold text-gray-800">📄 {result.original_filename}</span>
+                <span>Page: {result.page_number}</span>
                 {result.bookmarks && result.bookmarks.length > 0 && (
-                    <span>🔖 Bookmarks: {result.bookmarks.join(', ')}</span>
+                    <span>🔖 Bookmarks: {result.bookmarks}</span>
                 )}
             </div>
             <div className="space-y-3 text-gray-700">
-                {result.snippets.map((snippet, index) => (
-                    <p key={index} dangerouslySetInnerHTML={highlightSnippet(snippet)} />
-                ))}
+                <p dangerouslySetInnerHTML={highlightSnippet(result.content_snippet)} />
             </div>
         </div>
     );
@@ -260,17 +258,16 @@ const Results = ({ searchData, isLoading, currentPage, onPageChange }) => {
         return <div className="text-center py-10 text-gray-500 bg-white rounded-lg border border-gray-200">No results found for your query.</div>;
     }
 
-    const itemsPerPage = 4;
-    const totalPages = Math.ceil(searchData.total / itemsPerPage);
+    const totalPages = Math.ceil(searchData.total_results / searchData.page_size);
 
     return (
         <div className="mt-10">
             <div className="text-gray-600 mb-4">
-                Showing {searchData.results.length} of {searchData.total} results.
+                Showing {searchData.results.length} of {searchData.total_results} results.
             </div>
             <div className="space-y-6">
                 {searchData.results.map((result, index) => (
-                    <ResultCard key={`${result.original_file_name}-${index}`} result={result} />
+                    <ResultCard key={`${result.original_filename}-${index}`} result={result} />
                 ))}
             </div>
             <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={onPageChange} />
@@ -294,7 +291,6 @@ export default function App() {
     const [isLoading, setIsLoading] = useState(false);
 
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 4;
 
     // useEffect now only fetches metadata for the category filters.
     useEffect(() => {
@@ -332,13 +328,13 @@ export default function App() {
             language: languageToSend,
             proximity: proximity,
             page: page,
-            size: itemsPerPage
+            size: 20
         };
 
         const data = await api.search(requestPayload);
         setSearchData(data);
         setIsLoading(false);
-    }, [query, activeFilters, language, proximity, itemsPerPage]);
+    }, [query, activeFilters, language, proximity]);
 
     const handlePageChange = (page) => {
         if (page > 0) {
