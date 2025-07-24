@@ -1,6 +1,7 @@
 import re
 from typing import List, Dict, Any
 import logging
+from indicnlp.tokenize import indic_tokenize
 
 log_handle = logging.getLogger(__name__)
 
@@ -26,19 +27,22 @@ class HighlightExtractor:
         highlight_words = set()
 
         # Add words from the original query
-        # Simple split, consider more advanced tokenization for multi-language if needed
-        for word in re.findall(r'\b\w+\b', query_keywords.lower()):
+        # Use Unicode-aware pattern for multi-language support (Hindi, Gujarati, etc.)
+        query_tokens = indic_tokenize.trivial_tokenize(query_keywords)
+        log_handle.verbose(f"Original query tokens: {query_tokens}")
+        for word in query_tokens:
             highlight_words.add(word)
         log_handle.verbose(f"Added query keywords to highlights: {list(highlight_words)}")
 
         # Add words from content snippets (especially those highlighted by OpenSearch)
+        """
         for result in search_results:
             snippet = result.get('content_snippet')
             if snippet:
-                # Remove HTML tags (like <em>) and then extract words
-                clean_snippet = re.sub(r'<[^>]+>', '', snippet)
-                for word in re.findall(r'\b\w+\b', clean_snippet.lower()):
+                snippet_tokens = indic_tokenize.trivial_tokenize(snippet)
+                log_handle.verbose(f"Snippet tokens: {snippet_tokens}")
+                for word in snippet_tokens:
                     highlight_words.add(word)
         log_handle.verbose(f"Added snippet words to highlights. Total unique words: {len(highlight_words)}")
-
+        """
         return sorted(list(highlight_words))
