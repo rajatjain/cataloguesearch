@@ -15,6 +15,7 @@ pytest==8.2.2 # Testing framework
 
 # Utilities
 python-dotenv==1.0.1 # For managing environment variables (optional, but good practice)
+psutil==5.9.8 # For process management in CLI daemon
 
 protobuf~=6.31.1
 

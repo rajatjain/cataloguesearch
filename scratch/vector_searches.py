@@ -1,3 +1,5 @@
+import sys
+
 from dotenv import load_dotenv
 
 from backend.common import embedding_models
@@ -15,6 +17,8 @@ from backend.utils import json_dumps
 import shutil
 
 import os
+
+from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
 
 log_handle = logging.getLogger(__name__)
 
@@ -105,7 +109,6 @@ def build_index():
     discovery.crawl()
 
 def vector_search(query):
-    init()
     config = Config()
     index_searcher = IndexSearcher(config)
 
@@ -119,18 +122,29 @@ def vector_search(query):
     log_handle.info(f"Results: {json_dumps(results)}")
 
 def lexical_search(query, categories={}):
-    init()
     config = Config()
     index_searcher = IndexSearcher(config)
     log_handle.info(f"Index Name: {config.OPENSEARCH_INDEX_NAME}")
 
     log_handle.info(f"Running basic lexical query: {query}")
     results, _ = index_searcher.perform_lexical_search(
-        query, 30, categories, "hi", 10, 1)
+        query, 50, categories, "hi", 10, 1)
     log_handle.info(f"Results: {json_dumps(results)}")
 
-# init()
-# build_index()
+def main():
+    # setup logging
+    logs_dir = os.getenv("HOME", "") + "/cataloguesearch/logs/discovery"
+    setup_logging(logs_dir, console_level=logging.INFO,
+                  file_level=VERBOSE_LEVEL_NUM, console_only=False)
 
-query = "बढ़ते जलवायु"
-lexical_search(query, categories={"type": ["tx"]})
+    try:
+        config = Config("configs/config.yaml")
+    except Exception as e:
+        logging.error(f"Failed to load config: {e}")
+        sys.exit(1)
+
+    query = "मुनिराज चश्मा"
+    # lexical_search(query)
+    vector_search(query)
+
+main()

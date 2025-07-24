@@ -1,12 +1,12 @@
 # config.yaml
 crawler:
-  base_pdf_path: {HOME}/cataloguesearch/pdf
-  base_text_path: {HOME}/cataloguesearch/text
-  tmp_images_path: {HOME}/cataloguesearch/tmp_images
-  sqlite_db_path: {HOME}/cataloguesearch/db/cataloguesearch.db
+  base_pdf_path: "{HOME}/cataloguesearch/pdf"
+  base_text_path: "{HOME}/cataloguesearch/text"
+  tmp_images_path: "{HOME}/cataloguesearch/tmp_images"
+  sqlite_db_path: "{HOME}/cataloguesearch/db/cataloguesearch.db"
 
 index:
-  opensearch_config: {BASE_DIR}/configs/opensearch-config.yaml
+  opensearch_config: "{BASE_DIR}/configs/opensearch-config.yaml"
   chunk_size: 500
   chunk_overlap: 50
 
@@ -14,7 +14,7 @@ opensearch:
   host: localhost
   port: 9200
   username: admin
-  password: your_secure_password # IMPORTANT: Change this!
+  password: Admin@Password123!
   index_name: document_chunks_prod
 
 embedding_model:
@@ -22,4 +22,4 @@ embedding_model:
 
 llm_model:
   name: gemini-2.0-flash
-  api_key: {LLM_API_KEY} # This will be loaded as an environment variable
+  api_key: "{LLM_API_KEY}" # This will be loaded as an environment variable
