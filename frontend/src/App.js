@@ -1,90 +1,52 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
-// --- MOCK API SERVICE ---
-// In a real application, this would be in a separate file (e.g., services/api.js)
-// and would use fetch() to make actual network requests.
-
-const mockMetadata = {
-    "provider": ["TIFR", "IISC", "NCBS", "InStem"],
-    "iisc_department": ["Physics", "Biology", "Chemistry", "Mathematics"],
-    "year": ["2021", "2022", "2023", "2024"]
-};
-
-const mockSearchResults = {
-    total: 28,
-    results: [
-        {
-            original_file_name: "document_xyz.pdf",
-            page_no: 15,
-            bookmarks: ["General", "Science"],
-            snippets: [
-                "This is the first snippet where the important **search** term appears in context.",
-                "Another part of the page shows the **search** result with more details."
-            ]
-        },
-        {
-            original_file_name: "research_paper_alpha.pdf",
-            page_no: 3,
-            bookmarks: ["Physics"],
-            snippets: [
-                "The primary **search** was conducted over a period of six months."
-            ]
-        },
-        {
-            original_file_name: "catalogue_data_2023.docx",
-            page_no: 88,
-            bookmarks: [],
-            snippets: [
-                "For a successful **search**, one must define the parameters clearly.",
-                "This **search** yielded many interesting results from the chemistry department."
-            ]
-        },
-        {
-            original_file_name: "hindi_literature_review.pdf",
-            page_no: 42,
-            bookmarks: ["Literature", "Hindi"],
-            snippets: [
-                "यह एक महत्वपूर्ण **खोज** है जो हमारे अध्ययन को आगे बढ़ाएगी।",
-                "इस **खोज** के परिणाम बहुत उत्साहजनक थे।"
-            ]
-        }
-    ]
-};
-
+// --- API SERVICE ---
+// The getMetadata call is now only used for the dynamic category filters.
+const API_BASE_URL = 'http://localhost:8000';
 
 const api = {
-    getMetadata: () => {
-        console.log("API: Fetching metadata...");
-        return new Promise(resolve => {
-            setTimeout(() => {
-                console.log("API: Metadata received.", mockMetadata);
-                resolve(mockMetadata);
-            }, 500);
-        });
+    getMetadata: async () => {
+        console.log("API: Fetching metadata for categories...");
+        try {
+            const response = await fetch(`${API_BASE_URL}/metadata`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            console.log("API: Category metadata received.", data);
+            return data;
+        } catch (error) {
+            console.error("API Error: Could not fetch category metadata", error);
+            return {};
+        }
     },
-    search: (requestPayload) => {
+    search: async (requestPayload) => {
         console.log("API: Sending search request...", requestPayload);
-        return new Promise(resolve => {
-            setTimeout(() => {
-                console.log("API: Search results received.", mockSearchResults);
-                resolve(mockSearchResults);
-            }, 1000);
-        });
+        try {
+            const response = await fetch(`${API_BASE_URL}/search`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestPayload),
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            console.log("API: Search results received.", data);
+            return data;
+        } catch (error) {
+            console.error("API Error: Could not perform search", error);
+            return { total: 0, results: [] };
+        }
     }
 };
 
 // --- HELPER & ICON COMPONENTS ---
 
-/**
- * A simple spinner component to indicate loading states.
- */
 const Spinner = () => (
     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
 );
 
-/**
- * Filter Icon SVG
- */
 const FilterIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
         <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V15a1 1 0 01-.293.707l-2 2A1 1 0 019 17v-6.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
@@ -94,9 +56,6 @@ const FilterIcon = () => (
 
 // --- UI COMPONENTS ---
 
-/**
- * Module 1: Image Banner
- */
 const Banner = () => (
     <div className="bg-sky-100 h-40 flex items-center justify-center rounded-lg mb-4">
         <img
@@ -107,9 +66,6 @@ const Banner = () => (
     </div>
 );
 
-/**
- * Description Text
- */
 const Description = () => (
     <div className="text-center mb-8 px-4 text-gray-600 leading-relaxed">
         <p>Welcome to the Catalogue Search utility, your gateway to exploring a vast archive of documents.</p>
@@ -117,10 +73,6 @@ const Description = () => (
     </div>
 );
 
-
-/**
- * Module 2: Search Box
- */
 const SearchBar = ({ query, setQuery }) => (
     <div className="relative">
         <input
@@ -133,13 +85,13 @@ const SearchBar = ({ query, setQuery }) => (
     </div>
 );
 
-/**
- * Module 3: Metadata Filters
- */
 const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter }) => {
     const [selectedKey, setSelectedKey] = useState("");
     const [selectedValue, setSelectedValue] = useState("");
     const [availableValues, setAvailableValues] = useState([]);
+
+    // Get all keys from the metadata object for the dropdowns
+    const dropdownFilterKeys = Object.keys(metadata);
 
     useEffect(() => {
         if (selectedKey && metadata[selectedKey]) {
@@ -168,7 +120,7 @@ const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter 
                     className="p-3 bg-gray-50 border border-gray-300 rounded-md text-gray-900 w-full focus:ring-2 focus:ring-blue-500"
                 >
                     <option value="">Select Category...</option>
-                    {Object.keys(metadata).map(key => <option key={key} value={key}>{key}</option>)}
+                    {dropdownFilterKeys.map(key => <option key={key} value={key}>{key}</option>)}
                 </select>
                 <select
                     value={selectedValue}
@@ -204,25 +156,23 @@ const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter 
     );
 };
 
-
 /**
- * Modules 4 & 5: Language and Proximity Options
+ * MODIFICATION: This component now uses static, hardcoded data for its options
+ * as per the new requirements. It no longer needs the `metadata` prop.
  */
 const SearchOptions = ({ language, setLanguage, proximity, setProximity }) => {
+    const languageOptions = ['hindi', 'gujarati', 'both'];
     const proximityOptions = [
-        { label: 'Near', value: 10 }, { label: 'Medium', value: 20 }, { label: 'Far', value: 30 },
+        { label: 'near (10 words)', value: 10 },
+        { label: 'medium (20 words)', value: 20 },
+        { label: 'far (30 words)', value: 30 }
     ];
-    const languageOptions = ['hindi', 'gujarati'];
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-200">
             <div>
                 <h3 className="text-md font-semibold mb-3 text-gray-700">Language</h3>
                 <div className="flex gap-4">
-                    <label className="flex items-center gap-2 text-gray-800">
-                        <input type="radio" name="language" value="" checked={language === ""} onChange={() => setLanguage("")} className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500" />
-                        Any
-                    </label>
                     {languageOptions.map(lang => (
                         <label key={lang} className="flex items-center gap-2 text-gray-800 capitalize">
                             <input type="radio" name="language" value={lang} checked={language === lang} onChange={(e) => setLanguage(e.target.value)} className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500" />
@@ -247,9 +197,6 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity }) => {
 };
 
 
-/**
- * Module 7.1: Result Card
- */
 const ResultCard = ({ result }) => {
     const highlightSnippet = (snippet) => {
         const highlighted = snippet.replace(/\*\*(.*?)\*\*/g, `<strong class="bg-yellow-300 text-black px-1 rounded-sm">$1</strong>`);
@@ -274,9 +221,6 @@ const ResultCard = ({ result }) => {
     );
 };
 
-/**
- * Module 7 (Pagination): Pagination Controls
- */
 const Pagination = ({ currentPage, totalPages, onPageChange }) => {
     if (totalPages <= 1) return null;
     const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -298,9 +242,6 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
     );
 };
 
-/**
- * Module 7: Results Display
- */
 const Results = ({ searchData, isLoading, currentPage, onPageChange }) => {
     if (isLoading) {
         return (
@@ -341,23 +282,21 @@ const Results = ({ searchData, isLoading, currentPage, onPageChange }) => {
 // --- MAIN APP COMPONENT ---
 
 export default function App() {
-    // State for search inputs
     const [query, setQuery] = useState('');
     const [activeFilters, setActiveFilters] = useState([]);
-    const [language, setLanguage] = useState('');
+    // Set static defaults for language and proximity
+    const [language, setLanguage] = useState('hindi');
     const [proximity, setProximity] = useState(20);
 
-    // State for UI
     const [showFilters, setShowFilters] = useState(false);
-
-    // State for API data and loading status
     const [metadata, setMetadata] = useState({});
     const [searchData, setSearchData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    // State for pagination
     const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 4;
 
+    // useEffect now only fetches metadata for the category filters.
     useEffect(() => {
         api.getMetadata().then(data => setMetadata(data));
     }, []);
@@ -377,31 +316,34 @@ export default function App() {
             alert("Please enter a search query.");
             return;
         }
-
         setIsLoading(true);
-        setSearchData(null);
         setCurrentPage(page);
+
+        // If language is 'both', send null to the API, otherwise send the selected language.
+        const languageToSend = language === 'both' ? null : language;
 
         const requestPayload = {
             query: query,
-            filters: activeFilters.reduce((acc, filter) => {
+            categories: activeFilters.reduce((acc, filter) => {
                 if (!acc[filter.key]) acc[filter.key] = [];
                 acc[filter.key].push(filter.value);
                 return acc;
             }, {}),
-            language: language || null,
+            language: languageToSend,
             proximity: proximity,
             page: page,
-            size: 4
+            size: itemsPerPage
         };
 
         const data = await api.search(requestPayload);
         setSearchData(data);
         setIsLoading(false);
-    }, [query, activeFilters, language, proximity]);
+    }, [query, activeFilters, language, proximity, itemsPerPage]);
 
     const handlePageChange = (page) => {
-        handleSearch(page);
+        if (page > 0) {
+            handleSearch(page);
+        }
     };
 
     return (
@@ -413,7 +355,6 @@ export default function App() {
                 </header>
 
                 <main>
-                    {/* Search Controls Card */}
                     <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-8">
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
                             <div className="md:col-span-3">
@@ -422,7 +363,7 @@ export default function App() {
                             <button
                                 onClick={() => handleSearch(1)}
                                 disabled={isLoading}
-                                className="bg-green-600 text-white font-bold py-4 px-6 rounded-lg text-lg hover:bg-green-700 transition duration-300 disabled:bg-gray-400 flex items-center justify-center w-full"
+                                className="bg-green-600 text-white font-bold py-4 px-6 rounded-lg text-lg hover:bg-green-700 transition duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center w-full"
                             >
                                 {isLoading ? <Spinner /> : 'Search'}
                             </button>
@@ -441,7 +382,6 @@ export default function App() {
                             </button>
                         </div>
 
-                        {/* Collapsible Filter Section */}
                         {showFilters && (
                             <div className="mt-6 space-y-6">
                                 <MetadataFilters
@@ -460,7 +400,6 @@ export default function App() {
                         )}
                     </div>
 
-                    {/* Results Section */}
                     <Results
                         searchData={searchData}
                         isLoading={isLoading}
