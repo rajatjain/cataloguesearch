@@ -13,7 +13,7 @@ import psutil
 from datetime import datetime
 from threading import Event
 
-from backend.common.opensearch import get_opensearch_client
+from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
@@ -135,6 +135,12 @@ class DiscoveryDaemon:
             
             # Run discovery
             self.discovery.crawl()
+            
+            # Update metadata cache after discovery
+            logging.info("Updating metadata cache...")
+            metadata = get_metadata(self.config)
+            self.index_state.update_metadata_cache(metadata)
+            logging.info("Metadata cache updated successfully")
 
         except Exception as e:
             logging.error(f"Discovery failed: {e}")
@@ -178,6 +184,12 @@ def run_discovery_once(config: Config):
 
         # Run discovery
         discovery.crawl()
+        
+        # Update metadata cache after discovery
+        logging.info("Updating metadata cache...")
+        metadata = get_metadata(config)
+        index_state.update_metadata_cache(metadata)
+        logging.info("Metadata cache updated successfully")
         
     except Exception as e:
         logging.error(f"Discovery failed: {e}")

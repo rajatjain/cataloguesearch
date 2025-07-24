@@ -4,8 +4,10 @@ import shutil
 import tempfile
 import uuid
 
+from backend.common import opensearch
 from backend.common.opensearch import get_opensearch_client
 from backend.config import Config
+from backend.crawler.index_state import IndexState
 from backend.utils import json_dump, json_dumps
 
 log_handle = logging.getLogger(__name__)
@@ -156,3 +158,48 @@ def get_all_documents(max_results: int = 1000) -> list:
         print(f"An error occurred while querying OpenSearch: {e}")
         return []
 
+def update_index_state_metadata():
+    """
+    Updates the index state metadata in the OpenSearch index.
+    This is a placeholder function that can be implemented to update
+    the index state metadata as needed.
+    """
+    config = Config()
+    opensearch_client = get_opensearch_client(config)
+    index_name = config.OPENSEARCH_INDEX_NAME
+    index_state = IndexState(config.SQLITE_DB_PATH)
+
+    metadata = opensearch.get_metadata(config)
+    index_state.update_metadata_cache(metadata)
+
+def are_dicts_same(dict1: dict[str, list[str]], dict2: dict[str, list[str]]) -> bool:
+    """
+    Compares two dictionaries of the format {str: list[str]} to ensure they are the same,
+    regardless of key order or element order within the lists.
+
+    Args:
+        dict1: The first dictionary.
+        dict2: The second dictionary.
+
+    Returns:
+        True if the dictionaries are considered the same, False otherwise.
+    """
+
+    # 1. Check if the sets of keys are identical
+    if set(dict1.keys()) != set(dict2.keys()):
+        return False
+
+    # 2. Iterate through keys and compare their corresponding lists
+    for key in dict1:
+        list1 = dict1[key]
+        list2 = dict2[key]
+
+        # Check if the lengths of the lists are the same
+        if len(list1) != len(list2):
+            return False
+
+        # Convert lists to sets for order-independent comparison of elements
+        if set(list1) != set(list2):
+            return False
+
+    return True

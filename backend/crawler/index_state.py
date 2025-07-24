@@ -1,6 +1,8 @@
 import sqlite3
 import logging
 import os
+import json
+from datetime import datetime
 
 log_handle = logging.getLogger(__name__)
 
@@ -20,6 +22,13 @@ class IndexState:
                 last_indexed_timestamp TEXT,
                 file_checksum TEXT,
                 config_hash TEXT
+            )
+        """)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS metadata_cache (
+                metadata_key TEXT PRIMARY KEY,
+                metadata_values TEXT,
+                last_updated_timestamp TEXT
             )
         """)
         conn.commit()
@@ -119,3 +128,62 @@ class IndexState:
         conn.close()
         log_handle.info(f"Garbage Collect: Deleted {deleted_files} files from state.")
         return deleted_files
+
+    def get_metadata_cache(self) -> dict[str, list[str]]:
+        """
+        Retrieves cached metadata from the database.
+        Returns dict[str, list[str]] with metadata keys and their values.
+        """
+        conn = sqlite3.connect(self.state_db_path)
+        c = conn.cursor()
+        c.execute("SELECT metadata_key, metadata_values FROM metadata_cache")
+        rows = c.fetchall()
+        conn.close()
+        
+        metadata = {}
+        for row in rows:
+            key = row[0]
+            values = json.loads(row[1])
+            metadata[key] = values
+        
+        return metadata
+
+    def update_metadata_cache(self, metadata: dict[str, list[str]]):
+        """
+        Updates the metadata cache with new metadata.
+        
+        Args:
+            metadata: Dictionary with metadata keys and their values
+        """
+        conn = sqlite3.connect(self.state_db_path)
+        c = conn.cursor()
+        
+        # Clear existing metadata
+        c.execute("DELETE FROM metadata_cache")
+        
+        # Insert new metadata
+        timestamp = datetime.now().isoformat()
+        for key, values in metadata.items():
+            c.execute("""
+                INSERT INTO metadata_cache (metadata_key, metadata_values, last_updated_timestamp)
+                VALUES (?, ?, ?)
+            """, (key, json.dumps(values), timestamp))
+        
+        conn.commit()
+        conn.close()
+        log_handle.info(f"Updated metadata cache with {len(metadata)} keys")
+
+    def has_metadata_cache(self) -> bool:
+        """
+        Checks if metadata cache exists and is not empty.
+        
+        Returns:
+            bool: True if metadata cache has data, False otherwise
+        """
+        conn = sqlite3.connect(self.state_db_path)
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM metadata_cache")
+        count = c.fetchone()[0]
+        conn.close()
+        
+        return count > 0
