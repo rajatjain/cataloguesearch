@@ -46,9 +46,22 @@ class ResultRanker:
         combined_results_map: Dict[str, Dict[str, Any]] = defaultdict(dict)
         all_scores: List[float] = []
 
+        # Filter vector results to ignore low-quality matches
+        VECTOR_SCORE_THRESHOLD = 0.50
+        filtered_vector_results = []
+        if vector_results:
+            for res in vector_results:
+                vector_score = res.get('score', 0.0)
+                if vector_score >= VECTOR_SCORE_THRESHOLD:
+                    filtered_vector_results.append(res)
+                else:
+                    log_handle.debug(f"Filtered out vector result with score {vector_score:.3f} (below threshold {VECTOR_SCORE_THRESHOLD})")
+            
+            log_handle.info(f"Vector results: {len(vector_results)} -> {len(filtered_vector_results)} after filtering (threshold: {VECTOR_SCORE_THRESHOLD})")
+
         # Collect all unique document_id + page_number combinations
         # and store their highest scores from each source
-        for res_list, source_type in [(lexical_results, 'lexical'), (vector_results, 'vector')]:
+        for res_list, source_type in [(lexical_results, 'lexical'), (filtered_vector_results, 'vector')]:
             for res in res_list:
                 doc_page_id = f"{res.get('document_id')}-{res.get('page_number')}"
                 current_score = res.get('score', 0.0)

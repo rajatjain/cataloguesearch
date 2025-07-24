@@ -21,7 +21,7 @@ opensearch:
 
 embedding_model:
   # Even though it is slow, but keep it in tests to have uniformity.
-  name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  name: ai4bharat/indic-bert
 
 llm_model:
   name: gemini-2.0-flash
