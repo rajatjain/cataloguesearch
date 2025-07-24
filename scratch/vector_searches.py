@@ -2,7 +2,7 @@ import sys
 
 from dotenv import load_dotenv
 
-from backend.common import embedding_models
+from backend.common import embedding_models, opensearch
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
 from backend.index.embedding_module import IndexingEmbeddingModule
@@ -131,7 +131,7 @@ def lexical_search(query, categories={}):
         query, 50, categories, "hi", 10, 1)
     log_handle.info(f"Results: {json_dumps(results)}")
 
-def main():
+def prod_setup():
     # setup logging
     logs_dir = os.getenv("HOME", "") + "/cataloguesearch/logs/discovery"
     setup_logging(logs_dir, console_level=logging.INFO,
@@ -143,8 +143,61 @@ def main():
         logging.error(f"Failed to load config: {e}")
         sys.exit(1)
 
+
+def main():
+    prod_setup()
     query = "मुनिराज चश्मा"
     # lexical_search(query)
     vector_search(query)
 
-main()
+def are_dicts_same(dict1: dict[str, list[str]], dict2: dict[str, list[str]]) -> bool:
+    """
+    Compares two dictionaries of the format {str: list[str]} to ensure they are the same,
+    regardless of key order or element order within the lists.
+
+    Args:
+        dict1: The first dictionary.
+        dict2: The second dictionary.
+
+    Returns:
+        True if the dictionaries are considered the same, False otherwise.
+    """
+
+    # 1. Check if the sets of keys are identical
+    if set(dict1.keys()) != set(dict2.keys()):
+        return False
+
+    # 2. Iterate through keys and compare their corresponding lists
+    for key in dict1:
+        list1 = dict1[key]
+        list2 = dict2[key]
+
+        # Check if the lengths of the lists are the same
+        if len(list1) != len(list2):
+            return False
+
+        # Convert lists to sets for order-independent comparison of elements
+        if set(list1) != set(list2):
+            return False
+
+    return True
+
+def get_documents_tags():
+    prod_setup()
+    config = Config()
+    metadata = opensearch.get_metadata(config)
+
+    log_handle.info(f"Metadata: {json_dumps(metadata)}")
+
+    index_state = IndexState(config.SQLITE_DB_PATH)
+    index_state.update_metadata_cache(metadata)
+
+    met = index_state.get_metadata_cache()
+    log_handle.info(f"Metadata from IndexState: {json_dumps(met)}")
+
+    log_handle.info(f"Are two dicts same? {are_dicts_same(metadata, met)}")
+
+    # compare the two dicts and ensure they are the same
+
+
+get_documents_tags()

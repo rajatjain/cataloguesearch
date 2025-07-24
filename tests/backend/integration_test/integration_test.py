@@ -11,11 +11,12 @@ from backend.config import Config
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
 from backend.index.embedding_module import IndexingEmbeddingModule
-from backend.common.opensearch import get_opensearch_client
+from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.processor.pdf_processor import PDFProcessor
 from backend.utils import json_dump, json_dumps
 from tests.backend.base import *
 from tests.backend import common
+from tests.backend.common import are_dicts_same
 
 log_handle = logging.getLogger(__name__)
 
@@ -324,6 +325,15 @@ def test_full_integration(initialise):
         os_all_docs_old, os_all_docs_new, None, [doc_ids["abdmld"][1]]
     )
     log_handle.info(f"Test 8 Passed")
+
+    ###########################################
+    log_handle.info(f"Test 9: test metadata in OpenSearch and IndexState")
+    index_state = IndexState(config.SQLITE_DB_PATH)
+    metadata_os = get_metadata(config)
+    index_state.update_metadata_cache(metadata_os)
+    metadata_is = index_state.get_metadata_cache()
+    assert are_dicts_same(metadata_os, metadata_is)
+    log_handle.info(f"Test 9 Passed")
 
 
 def add_bookmark_to_pdf(pdf_path, bookmark_name, page_number):
