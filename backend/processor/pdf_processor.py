@@ -195,6 +195,21 @@ class PDFProcessor:
             log_handle.critical(f"output_dir {output_dir} does not exist. Exiting.")
             return [], {}
 
+        bookmarks = self.fetch_bookmarks(pdf_path)
+
+        # if output_dir exists and has same number of files as the PDF pages, skip processing
+        if os.path.exists(output_dir):
+            # count the number of text files in the output_dir
+            text_files = [f for f in os.listdir(output_dir) if f.endswith('.txt')]
+            # sort text files to ensure consistent order
+            text_files.sort()
+            # count the number of pages in the PDF
+            doc = fitz.open(pdf_path)
+            num_pages = doc.page_count
+            if len(text_files) == num_pages:
+                log_handle.info(f"Skipping processing for {pdf_path} as it already has {len(text_files)} text files.")
+                return [os.path.join(output_dir, f) for f in text_files], bookmarks
+
         image_dir = os.path.join(images_dir, pdf_name)
         if not os.path.exists(image_dir):
             log_handle.info(f"Creating image directory: {image_dir}")
@@ -212,10 +227,6 @@ class PDFProcessor:
                 text_folder=output_dir,
                 file_metadata=file_metadata
             )
-
-            # Extract bookmarks
-            bookmarks = self.fetch_bookmarks(pdf_path)
-            log_handle.info(f"Extracted {len(bookmarks)} bookmarks from {pdf_path}.")
 
             return saved_text_file_paths, bookmarks
 

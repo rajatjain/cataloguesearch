@@ -13,6 +13,7 @@ import psutil
 from datetime import datetime
 from threading import Event
 
+from backend.common import opensearch
 from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
 from backend.crawler.discovery import Discovery
@@ -195,12 +196,20 @@ def run_discovery_once(config: Config):
         logging.error(f"Discovery failed: {e}")
         sys.exit(1)
 
+def delete_index(config: Config):
+    get_opensearch_client(config, force_clean=True)
+
+    # delete index_state as well
+    index_state = IndexState(config.SQLITE_DB_PATH)
+    index_state.delete_index_state()
 
 def main():
     parser = argparse.ArgumentParser(description="CatalogueSearch Discovery CLI/Daemon")
     
     parser.add_argument('command', choices=['discover'], help='Command to run')
     parser.add_argument('--daemon', action='store_true', help='Run as daemon (every 6 hours)')
+    parser.add_argument('--delete-index', action='store_true',
+                        help='Delete OpenSearch index before starting discovery')
 
     args = parser.parse_args()
 
@@ -216,6 +225,8 @@ def main():
         sys.exit(1)
     
     if args.command == 'discover':
+        if args.delete_index:
+            delete_index(config)
         if args.daemon:
             # Check existing daemon
             if not DaemonManager.check_existing_daemon():

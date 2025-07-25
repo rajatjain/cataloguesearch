@@ -176,7 +176,7 @@ class IndexState:
     def has_metadata_cache(self) -> bool:
         """
         Checks if metadata cache exists and is not empty.
-        
+
         Returns:
             bool: True if metadata cache has data, False otherwise
         """
@@ -187,3 +187,16 @@ class IndexState:
         conn.close()
         
         return count > 0
+
+    def delete_index_state(self):
+        """
+        Deletes the entire index state from the SQLite DB.
+        This is a destructive operation and should be used with caution.
+        """
+        conn = sqlite3.connect(self.state_db_path)
+        c = conn.cursor()
+        c.execute("DELETE FROM indexed_files_state")
+        c.execute("DELETE FROM metadata_cache")
+        conn.commit()
+        conn.close()
+        log_handle.info("Deleted all index state and metadata cache.")

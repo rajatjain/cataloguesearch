@@ -39,7 +39,7 @@ def json_dump(obj, fp, **kwargs):
         processed_obj = _recursive_truncate(obj_copy, truncate_fields)
         return json.dump(processed_obj, fp, ensure_ascii=False, indent=2, **kwargs)
     else:
-        return json.dump(obj, fp, ensure_ascii=False, indent=4, **kwargs)
+        return json.dump(obj, fp, ensure_ascii=False, indent=2, **kwargs)
 
 def json_dumps(obj, **kwargs):
     """
@@ -56,4 +56,4 @@ def json_dumps(obj, **kwargs):
         processed_obj = _recursive_truncate(obj_copy, truncate_fields)
         return json.dumps(processed_obj, ensure_ascii=False, indent=2, **kwargs)
     else:
-        return json.dumps(obj, ensure_ascii=False, indent=4, **kwargs)
+        return json.dumps(obj, ensure_ascii=False, indent=2, **kwargs)

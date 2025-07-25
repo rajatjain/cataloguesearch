@@ -7,8 +7,13 @@ crawler:
 
 index:
   opensearch_config: "{BASE_DIR}/configs/opensearch-config.yaml"
-  chunk_size: 500
-  chunk_overlap: 50
+  chunking_algos:
+    default:
+      chunk_size: 500
+      chunk_overlap: 50
+    dynamic:
+      similarity_threshold: 0.5
+  chunk_strategy: "dynamic"
 
 opensearch:
   host: localhost
@@ -18,7 +23,7 @@ opensearch:
   index_name: document_chunks_prod
 
 embedding_model:
-  name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  name: ai4bharat/indic-bert
 
 llm_model:
   name: gemini-2.0-flash
