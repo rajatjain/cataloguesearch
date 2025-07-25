@@ -57,6 +57,23 @@ mappings:
       type: text
     timestamp_indexed:
       type: date
+    paragraph_id:
+      type: keyword
+    chunk_in_para_index:
+      type: integer
     vector_embedding:
       type: knn_vector
-      dimension: <set_by_embedding_model>
+      # The dimension for ai4bharat/sentence-embedding-indic-bert is 768.
+      dimension: 768
+      method:
+        name: hnsw
+        # The embeddings will be normalized for faster and more accurate similarity search.
+        # Hence use cosinesimil as the distance metric.
+        space_type: cosinesimil
+        engine: faiss
+        parameters:
+          # Number of neighbors to connect to during graph construction.
+          # Higher values lead to better recall but slower indexing.
+          ef_construction: 256
+          # The number of bidirectional links for each new element.
+          m: 48

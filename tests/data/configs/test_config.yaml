@@ -9,19 +9,25 @@ crawler:
 
 index:
   opensearch_config: "{TEST_DATA_DIR}/configs/opensearch-config.yaml"
-  chunk_size: 500
-  chunk_overlap: 50
+  chunking_algos:
+    default:
+      chunk_size: 500
+      chunk_overlap: 50
+    dynamic:
+      similarity_threshold: 0.5
+  chunk_strategy: "default"
+
 
 opensearch:
   host: localhost
   port: 19200
   username: admin
   password: Admin@Password123!
-  index_name: "{INDEX_NAME}"
+  index_name: opensearch-cataloguesearch-pytest
 
 embedding_model:
   # Even though it is slow, but keep it in tests to have uniformity.
-  name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  name: ai4bharat/indic-bert
 
 llm_model:
   name: gemini-2.0-flash

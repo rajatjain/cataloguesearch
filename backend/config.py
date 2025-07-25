@@ -84,10 +84,8 @@ class Config:
             return self._settings.get("crawler", {}).get("sqlite_db_path", None)
         elif name == "OPENSEARCH_CONFIG_PATH":
             return self._settings.get("index", {}).get("opensearch_config", None)
-        elif name == "CHUNK_SIZE":
-            return self._settings.get("index", {}).get("chunk_size", 500)
-        elif name == "CHUNK_OVERLAP":
-            return self._settings.get("index", {}).get("chunk_overlap", 50)
+        elif name == "CHUNK_STRATEGY":
+            return self._settings.get("index", {}).get("chunk_strategy", "default")
         elif name == "OPENSEARCH_HOST":
             return self._settings.get("opensearch", {}).get("host", "localhost")
         elif name == "OPENSEARCH_PORT":
@@ -99,7 +97,7 @@ class Config:
         elif name == "OPENSEARCH_INDEX_NAME":
             return self._settings.get("opensearch", {}).get("index_name", "document_chunks")
         elif name == "EMBEDDING_MODEL_NAME":
-            return self._settings.get("embedding_model", {}).get("name", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+            return self._settings.get("embedding_model", {}).get("name", "ai4bharat/indic-bert")
         elif name == "LLM_MODEL_NAME":
             return self._settings.get("llm_model", {}).get("name", "gemini-2.0-flash")
         elif name == "LLM_API_KEY":

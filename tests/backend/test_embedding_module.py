@@ -282,15 +282,15 @@ def test_chunk_text_basic(indexing_module):
     """
     Tests basic text chunking.
     """
-    long_text = "a " * 500 # 1000 characters (500 'a ' pairs)
-    chunks = indexing_module._chunk_text(long_text)
+    long_text = "a " * 800 # 1600 characters (800 'a ' pairs)
+    chunks = indexing_module._text_splitter._chunk_text(long_text)
     # With chunk_size=100, chunk_overlap=20, and "a " being 2 chars
     # Expected chunks: (100-20) = 80 chars per effective chunk.
     # Total chars = 1000. 1000 / 80 = 12.5. So 13 chunks.
     # The first chunk will be 100 chars. Subsequent chunks will start 80 chars after previous.
     # Let's verify that chunks are created and have reasonable lengths.
     assert len(chunks) > 1
-    assert all(len(chunk) <= indexing_module._chunk_size for chunk in chunks)
+    assert all(len(chunk) <= indexing_module._text_splitter._chunk_size for chunk in chunks)
     assert chunks[0].startswith("a a a a a")
     assert chunks[1].startswith("a a a a a") # Should have overlap
 
