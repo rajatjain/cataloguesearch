@@ -129,8 +129,8 @@ async def search(request_data: SearchRequest = Body(...)):
                         f"categories={categories}, page={page_number}, size={page_size}")
         log_handle.info(f"Detected language for keywords '{keywords}': {detected_language}")
 
-        disable_lexical_search = True
-        disable_vector_search = False
+        disable_lexical_search = False
+        disable_vector_search = True
 
         # Perform Lexical Search
         lexical_results = []
