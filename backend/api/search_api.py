@@ -129,42 +129,48 @@ async def search(request_data: SearchRequest = Body(...)):
                         f"categories={categories}, page={page_number}, size={page_size}")
         log_handle.info(f"Detected language for keywords '{keywords}': {detected_language}")
 
+        disable_lexical_search = True
+        disable_vector_search = False
+
         # Perform Lexical Search
+        lexical_results = []
+
         opensearch_client = get_opensearch_client(Config())
-        lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
-            keywords=keywords,
-            proximity_distance=proximity_distance,
-            categories=categories,
-            detected_language=detected_language,
-            page_size=page_size,
-            page_number=page_number
-        )
-        log_handle.info(f"Lexical search returned {len(lexical_results)} "
-                        f"results (total: {lexical_total_hits}).")
+        if not disable_lexical_search:
+            lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
+                keywords=keywords,
+                proximity_distance=proximity_distance,
+                categories=categories,
+                detected_language=detected_language,
+                page_size=page_size,
+                page_number=page_number
+            )
+            log_handle.info(f"Lexical search returned {len(lexical_results)} "
+                            f"results (total: {lexical_total_hits}).")
+
 
         # Perform Vector Search
         # Disable Vector Search for now.
         # TODO(rajatjain): Enable vector search when embedding model is ready.
-        """
-        model_name = config.EMBEDDING_MODEL_NAME
-        query_embedding = get_embedding(model_name, keywords)
-        if not query_embedding:
-            log_handle.warning("Could not generate embedding for query. Vector search skipped.")
-            vector_results = []
-        else:
-            vector_results, vector_total_hits = index_searcher.perform_vector_search(
-                embedding=query_embedding,
-                categories=categories,
-                page_size=page_size,
-                page_number=page_number,
-                language=detected_language
-            )
-            log_handle.info(
-                f"Vector search returned {len(vector_results)} "
-                f"results (total: {vector_total_hits}).")
-        """
         vector_results = []
-
+        if not disable_vector_search:
+            model_name = config.EMBEDDING_MODEL_NAME
+            log_handle.info(f"Using embedding model: {model_name}")
+            query_embedding = get_embedding(model_name, keywords)
+            if not query_embedding:
+                log_handle.warning("Could not generate embedding for query. Vector search skipped.")
+                vector_results = []
+            else:
+                vector_results, vector_total_hits = index_searcher.perform_vector_search(
+                    embedding=query_embedding,
+                    categories=categories,
+                    page_size=page_size,
+                    page_number=page_number,
+                    language=detected_language
+                )
+                log_handle.info(
+                    f"Vector search returned {len(vector_results)} "
+                    f"results (total: {vector_total_hits}).")
 
         # Collate and Rank Results
         final_results, total_results = ResultRanker.collate_and_rank(
