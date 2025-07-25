@@ -64,8 +64,8 @@ class IndexSearcher:
                 })
                 log_handle.debug(f"Added bookmark filter: {self._bookmark_field} with values {values}")
             else:
-                # Search in metadata fields
-                field_name = f"{self._metadata_prefix}.{category_key}"
+                # Search in metadata fields using .keyword for exact matching
+                field_name = f"{self._metadata_prefix}.{category_key}.keyword"
                 filters.append({
                     "terms": {
                         field_name: values
