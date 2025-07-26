@@ -40,7 +40,7 @@ class ParagraphChunksSplitter(BaseChunkSplitter):
             log_handle.verbose(f"page {page_num} has {len(page_paras)} paragraphs")
 
             if buffer_page_num != -1:
-                log_handle.info(f"last para of page {buffer_page_num} is incomplete")
+                log_handle.verbose(f"last para of page {buffer_page_num} is incomplete")
                 # last para of previous page is incomplete
                 last_para = page_num_params_dict[buffer_page_num][-1]
                 last_para += "\n" + page_paras[0]

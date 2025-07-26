@@ -42,7 +42,8 @@ settings:
           - "म्म => ंम"
     analyzer:
       hindi_analyzer:
-        tokenizer: standard
+        # UPDATED: Changed tokenizer from 'standard' to 'icu_tokenizer'
+        tokenizer: icu_tokenizer
         char_filter:
           - hindi_nasal_normalizer
         filter:
@@ -50,7 +51,8 @@ settings:
           - indic_normalizer
           - hindi_stop
       gujarati_analyzer:
-        tokenizer: standard
+        # It's good practice to use icu_tokenizer for Gujarati as well
+        tokenizer: icu_tokenizer
         filter:
           - lowercase
           - indic_normalizer
