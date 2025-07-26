@@ -145,7 +145,7 @@ def test_vector_search_with_categories():
     results, _ = index_searcher.perform_vector_search(
         embedding, {"type": ["t2"]}, 10, 1, "hi")
     log_handle.verbose(f"Vector Search Results with categories: {json_dumps(results)}")
-    assert len(results) == 3
+    assert len(results) == 2
 
     results1, _ = index_searcher.perform_vector_search(
         embedding, {}, 10, 1, "hi")

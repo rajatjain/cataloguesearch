@@ -11,6 +11,7 @@ from backend.common.embedding_models import get_embedding_model, get_embedding
 from backend.index.embedding_module import IndexingEmbeddingModule
 
 from backend.common.opensearch import get_opensearch_client
+from backend.index.text_splitter.default import DefaultChunksSplitter
 from backend.utils import json_dumps
 from tests.backend.base import *
 
@@ -278,19 +279,20 @@ def test_generate_embedding_empty_text(indexing_module):
     assert len(embedding) == \
            get_embedding_model(config.EMBEDDING_MODEL_NAME).get_sentence_embedding_dimension()
 
-def test_chunk_text_basic(indexing_module):
+def test_chunk_text_basic():
     """
     Tests basic text chunking.
     """
+    text_splitter = DefaultChunksSplitter(config=Config())
     long_text = "a " * 800 # 1600 characters (800 'a ' pairs)
-    chunks = indexing_module._text_splitter._chunk_text(long_text)
+    chunks = text_splitter._chunk_text(long_text)
     # With chunk_size=100, chunk_overlap=20, and "a " being 2 chars
     # Expected chunks: (100-20) = 80 chars per effective chunk.
     # Total chars = 1000. 1000 / 80 = 12.5. So 13 chunks.
     # The first chunk will be 100 chars. Subsequent chunks will start 80 chars after previous.
     # Let's verify that chunks are created and have reasonable lengths.
     assert len(chunks) > 1
-    assert all(len(chunk) <= indexing_module._text_splitter._chunk_size for chunk in chunks)
+    assert all(len(chunk) <= text_splitter._chunk_size for chunk in chunks)
     assert chunks[0].startswith("a a a a a")
     assert chunks[1].startswith("a a a a a") # Should have overlap
 

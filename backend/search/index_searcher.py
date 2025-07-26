@@ -98,16 +98,14 @@ class IndexSearcher:
         query_body = {
             "query": {
                 "bool": {
-                    "must": [
-                        {
-                            "match_phrase": {
-                                query_field: {
-                                    "query": keywords,
-                                    "slop": proximity_distance
-                                }
+                    "must": [{
+                        "match_phrase": {
+                            query_field: {
+                                "query": keywords,
+                                "slop": proximity_distance,
                             }
                         }
-                    ]
+                    }]
                 }
             },
             "highlight": {
@@ -262,7 +260,7 @@ class IndexSearcher:
         """
         query_body = self._build_lexical_query(keywords, proximity_distance, categories, detected_language)
         from_ = (page_number - 1) * page_size
-        log_handle.verbose(f"Lexical query: {query_body}")
+        log_handle.verbose(f"Lexical query: {json_dumps(query_body)}")
         try:
             response = self._opensearch_client.search(
                 index=self._index_name,

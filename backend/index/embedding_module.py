@@ -12,6 +12,7 @@ from backend.common import language_detector
 from backend.config import Config
 from backend.index.text_splitter.default import DefaultChunksSplitter
 from backend.index.text_splitter.dynamic_chunks import DynamicChunksSplitter
+from backend.index.text_splitter.paragraph_splitter import ParagraphChunksSplitter
 
 # Setup logging for this module
 log_handle = logging.getLogger(__name__)
@@ -35,30 +36,14 @@ class IndexingEmbeddingModule:
             self._text_splitter = DefaultChunksSplitter(config)
         elif self._chunk_strategy == "dynamic":
             self._text_splitter = DynamicChunksSplitter(config)
+        elif self._chunk_strategy == "paragraph":
+            self._text_splitter = ParagraphChunksSplitter(config)
 
         self._index_keys_per_lang = {
             "hi": "text_content_hindi",
             "en": "text_content",
             "gu": "text_content_gujarati"
         }
-
-    def _chunk_text(self, text_content: str) -> list[str]:
-        """
-        Chunks the given text content using the configured text splitter.
-
-        Args:
-            text_content (str): The full text content of a page/document.
-
-        Returns:
-            list[str]: A list of text chunks.
-        """
-        try:
-            chunks = self._text_splitter.split_text(text_content)
-            log_handle.verbose(f"Chunked text into {len(chunks)} chunks.")
-            return chunks
-        except Exception as e:
-            log_handle.error(f"Error chunking text: {e}")
-            return [text_content] # Return original text as single chunk on error
 
     def index_document(
             self, document_id: str, original_filename: str,
@@ -115,7 +100,9 @@ class IndexingEmbeddingModule:
                 log_handle.error(f"Error during metadata-only re-indexing for {document_id}: {e}")
             return
 
-        chunks = self._text_splitter.get_chunks(document_id, page_text_paths)
+        chunks = self._text_splitter.get_chunks(
+            document_id=document_id, pages_text_path=page_text_paths)
+
         language = metadata.get("language", None)
         for chunk in chunks:
             # add common fields
@@ -151,4 +138,4 @@ class IndexingEmbeddingModule:
                     f"Error indexing chunk {chunk['chunk_id']} "
                     f"for document {document_id}: {e}")
 
-        log_handle.info(f"Finished full indexing for document {document_id}.")
+        log_handle.info(f"Finished full indexing for document {document_id}: total_chunks: {len(chunks)}")
