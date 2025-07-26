@@ -61,6 +61,7 @@ const Banner = () => (
             src="/images/banner.jpg"
             alt="Jain Catalogue Search Banner"
             className="w-full h-full object-contain rounded-lg"
+            onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/1200x200/E0F2FE/334155?text=Jain+Catalogue+Search' }}
         />
     </div>
 );
@@ -68,7 +69,6 @@ const Banner = () => (
 const Description = () => (
     <div className="text-center mb-8 px-4 text-gray-600 leading-relaxed">
         <h1 className="text-3xl font-bold text-gray-800 mb-2">Jain Catalogue Search</h1>
-        <p></p>
         <p>This interface allows a Mumukshu to search through a vast collection of sermons</p>
         <p>delivered by Pujya Gurudev Shri Kanji Swami.</p>
     </div>
@@ -91,7 +91,6 @@ const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter 
     const [selectedValue, setSelectedValue] = useState("");
     const [availableValues, setAvailableValues] = useState([]);
 
-    // Get all keys from the metadata object for the dropdowns
     const dropdownFilterKeys = Object.keys(metadata);
 
     useEffect(() => {
@@ -209,37 +208,23 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity, searchT
     );
 };
 
-
-const ResultCard = ({ result, highlightWords = [] }) => {
-    const highlightSnippet = (snippet) => {
-        console.log('Highlighting debug:', { snippet: snippet?.substring(0, 100), highlightWords });
-        
-        if (!highlightWords || highlightWords.length === 0 || !snippet) {
-            return { __html: snippet };
+/**
+ * Renders a single search result card.
+ * It now receives HTML with <em> tags in `content_snippet` and styles them.
+ */
+const ResultCard = ({ result }) => {
+    /**
+     * Replaces <em> tags from OpenSearch with styled <mark> tags
+     * and returns an object suitable for dangerouslySetInnerHTML.
+     */
+    const getHighlightedHTML = () => {
+        if (!result.content_snippet) {
+            return { __html: '' };
         }
-
-        let highlighted = snippet;
-        // Sort words by length in descending order to avoid partial matches
-        const sortedWords = [...highlightWords].sort((a, b) => b.length - a.length);
-
-        sortedWords.forEach(word => {
-            if (!word || word.trim() === '') return;
-            
-            console.log('Trying to highlight word:', word);
-            // Escape special regex characters
-            const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            // Use global case-insensitive search, handle both exact and partial matches
-            const regex = new RegExp(`(${escapedWord})`, 'giu');
-            const beforeReplace = highlighted;
-            highlighted = highlighted.replace(regex, `<mark class="bg-yellow-200 text-black px-1 rounded font-medium">$1</mark>`);
-            
-            if (beforeReplace !== highlighted) {
-                console.log('Successfully highlighted word:', word);
-            }
-        });
-
-        console.log('Final highlighted result:', highlighted.substring(0, 200));
-        return { __html: highlighted };
+        const styledSnippet = result.content_snippet
+            .replace(/<em>/g, '<mark class="bg-yellow-200 text-black px-1 rounded font-medium">')
+            .replace(/<\/em>/g, '</mark>');
+        return { __html: styledSnippet };
     };
 
     return (
@@ -252,7 +237,8 @@ const ResultCard = ({ result, highlightWords = [] }) => {
                 )}
             </div>
             <div className="space-y-3 text-gray-700">
-                <p dangerouslySetInnerHTML={highlightSnippet(result.content_snippet)} />
+                {/* Use dangerouslySetInnerHTML to render the HTML from the API */}
+                <p dangerouslySetInnerHTML={getHighlightedHTML()} />
             </div>
         </div>
     );
@@ -279,6 +265,9 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
     );
 };
 
+/**
+ * Renders the list of search results.
+ */
 const Results = ({ searchData, isLoading, currentPage, onPageChange }) => {
     if (isLoading) {
         return (
@@ -309,7 +298,6 @@ const Results = ({ searchData, isLoading, currentPage, onPageChange }) => {
                     <ResultCard
                         key={`${result.original_filename}-${index}`}
                         result={result}
-                        highlightWords={searchData.highlight_words || []}
                     />
                 ))}
             </div>
@@ -326,7 +314,7 @@ export default function App() {
     const [activeFilters, setActiveFilters] = useState([]);
     const [language, setLanguage] = useState('hindi');
     const [proximity, setProximity] = useState(20);
-    const [searchType, setSearchType] = useState('strict'); // New state for search type
+    const [searchType, setSearchType] = useState('strict');
 
     const [showFilters, setShowFilters] = useState(false);
     const [metadata, setMetadata] = useState({});
@@ -351,6 +339,7 @@ export default function App() {
 
     const handleSearch = useCallback(async (page = 1) => {
         if (!query.trim()) {
+            // Using a simple browser alert for now. Consider a modal for a better UX.
             alert("Please enter a search query.");
             return;
         }
@@ -361,7 +350,7 @@ export default function App() {
 
         const requestPayload = {
             query: query,
-            search_type: searchType, // Pass search type to API
+            search_type: searchType,
             categories: activeFilters.reduce((acc, filter) => {
                 if (!acc[filter.key]) acc[filter.key] = [];
                 acc[filter.key].push(filter.value);
@@ -379,7 +368,7 @@ export default function App() {
     }, [query, activeFilters, language, proximity, searchType]);
 
     const handlePageChange = (page) => {
-        if (page > 0 && page <= Math.ceil(searchData.total_results / searchData.page_size)) {
+        if (searchData && page > 0 && page <= Math.ceil(searchData.total_results / searchData.page_size)) {
             handleSearch(page);
         }
     };

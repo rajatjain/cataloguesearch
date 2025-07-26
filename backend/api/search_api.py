@@ -177,10 +177,9 @@ async def search(request_data: SearchRequest = Body(...)):
             "page_size": page_size,
             "page_number": page_number,
             "results": final_results,
-            "highlight_words": highlight_words
         }
 
-        log_handle.info(f"Search response: {json_dumps(response, truncate_fields=['content_snippet'])}")
+        log_handle.info(f"Search response: {json_dumps(response)}")
         return JSONResponse(content=response, status_code=200)
 
     except Exception as e:

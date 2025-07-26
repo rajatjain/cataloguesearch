@@ -162,8 +162,7 @@ class IndexSearcher:
                     query_field: {
                         "pre_tags": ["<em>"],
                         "post_tags": ["</em>"],
-                        "fragment_size": 150,
-                        "number_of_fragments": 1,
+                        "number_of_fragments": 0,
                         "type": "unified",
                         "highlight_query": {
                             "match_phrase": {
@@ -185,8 +184,7 @@ class IndexSearcher:
                         query_field: {
                             "pre_tags": ["<em>"],
                             "post_tags": ["</em>"],
-                            "fragment_size": 150,
-                            "number_of_fragments": 1,
+                            "number_of_fragments": 0,
                             "type": "unified",
                             "highlight_query": main_query
                         }
@@ -199,8 +197,7 @@ class IndexSearcher:
                         query_field: {
                             "pre_tags": ["<em>"],
                             "post_tags": ["</em>"],
-                            "fragment_size": 150,
-                            "number_of_fragments": 1,
+                            "number_of_fragments": 0,
                             "type": "unified"
                         }
                     }
@@ -268,12 +265,16 @@ class IndexSearcher:
 
             if is_lexical:
                 if language is None:
-                    language = 'en'
+                    language = 'hi'
                 field = self._text_fields.get(language)
-                content_snippet = source.get(field, '')
+
+                # Prioritise the highlighted content if available
+                highlighted_fragment = hit.get('highlight', {}).get(field, '')
+                if highlighted_fragment:
+                    content_snippet = "...".join(highlighted_fragment)
             elif not is_lexical:
                 # For vector search, we might just take a snippet of the content
-                field = self._text_fields.get('en')
+                field = self._text_fields.get(language or 'hi')
                 content_snippet = source.get(field)
 
             metadata = source.get(self._metadata_prefix, {})
@@ -308,6 +309,8 @@ class IndexSearcher:
             hits = response.get('hits', {}).get('hits', [])
             total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
             log_handle.info(f"Lexical search executed. Total hits: {total_hits}.")
+            log_handle.info(
+                f"Lexical search response: {json_dumps(response, truncate_fields=['content_snippet'])}")
             return self._extract_results(hits, is_lexical=True, language=detected_language), total_hits
         except Exception as e:
             log_handle.error(f"Error during lexical search: {e}", exc_info=True)
