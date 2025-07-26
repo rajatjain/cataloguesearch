@@ -160,6 +160,7 @@ const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter 
 const SearchOptions = ({ language, setLanguage, proximity, setProximity, searchType, setSearchType }) => {
     const languageOptions = ['hindi', 'gujarati', 'both'];
     const proximityOptions = [
+        { label: 'exact phrase', value: 0 },
         { label: 'near (10 words)', value: 10 },
         { label: 'medium (20 words)', value: 20 },
         { label: 'far (30 words)', value: 30 }
@@ -367,7 +368,7 @@ export default function App() {
                 return acc;
             }, {}),
             language: languageToSend,
-            proximity: proximity,
+            proximity_distance: proximity,
             page: page,
             size: 20
         };

@@ -88,7 +88,7 @@ class SearchRequest(BaseModel):
     """
     query: str = Field(..., example="Bangalore city history")
     search_type: str = Field("strict", description="Type of search: 'strict' or 'fuzzy'.")
-    proximity_distance: int = Field(30, ge=1, description="Max word distance for proximity search.")
+    proximity_distance: int = Field(30, ge=0, description="Max word distance for proximity search. Use 0 for exact phrase.")
     categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
     page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
     page_number: int = Field(1, ge=1, description="Page number for pagination.")
