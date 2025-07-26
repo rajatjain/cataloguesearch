@@ -112,9 +112,11 @@ async def search(request_data: SearchRequest = Body(...)):
 
     try:
         detected_language = LanguageDetector.detect_language(keywords)
+        search_type = "exact_phrase" if proximity_distance == 0 else "proximity"
         log_handle.info(f"Received search request: keywords='{keywords}', "
-                        f"search_type='{search_type}', categories={categories}, page={page_number}, size={page_size}")
-        log_handle.info(f"Detected language for keywords '{keywords}': {detected_language}")
+                        f"search_type='{search_type}', proximity_distance={proximity_distance}, "
+                        f"categories={categories}, page={page_number}, size={page_size}",
+                        f"detected_language={detected_language}")
 
         disable_lexical_search = False
         
@@ -132,7 +134,6 @@ async def search(request_data: SearchRequest = Body(...)):
                 detected_language=detected_language,
                 page_size=page_size,
                 page_number=page_number,
-                search_type=search_type
             )
             log_handle.info(f"Lexical search returned {len(lexical_results)} "
                             f"results (total: {lexical_total_hits}).")
@@ -162,12 +163,23 @@ async def search(request_data: SearchRequest = Body(...)):
         )
         log_handle.info(f"Collation and ranking produced {len(final_results)} final results (total: {total_results}).")
 
+        # Extract Highlight Words
+        if proximity_distance == 0:
+            # For exact phrase search, treat the entire query as one highlight unit
+            highlight_words = [keywords.strip()]
+        else:
+            # For proximity search, extract individual words
+            highlight_words = HighlightExtractor.extract_highlights(keywords, final_results)
+        log_handle.info(f"Extracted highlight words: {highlight_words}")
+
         response = {
             "total_results": total_results,
             "page_size": page_size,
             "page_number": page_number,
             "results": final_results,
+            "highlight_words": highlight_words
         }
+
         log_handle.info(f"Search response: {json_dumps(response, truncate_fields=['content_snippet'])}")
         return JSONResponse(content=response, status_code=200)
 

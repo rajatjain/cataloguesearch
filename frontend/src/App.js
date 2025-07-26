@@ -309,7 +309,7 @@ const Results = ({ searchData, isLoading, currentPage, onPageChange }) => {
                     <ResultCard
                         key={`${result.original_filename}-${index}`}
                         result={result}
-                        highlightWords={result.highlight_words || []}
+                        highlightWords={searchData.highlight_words || []}
                     />
                 ))}
             </div>
@@ -369,8 +369,8 @@ export default function App() {
             }, {}),
             language: languageToSend,
             proximity_distance: proximity,
-            page: page,
-            size: 20
+            page_number: page,
+            page_size: 20
         };
 
         const data = await api.search(requestPayload);

@@ -1,41 +1,50 @@
-import re
-from typing import List, Dict, Any, Set
 import logging
+from typing import List, Any, Dict
+
+from indicnlp.tokenize import indic_tokenize
 
 log_handle = logging.getLogger(__name__)
 
 class HighlightExtractor:
+    """
+    A utility class to extract and clean words for UI highlighting.
+    """
+
     @staticmethod
-    def extract_highlights(results: List[str], proximity_distance: int = None) -> List[str]:
+    def extract_highlights(query_keywords: str, search_results: List[Dict[str, Any]]) -> List[str]:
         """
-        Extracts highlighted words/phrases from a list of result strings.
+        Extracts important words from the original query and content snippets
+        of the search results for UI highlighting.
 
         Args:
-            results: List of result strings containing highlighted terms.
-            proximity_distance: If 0 (exact phrase), keep phrases intact. Otherwise split into words.
+            query_keywords (str): The original search query string.
+            search_results (List[Dict[str, Any]]): A list of search result dictionaries.
 
         Returns:
-            A list of unique highlighted words or phrases.
+            List[str]: A deduplicated list of words to highlight.
         """
-        highlighted_items: Set[str] = set()
-        highlight_regex = re.compile(r'<em>(.*?)</em>', re.IGNORECASE)
+        highlight_words = set()
 
-        for result in results:
-            matches = highlight_regex.findall(result)
+        # Add words from the original query
+        # Use Unicode-aware pattern for multi-language support (Hindi, Gujarati, etc.)
+        query_tokens = indic_tokenize.trivial_tokenize(query_keywords)
+        log_handle.verbose(f"Original query tokens: {query_tokens}")
+        for word in query_tokens:
+            highlight_words.add(word)
+        log_handle.verbose(f"Added query keywords to highlights: {list(highlight_words)}")
+
+        # The snippet extraction code is already commented out
+        return sorted(list(highlight_words))
+
+    @staticmethod
+    def extract_phrase_highlights(query_keywords: str) -> List[str]:
+        """
+        Extract highlights for exact phrase search.
+        
+        Args:
+            query_keywords (str): The exact phrase to highlight.
             
-            for match in matches:
-                if proximity_distance == 0:  # exact phrase search
-                    # Keep the entire phrase intact
-                    cleaned_phrase = match.strip()
-                    if cleaned_phrase:
-                        highlighted_items.add(cleaned_phrase)
-                else:
-                    # Split into individual words for proximity/fuzzy searches
-                    words = match.split()
-                    for word in words:
-                        cleaned_word = word.strip()
-                        if cleaned_word:
-                            highlighted_items.add(cleaned_word)
-
-        log_handle.verbose(f"Extracted unique highlight items: {list(highlighted_items)}")
-        return list(highlighted_items)
+        Returns:
+            List[str]: A list containing the full phrase as a single highlight unit.
+        """
+        return [query_keywords.strip()]
