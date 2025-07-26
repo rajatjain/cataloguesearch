@@ -1,25 +1,60 @@
-# Settings for the OpenSearch index
+# Alternative approach using char_filter for bidirectional nasal normalization
 settings:
-  # The knn settings must be prefixed with 'index.' and be at the top level
   "index.knn": true
-
-  # Standard index settings do not have a prefix
   number_of_shards: 1
   number_of_replicas: 0
   analysis:
+    char_filter:
+      # Normalize everything to anusvara form
+      hindi_nasal_normalizer:
+        type: mapping
+        mappings:
+          # Convert all halant forms to anusvara
+          - "न्त => ंत"
+          - "न्थ => ंथ"
+          - "न्द => ंद"
+          - "न्ध => ंध"
+          - "न्न => ंन"
+          - "न्स => ंस"
+          - "न्श => ंश"
+          - "न्ह => ंह"
+          - "न्य => ंय"
+          - "न्व => ंव"
+          - "न्ल => ंल"
+          - "न्र => ंर"
+          - "न्च => ंच"
+          - "न्छ => ंछ"
+          - "न्ज => ंज"
+          - "न्झ => ंझ"
+          - "न्क => ंक"
+          - "न्ख => ंख"
+          - "न्ग => ंग"
+          - "न्घ => ंघ"
+          - "ण्ट => ंट"
+          - "ण्ठ => ंठ"
+          - "ण्ड => ंड"
+          - "ण्ढ => ंढ"
+          - "ण्ण => ंण"
+          - "म्प => ंप"
+          - "म्फ => ंफ"
+          - "म्ब => ंब"
+          - "म्भ => ंभ"
+          - "म्म => ंम"
     analyzer:
       hindi_analyzer:
         tokenizer: standard
+        char_filter:
+          - hindi_nasal_normalizer
         filter:
           - lowercase
-          - hindi_stop
           - indic_normalizer
+          - hindi_stop
       gujarati_analyzer:
         tokenizer: standard
         filter:
           - lowercase
-          - gujarati_stop
           - indic_normalizer
+          - gujarati_stop
     filter:
       hindi_stop:
         type: stop
@@ -31,7 +66,7 @@ settings:
         type: icu_normalizer
         name: nfkc_cf
 
-# Mappings define the schema for documents in the index
+# Mappings - IMPORTANT: Ensure search_analyzer is also set!
 mappings:
   properties:
     document_id:
@@ -48,9 +83,11 @@ mappings:
     text_content_hindi:
       type: text
       analyzer: hindi_analyzer
+      search_analyzer: hindi_analyzer  # Explicitly set search analyzer
     text_content_gujarati:
       type: text
       analyzer: gujarati_analyzer
+      search_analyzer: gujarati_analyzer  # Explicitly set search analyzer
     metadata:
       type: object
     bookmarks:
@@ -63,17 +100,11 @@ mappings:
       type: integer
     vector_embedding:
       type: knn_vector
-      # The dimension for ai4bharat/sentence-embedding-indic-bert is 768.
       dimension: 768
       method:
         name: hnsw
-        # The embeddings will be normalized for faster and more accurate similarity search.
-        # Hence use cosinesimil as the distance metric.
         space_type: cosinesimil
         engine: faiss
         parameters:
-          # Number of neighbors to connect to during graph construction.
-          # Higher values lead to better recall but slower indexing.
           ef_construction: 256
-          # The number of bidirectional links for each new element.
           m: 48

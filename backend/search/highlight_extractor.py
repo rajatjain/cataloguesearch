@@ -21,9 +21,7 @@ class HighlightExtractor:
         highlight_regex = re.compile(r'<em>(.*?)</em>', re.IGNORECASE)
 
         for result in results:
-            log_handle.info(f"Processing highlight result for proximity_distance={proximity_distance}: {result}")
             matches = highlight_regex.findall(result)
-            log_handle.info(f"Found regex matches: {matches}")
             
             for match in matches:
                 if proximity_distance == 0:  # exact phrase search
@@ -39,5 +37,5 @@ class HighlightExtractor:
                         if cleaned_word:
                             highlighted_items.add(cleaned_word)
 
-        log_handle.info(f"Extracted unique highlight items: {list(highlighted_items)}")
+        log_handle.verbose(f"Extracted unique highlight items: {list(highlighted_items)}")
         return list(highlighted_items)
