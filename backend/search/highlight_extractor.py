@@ -1,48 +1,32 @@
 import re
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Set
 import logging
-from indicnlp.tokenize import indic_tokenize
 
 log_handle = logging.getLogger(__name__)
 
 class HighlightExtractor:
-    """
-    A utility class to extract and clean words for UI highlighting.
-    """
-
     @staticmethod
-    def extract_highlights(query_keywords: str, search_results: List[Dict[str, Any]]) -> List[str]:
+    def extract_highlights(results: List[str]) -> List[str]:
         """
-        Extracts important words from the original query and content snippets
-        of the search results for UI highlighting.
+        Extracts highlighted words from a list of result strings.
 
         Args:
-            query_keywords (str): The original search query string.
-            search_results (List[Dict[str, Any]]): A list of search result dictionaries,
-                                                    expected to contain 'content_snippet'.
+            results: List of result strings containing highlighted terms.
 
         Returns:
-            List[str]: A deduplicated list of words to highlight.
+            A list of unique highlighted words.
         """
-        highlight_words = set()
+        highlighted_words: Set[str] = set()
+        highlight_regex = re.compile(r'<em>(.*?)</em>', re.IGNORECASE)
 
-        # Add words from the original query
-        # Use Unicode-aware pattern for multi-language support (Hindi, Gujarati, etc.)
-        query_tokens = indic_tokenize.trivial_tokenize(query_keywords)
-        log_handle.verbose(f"Original query tokens: {query_tokens}")
-        for word in query_tokens:
-            highlight_words.add(word)
-        log_handle.verbose(f"Added query keywords to highlights: {list(highlight_words)}")
+        for result in results:
+            matches = highlight_regex.findall(result)
+            for match in matches:
+                words = match.split()
+                for word in words:
+                    cleaned_word = word.strip()
+                    if cleaned_word:
+                        highlighted_words.add(cleaned_word)
 
-        # Add words from content snippets (especially those highlighted by OpenSearch)
-        """
-        for result in search_results:
-            snippet = result.get('content_snippet')
-            if snippet:
-                snippet_tokens = indic_tokenize.trivial_tokenize(snippet)
-                log_handle.verbose(f"Snippet tokens: {snippet_tokens}")
-                for word in snippet_tokens:
-                    highlight_words.add(word)
-        log_handle.verbose(f"Added snippet words to highlights. Total unique words: {len(highlight_words)}")
-        """
-        return sorted(list(highlight_words))
+        log_handle.info(f"Extracted unique highlight words: {list(highlighted_words)}")
+        return list(highlighted_words)

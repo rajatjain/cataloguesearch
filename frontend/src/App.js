@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
 // --- API SERVICE ---
-// The getMetadata call is now only used for the dynamic category filters.
 const API_BASE_URL = 'http://localhost:8000';
 
 const api = {
@@ -158,20 +157,31 @@ const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter 
     );
 };
 
-/**
- * MODIFICATION: This component now uses static, hardcoded data for its options
- * as per the new requirements. It no longer needs the `metadata` prop.
- */
-const SearchOptions = ({ language, setLanguage, proximity, setProximity }) => {
+const SearchOptions = ({ language, setLanguage, proximity, setProximity, searchType, setSearchType }) => {
     const languageOptions = ['hindi', 'gujarati', 'both'];
     const proximityOptions = [
         { label: 'near (10 words)', value: 10 },
         { label: 'medium (20 words)', value: 20 },
         { label: 'far (30 words)', value: 30 }
     ];
+    const searchTypeOptions = [
+        { label: 'Strict Search', value: 'strict' },
+        { label: 'Allow Typos', value: 'fuzzy' }
+    ];
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-gray-200">
+            <div>
+                <h3 className="text-md font-semibold mb-3 text-gray-700">Search Type</h3>
+                <div className="flex gap-4">
+                    {searchTypeOptions.map(opt => (
+                        <label key={opt.value} className="flex items-center gap-2 text-gray-800">
+                            <input type="radio" name="searchType" value={opt.value} checked={searchType === opt.value} onChange={() => setSearchType(opt.value)} className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500" />
+                            {opt.label}
+                        </label>
+                    ))}
+                </div>
+            </div>
             <div>
                 <h3 className="text-md font-semibold mb-3 text-gray-700">Language</h3>
                 <div className="flex gap-4">
@@ -201,22 +211,33 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity }) => {
 
 const ResultCard = ({ result, highlightWords = [] }) => {
     const highlightSnippet = (snippet) => {
-        if (!highlightWords || highlightWords.length === 0) {
+        console.log('Highlighting debug:', { snippet: snippet?.substring(0, 100), highlightWords });
+        
+        if (!highlightWords || highlightWords.length === 0 || !snippet) {
             return { __html: snippet };
         }
-        
+
         let highlighted = snippet;
         // Sort words by length in descending order to avoid partial matches
         const sortedWords = [...highlightWords].sort((a, b) => b.length - a.length);
-        
+
         sortedWords.forEach(word => {
+            if (!word || word.trim() === '') return;
+            
+            console.log('Trying to highlight word:', word);
             // Escape special regex characters
             const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            // Use global case-insensitive search without word boundaries for Indic text
+            // Use global case-insensitive search, handle both exact and partial matches
             const regex = new RegExp(`(${escapedWord})`, 'giu');
-            highlighted = highlighted.replace(regex, `<span class="bg-yellow-300 text-black px-1 rounded-sm font-semibold">$1</span>`);
+            const beforeReplace = highlighted;
+            highlighted = highlighted.replace(regex, `<mark class="bg-yellow-200 text-black px-1 rounded font-medium">$1</mark>`);
+            
+            if (beforeReplace !== highlighted) {
+                console.log('Successfully highlighted word:', word);
+            }
         });
-        
+
+        console.log('Final highlighted result:', highlighted.substring(0, 200));
         return { __html: highlighted };
     };
 
@@ -284,10 +305,10 @@ const Results = ({ searchData, isLoading, currentPage, onPageChange }) => {
             </div>
             <div className="space-y-6">
                 {searchData.results.map((result, index) => (
-                    <ResultCard 
-                        key={`${result.original_filename}-${index}`} 
-                        result={result} 
-                        highlightWords={searchData.highlight_words || []} 
+                    <ResultCard
+                        key={`${result.original_filename}-${index}`}
+                        result={result}
+                        highlightWords={result.highlight_words || []}
                     />
                 ))}
             </div>
@@ -302,9 +323,9 @@ const Results = ({ searchData, isLoading, currentPage, onPageChange }) => {
 export default function App() {
     const [query, setQuery] = useState('');
     const [activeFilters, setActiveFilters] = useState([]);
-    // Set static defaults for language and proximity
     const [language, setLanguage] = useState('hindi');
     const [proximity, setProximity] = useState(20);
+    const [searchType, setSearchType] = useState('strict'); // New state for search type
 
     const [showFilters, setShowFilters] = useState(false);
     const [metadata, setMetadata] = useState({});
@@ -313,7 +334,6 @@ export default function App() {
 
     const [currentPage, setCurrentPage] = useState(1);
 
-    // useEffect now only fetches metadata for the category filters.
     useEffect(() => {
         api.getMetadata().then(data => setMetadata(data));
     }, []);
@@ -336,11 +356,11 @@ export default function App() {
         setIsLoading(true);
         setCurrentPage(page);
 
-        // If language is 'both', send null to the API, otherwise send the selected language.
         const languageToSend = language === 'both' ? null : language;
 
         const requestPayload = {
             query: query,
+            search_type: searchType, // Pass search type to API
             categories: activeFilters.reduce((acc, filter) => {
                 if (!acc[filter.key]) acc[filter.key] = [];
                 acc[filter.key].push(filter.value);
@@ -355,10 +375,10 @@ export default function App() {
         const data = await api.search(requestPayload);
         setSearchData(data);
         setIsLoading(false);
-    }, [query, activeFilters, language, proximity]);
+    }, [query, activeFilters, language, proximity, searchType]);
 
     const handlePageChange = (page) => {
-        if (page > 0) {
+        if (page > 0 && page <= Math.ceil(searchData.total_results / searchData.page_size)) {
             handleSearch(page);
         }
     };
@@ -412,6 +432,8 @@ export default function App() {
                                     setLanguage={setLanguage}
                                     proximity={proximity}
                                     setProximity={setProximity}
+                                    searchType={searchType}
+                                    setSearchType={setSearchType}
                                 />
                             </div>
                         )}
