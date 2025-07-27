@@ -156,7 +156,7 @@ const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter 
     );
 };
 
-const SearchOptions = ({ language, setLanguage, proximity, setProximity, searchType, setSearchType }) => {
+const SearchOptions = ({ language, setLanguage, proximity, setProximity, allowTypos, setAllowTypos }) => {
     const languageOptions = ['hindi', 'gujarati', 'both'];
     const proximityOptions = [
         { label: 'exact phrase', value: 0 },
@@ -164,23 +164,26 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity, searchT
         { label: 'medium (20 words)', value: 20 },
         { label: 'far (30 words)', value: 30 }
     ];
-    const searchTypeOptions = [
-        { label: 'Strict Search', value: 'strict' },
-        { label: 'Allow Typos', value: 'fuzzy' }
-    ];
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-gray-200">
             <div>
-                <h3 className="text-md font-semibold mb-3 text-gray-700">Search Type</h3>
-                <div className="flex gap-4">
-                    {searchTypeOptions.map(opt => (
-                        <label key={opt.value} className="flex items-center gap-2 text-gray-800">
-                            <input type="radio" name="searchType" value={opt.value} checked={searchType === opt.value} onChange={() => setSearchType(opt.value)} className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500" />
-                            {opt.label}
-                        </label>
-                    ))}
-                </div>
+                <label className="flex items-center gap-3 text-gray-800">
+                    <input 
+                        type="checkbox" 
+                        checked={allowTypos} 
+                        onChange={(e) => {
+                            const checked = e.target.checked;
+                            setAllowTypos(checked);
+                            // If enabling typos and currently on exact phrase, switch to near
+                            if (checked && proximity === 0) {
+                                setProximity(10);
+                            }
+                        }} 
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" 
+                    />
+                    <span className="text-md font-semibold text-gray-700">Allow Typos</span>
+                </label>
             </div>
             <div>
                 <h3 className="text-md font-semibold mb-3 text-gray-700">Language</h3>
@@ -197,8 +200,16 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity, searchT
                 <h3 className="text-md font-semibold mb-3 text-gray-700">Proximity</h3>
                 <div className="flex flex-wrap gap-4">
                     {proximityOptions.map(opt => (
-                        <label key={opt.value} className="flex items-center gap-2 text-gray-800">
-                            <input type="radio" name="proximity" value={opt.value} checked={proximity === opt.value} onChange={() => setProximity(opt.value)} className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500" />
+                        <label key={opt.value} className={`flex items-center gap-2 ${allowTypos && opt.value === 0 ? 'text-gray-400' : 'text-gray-800'}`}>
+                            <input 
+                                type="radio" 
+                                name="proximity" 
+                                value={opt.value} 
+                                checked={proximity === opt.value} 
+                                onChange={() => setProximity(opt.value)} 
+                                disabled={allowTypos && opt.value === 0}
+                                className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" 
+                            />
                             {opt.label}
                         </label>
                     ))}
@@ -314,7 +325,7 @@ export default function App() {
     const [activeFilters, setActiveFilters] = useState([]);
     const [language, setLanguage] = useState('hindi');
     const [proximity, setProximity] = useState(20);
-    const [searchType, setSearchType] = useState('strict');
+    const [allowTypos, setAllowTypos] = useState(false);
 
     const [showFilters, setShowFilters] = useState(false);
     const [metadata, setMetadata] = useState({});
@@ -350,7 +361,7 @@ export default function App() {
 
         const requestPayload = {
             query: query,
-            search_type: searchType,
+            allow_typos: allowTypos,
             categories: activeFilters.reduce((acc, filter) => {
                 if (!acc[filter.key]) acc[filter.key] = [];
                 acc[filter.key].push(filter.value);
@@ -365,7 +376,7 @@ export default function App() {
         const data = await api.search(requestPayload);
         setSearchData(data);
         setIsLoading(false);
-    }, [query, activeFilters, language, proximity, searchType]);
+    }, [query, activeFilters, language, proximity, allowTypos]);
 
     const handlePageChange = (page) => {
         if (searchData && page > 0 && page <= Math.ceil(searchData.total_results / searchData.page_size)) {
@@ -422,8 +433,8 @@ export default function App() {
                                     setLanguage={setLanguage}
                                     proximity={proximity}
                                     setProximity={setProximity}
-                                    searchType={searchType}
-                                    setSearchType={setSearchType}
+                                    allowTypos={allowTypos}
+                                    setAllowTypos={setAllowTypos}
                                 />
                             </div>
                         )}

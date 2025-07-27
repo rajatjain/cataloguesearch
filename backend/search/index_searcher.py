@@ -62,12 +62,12 @@ class IndexSearcher:
         return filters
 
     def _build_lexical_query(
-            self, keywords: str, proximity_distance: int,
+            self, keywords: str, proximity_distance: int, allow_typos: bool,
             categories: Dict[str, List[str]], detected_language: str) -> Dict[str, Any]:
         """
         Builds the OpenSearch DSL query for lexical search.
         When proximity_distance is 0, performs exact phrase match.
-        search_type can be 'strict' or 'fuzzy'.
+        allow_typos determines if fuzzy matching is allowed.
         """
         query_field = self._text_fields.get(detected_language, 'text_content')
         if not query_field:
@@ -75,7 +75,6 @@ class IndexSearcher:
             query_field = 'text_content'
 
         is_exact_phrase = proximity_distance == 0
-        search_type = "strict" if is_exact_phrase else "fuzzy"
 
         # Determine which analyzer to use for highlighting
         analyzer_name = None
@@ -85,12 +84,12 @@ class IndexSearcher:
             analyzer_name = "gujarati_analyzer"
 
         log_handle.verbose(f"Lexical search targeting field: {query_field} for language: {detected_language}, "
-                           f"exact_phrase: {is_exact_phrase}, search_type: {search_type}")
+                           f"exact_phrase: {is_exact_phrase}, allow_typos: {allow_typos}")
 
-        # Build the main query based on search_type and proximity
-        if search_type == "fuzzy":
+        # Build the main query based on allow_typos and proximity
+        if allow_typos:
             if is_exact_phrase:
-                # Fuzzy exact phrase match
+                # Fuzzy exact phrase match - prioritize exact matches strongly
                 main_query = {
                     "bool": {
                         "should": [
@@ -99,7 +98,7 @@ class IndexSearcher:
                                     query_field: {
                                         "query": keywords,
                                         "slop": 0,
-                                        "boost": 2  # Boost exact matches
+                                        "boost": 10  # Very high boost for exact matches
                                     }
                                 }
                             },
@@ -108,7 +107,8 @@ class IndexSearcher:
                                     query_field: {
                                         "query": keywords,
                                         "fuzziness": "AUTO",
-                                        "operator": "and"
+                                        "operator": "and",
+                                        "boost": 1  # Standard boost for fuzzy fallback
                                     }
                                 }
                             }
@@ -155,8 +155,8 @@ class IndexSearcher:
             }
 
         # Build highlight configuration
-        if is_exact_phrase:
-            # For exact phrase, highlight the entire phrase together
+        if is_exact_phrase and not allow_typos:
+            # For exact phrase without typos, highlight the entire phrase together
             highlight_config = {
                 "fields": {
                     query_field: {
@@ -177,7 +177,7 @@ class IndexSearcher:
             }
         else:
             # For proximity/fuzzy search
-            if search_type == "fuzzy":
+            if allow_typos:
                 # For fuzzy search, use the main query for highlighting
                 highlight_config = {
                     "fields": {
@@ -294,9 +294,11 @@ class IndexSearcher:
         return extracted
 
     def perform_lexical_search(
-            self, keywords: str, proximity_distance: int, categories: Dict[str, List[str]],
-            detected_language: str, page_size: int, page_number: int) -> Tuple[List[Dict[str, Any]], int]:
-        query_body = self._build_lexical_query(keywords, proximity_distance, categories, detected_language)
+            self, keywords: str, proximity_distance: int, allow_typos: bool,
+            categories: Dict[str, List[str]], detected_language: str,
+            page_size: int, page_number: int) -> Tuple[List[Dict[str, Any]], int]:
+        query_body = self._build_lexical_query(keywords, proximity_distance,
+                                               allow_typos, categories, detected_language)
         from_ = (page_number - 1) * page_size
         log_handle.verbose(f"Lexical query: {json_dumps(query_body)}")
         try:
