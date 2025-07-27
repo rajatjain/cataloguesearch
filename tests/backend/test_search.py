@@ -91,7 +91,7 @@ def test_basic_query():
     query = "जलवायु"
 
     log_handle.info(f"Running basic query: {query}")
-    results = index_searcher.perform_lexical_search(query, 5, {}, "hi", 10, 1)
+    results = index_searcher.perform_lexical_search(query, 5, False, {}, "hi", 10, 1)
     log_handle.verbose(f"Results: {json_dumps(results)}")
 
 def test_multi_phrase_query():
@@ -100,7 +100,7 @@ def test_multi_phrase_query():
     query = "बढ़ते जलवायु"
 
     log_handle.info(f"Running multi-phrase query: {query}")
-    results, _ = index_searcher.perform_lexical_search(query, 30, {}, "hi", 10, 1)
+    results, _ = index_searcher.perform_lexical_search(query, 30, False, {}, "hi", 10, 1)
     log_handle.verbose(f"Results: {json_dumps(results)}")
     assert len(results) == 2
 
@@ -111,7 +111,7 @@ def test_category_query():
 
     log_handle.info(f"Running category query: {query}")
     results, _ = index_searcher.perform_lexical_search(
-        query, 30, {"type": ["t2"]}, "hi", 10, 1)
+        query, 30, False, {"type": ["t2"]}, "hi", 10, 1)
     log_handle.verbose(f"Results: {json_dumps(results)}")
     assert len(results) == 2
 
