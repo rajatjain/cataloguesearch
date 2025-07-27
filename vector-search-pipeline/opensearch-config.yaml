@@ -1,0 +1,77 @@
+---
+# This is an OpenSearch index mapping configuration.
+# It defines the structure for storing Hindi text for lexical search
+# and vector embeddings from the four specified models for semantic search.
+# The parameters have been tuned to prioritize search accuracy.
+
+settings:
+  index:
+    # Settings for the k-NN (k-Nearest Neighbors) plugin
+    knn: true
+    # ef_search: A search-time parameter. A higher value increases accuracy at the cost of latency.
+    # 512 is a very high value, ensuring a thorough search.
+    knn.algo_param.ef_search: 512
+
+mappings:
+  properties:
+    # 1. Document ID: A unique identifier for each text chunk.
+    # 'keyword' is used for exact matching, not full-text search.
+    document_id:
+      type: keyword
+
+    # 2. Plain Text Field: Stores the raw Hindi text for lexical search.
+    # The 'text' type enables full-text search capabilities.
+    # The 'analyzer' is set to 'standard', which works well for Hindi.
+    text_content:
+      type: text
+      analyzer: standard
+
+    # 3. Vector Embedding Field for Google's Model
+    embedding_google:
+      type: knn_vector
+      dimension: 768
+      method:
+        name: hnsw
+        space_type: cosinesimil
+        engine: faiss
+        parameters:
+          # ef_construction: Higher value creates a more accurate index, but is slower to build.
+          ef_construction: 512
+          # m: Higher value increases memory usage but improves accuracy.
+          m: 64
+
+    # 4. Vector Embedding Field for the E5 Model
+    embedding_e5_large:
+      type: knn_vector
+      dimension: 1024 # The dimension of the 'intfloat/multilingual-e5-large' model
+      method:
+        name: hnsw
+        space_type: cosinesimil
+        engine: faiss
+        parameters:
+          ef_construction: 512
+          m: 64
+
+    # 5. Vector Embedding Field for the BGE-M3 Model
+    embedding_bge_m3:
+      type: knn_vector
+      dimension: 1024 # The dimension of the 'BAAI/bge-m3' model
+      method:
+        name: hnsw
+        space_type: cosinesimil
+        engine: faiss
+        parameters:
+          ef_construction: 512
+          m: 64
+
+    # 6. Vector Embedding Field for the Indic-BERT Model
+    embedding_indic_bert:
+      type: knn_vector
+      dimension: 768 # The dimension of the 'ai4bharat/indic-bert' model
+      method:
+        name: hnsw
+        space_type: cosinesimil
+        engine: faiss
+        parameters:
+          ef_construction: 512
+          m: 64
