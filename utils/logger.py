@@ -39,6 +39,11 @@ def setup_logging(logs_dir="logs",
     console_handler.setFormatter(logging.Formatter(log_format, date_format))
     root_logger.addHandler(console_handler)
 
+    # Suppress noisy OpenSearch client logs
+    logging.getLogger('opensearch').setLevel(logging.WARNING)
+    logging.getLogger('opensearchpy').setLevel(logging.WARNING)
+    logging.getLogger('elasticsearch').setLevel(logging.WARNING)
+
     if not console_only:
         # Set up two file handlers: one for INFO+, one for VERBOSE+
         info_log_path = os.path.join(logs_dir, "info.log")

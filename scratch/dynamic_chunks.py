@@ -3,6 +3,7 @@ import os
 
 from backend.config import Config
 from backend.index.text_splitter.dynamic_chunks import DynamicChunksSplitter
+from backend.index.text_splitter.paragraph_splitter import ParagraphChunksSplitter
 from backend.utils import json_dumps
 from scratch.prod_setup import prod_setup
 
@@ -38,5 +39,15 @@ def embedding_text():
     # log_handle.info(splitter._create_embedding_text(sentences))
 
 
+def para_chunks():
+    prod_setup()
+    splitter = ParagraphChunksSplitter(Config())
 
-dynamic_chunks()
+    path = "/Users/r0j08wt/tmp/text_folder"
+
+    text_files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith('.txt')]
+    text_files = sorted(text_files)
+    chunks = splitter.get_chunks("test_doc", text_files)
+    log_handle.info(f"{json_dumps(chunks)}")
+
+para_chunks()

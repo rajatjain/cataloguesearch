@@ -50,9 +50,11 @@ def test_language_detection_test_data_files():
     for lang in mp.keys():
         files = mp[lang]
         for file in files:
-            chunks = indexing_module._chunk_text(open(file, 'r', encoding='utf-8').read())
+            chunks = indexing_module._text_splitter.get_chunks(
+                "doc_%s" % lang, files)
             assert len(chunks) > 0
             for chunk in chunks:
-                language = LanguageDetector.detect_language(chunk)
-                log_handle.info(f"detected language: {language} for chunk: {chunk[:50]}...")
-                assert language == lang, f"Detected language {language} for chunk: {chunk[:50]}..."
+                chunk_test = chunk["text_content"]
+                language = LanguageDetector.detect_language(chunk_test)
+                log_handle.info(f"detected language: {language} for chunk: {chunk_test[:50]}...")
+                assert language == lang, f"Detected language {language} for chunk: {chunk_test[:50]}..."

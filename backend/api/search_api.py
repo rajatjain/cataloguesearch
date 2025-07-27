@@ -13,7 +13,6 @@ from backend.common.embedding_models import get_embedding_model, get_embedding
 from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
 from backend.crawler.index_state import IndexState
-from backend.search.highlight_extractor import HighlightExtractor
 from backend.common.language_detector import LanguageDetector
 from backend.search.index_searcher import IndexSearcher
 from backend.search.result_ranker import ResultRanker
@@ -30,8 +29,6 @@ app = FastAPI(
 )
 
 # --- CORS Middleware ---
-# This is important for development, allowing your React dev server (e.g., on localhost:3000)
-# to make requests to your Python backend (e.g., on localhost:8000).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allows all origins
@@ -41,14 +38,8 @@ app.add_middleware(
 )
 
 # --- Static File Serving ---
-# This section configures FastAPI to serve the built React application.
-
-# Define the path to the React build directory.
-# The path is relative from this file's location (backend/api/)
 frontend_build_path = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "build")
 
-# 1. Mount the 'static' folder from the React build.
-# This serves all the compiled JavaScript, CSS, and other assets.
 app.mount(
     "/static",
     StaticFiles(directory=os.path.join(frontend_build_path, "static")),
@@ -57,9 +48,6 @@ app.mount(
 
 def initialize():
     """Initializes the config and other variables, if required"""
-
-    # Initialize logging
-
     logs_dir = os.environ.get("LOGS_DIR", "logs")
     setup_logging(
         logs_dir=logs_dir, console_level=VERBOSE_LEVEL_NUM,
@@ -78,17 +66,15 @@ async def get_metadata_api():
     try:
         config = Config()
         index_state = IndexState(config.SQLITE_DB_PATH)
-        
-        # Check if metadata is cached in index_state
+
         if index_state.has_metadata_cache():
             log_handle.info("Retrieving metadata from cache")
             metadata = index_state.get_metadata_cache()
         else:
             log_handle.info("No metadata cache found, fetching from OpenSearch")
             metadata = get_metadata(config)
-            # Update cache for future requests
             index_state.update_metadata_cache(metadata)
-        
+
         log_handle.info(f"Metadata retrieved: {len(metadata)} keys found")
         return JSONResponse(content=metadata, status_code=200)
     except Exception as e:
@@ -100,7 +86,8 @@ class SearchRequest(BaseModel):
     Pydantic model for the search request payload.
     """
     query: str = Field(..., example="Bangalore city history")
-    proximity_distance: int = Field(30, ge=1, description="Max word distance for proximity search.")
+    proximity_distance: int = Field(30, ge=0, description="Max word distance for proximity search. Use 0 for exact phrase.")
+    allow_typos: bool = Field(False, description="Allow typos in search terms.")
     categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
     page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
     page_number: int = Field(1, ge=1, description="Page number for pagination.")
@@ -112,10 +99,10 @@ async def search(request_data: SearchRequest = Body(...)):
     Handles search requests to the OpenSearch index.
     Performs lexical and vector searches, collates results, and returns paginated output.
     """
-    # Initialize OpenSearch client and embedding module
     config = Config()
-    index_searcher = IndexSearcher(Config())
+    index_searcher = IndexSearcher(config)
     keywords = request_data.query
+    allow_typos = request_data.allow_typos
     proximity_distance = request_data.proximity_distance
     categories = request_data.categories
     page_size = request_data.page_size
@@ -123,23 +110,30 @@ async def search(request_data: SearchRequest = Body(...)):
 
 
     try:
-        # Language Detection
+        # If allow_typos is true and proximity_distance is 0 (exact phrase), change to near (10)
+        if allow_typos and proximity_distance == 0:
+            proximity_distance = 10
+            log_handle.info(f"Changed proximity_distance from 0 to 10 because allow_typos=True")
+
         detected_language = LanguageDetector.detect_language(keywords)
         log_handle.info(f"Received search request: keywords='{keywords}', "
-                        f"categories={categories}, page={page_number}, size={page_size}")
-        log_handle.info(f"Detected language for keywords '{keywords}': {detected_language}")
+                        f"allow_typos='{allow_typos}', proximity_distance={proximity_distance}, "
+                        f"categories={categories}, page={page_number}, size={page_size}",
+                        f"detected_language={detected_language}")
 
         disable_lexical_search = False
+        
+        # TODO(rajatjain): Enable vector search when embedding model is ready.
         disable_vector_search = True
 
         # Perform Lexical Search
         lexical_results = []
 
-        opensearch_client = get_opensearch_client(Config())
         if not disable_lexical_search:
             lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
                 keywords=keywords,
                 proximity_distance=proximity_distance,
+                allow_typos=allow_typos,
                 categories=categories,
                 detected_language=detected_language,
                 page_size=page_size,
@@ -148,10 +142,6 @@ async def search(request_data: SearchRequest = Body(...)):
             log_handle.info(f"Lexical search returned {len(lexical_results)} "
                             f"results (total: {lexical_total_hits}).")
 
-
-        # Perform Vector Search
-        # Disable Vector Search for now.
-        # TODO(rajatjain): Enable vector search when embedding model is ready.
         vector_results = []
         if not disable_vector_search:
             model_name = config.EMBEDDING_MODEL_NAME
@@ -172,23 +162,18 @@ async def search(request_data: SearchRequest = Body(...)):
                     f"Vector search returned {len(vector_results)} "
                     f"results (total: {vector_total_hits}).")
 
-        # Collate and Rank Results
         final_results, total_results = ResultRanker.collate_and_rank(
             lexical_results, vector_results, page_size, page_number
         )
         log_handle.info(f"Collation and ranking produced {len(final_results)} final results (total: {total_results}).")
-
-        # 5. Extract Highlight Words
-        highlight_words = HighlightExtractor.extract_highlights(keywords, final_results)
-        log_handle.info(f"Extracted highlight words: {highlight_words}")
 
         response = {
             "total_results": total_results,
             "page_size": page_size,
             "page_number": page_number,
             "results": final_results,
-            "highlight_words": highlight_words
         }
+
         log_handle.info(f"Search response: {json_dumps(response)}")
         return JSONResponse(content=response, status_code=200)
 
@@ -200,20 +185,11 @@ initialize()
 
 @app.get("/{full_path:path}")
 async def serve_react_app(request: Request, full_path: str):
-    """
-    This catch-all route is crucial for a Single-Page Application (SPA).
-    It ensures that any request that doesn't match an API endpoint or a static file
-    is served the main `index.html` file. React Router then handles the routing
-    on the client side.
-    """
     index_path = os.path.join(frontend_build_path, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return {"error": "Frontend not built. Run 'npm run build' in the frontend directory."}
 
-# --- Uvicorn Runner ---
-# To run this file directly for development: `python backend/api/search-api.py`
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
