@@ -13,7 +13,6 @@ from backend.common.embedding_models import get_embedding_model, get_embedding
 from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
 from backend.crawler.index_state import IndexState
-from backend.search.highlight_extractor import HighlightExtractor
 from backend.common.language_detector import LanguageDetector
 from backend.search.index_searcher import IndexSearcher
 from backend.search.result_ranker import ResultRanker
@@ -138,7 +137,7 @@ async def search(request_data: SearchRequest = Body(...)):
                 categories=categories,
                 detected_language=detected_language,
                 page_size=page_size,
-                page_number=page_number,
+                page_number=page_number
             )
             log_handle.info(f"Lexical search returned {len(lexical_results)} "
                             f"results (total: {lexical_total_hits}).")
@@ -167,15 +166,6 @@ async def search(request_data: SearchRequest = Body(...)):
             lexical_results, vector_results, page_size, page_number
         )
         log_handle.info(f"Collation and ranking produced {len(final_results)} final results (total: {total_results}).")
-
-        # Extract Highlight Words
-        if proximity_distance == 0:
-            # For exact phrase search, treat the entire query as one highlight unit
-            highlight_words = [keywords.strip()]
-        else:
-            # For proximity search, extract individual words
-            highlight_words = HighlightExtractor.extract_highlights(keywords, final_results)
-        log_handle.info(f"Extracted highlight words: {highlight_words}")
 
         response = {
             "total_results": total_results,

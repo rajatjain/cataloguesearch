@@ -4,7 +4,6 @@ import os
 from typing import List, Dict, Any, Tuple
 
 from backend.common.opensearch import get_opensearch_config, get_opensearch_client
-from backend.search.highlight_extractor import HighlightExtractor
 from backend.utils import json_dumps
 
 log_handle = logging.getLogger(__name__)
