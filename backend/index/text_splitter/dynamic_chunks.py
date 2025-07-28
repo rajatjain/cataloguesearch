@@ -15,12 +15,6 @@ class DynamicChunksSplitter(BaseChunkSplitter):
         super().__init__(config)
         self._similarity_threshold = \
             config.settings()["index"]["chunking_algos"]["dynamic"]["similarity_threshold"]
-        self._stop_phrases = self._get_default_stop_phrases()
-        # --- NEW: Pre-compile the regex pattern for efficiency ---
-        sorted_phrases = sorted(list(self._stop_phrases), key=len, reverse=True)
-        self._stop_phrases_pattern = re.compile(
-            r'\s*(' + '|'.join(re.escape(p) for p in sorted_phrases) + r')\s*[।?!]*'
-        )
 
 
     def get_chunks(self, document_id, pages_text_path: list[str]) -> list[dict]:
@@ -142,71 +136,3 @@ class DynamicChunksSplitter(BaseChunkSplitter):
         all_chunks_embeddings = self._add_embeddings_parallel(all_chunks)
         return all_chunks
 
-    def _clean_page_content(self, text: str) -> str:
-        """
-        Removes header and footer text from a page based on finding the first and
-        last lines that contain sentence-terminating punctuation.
-        """
-        lines = text.split('\n')
-
-        # Find the start index of the content block
-        content_start_index = -1
-        for i, line in enumerate(lines):
-            if self._is_likely_content_line(line):
-                content_start_index = i
-                break
-
-        # Find the end index of the content block (searching from the end)
-        content_end_index = -1
-        for i in range(len(lines) - 1, -1, -1):
-            line = lines[i]
-            if self._is_likely_content_line(line):
-                content_end_index = i
-                break
-
-        # If no valid content lines were found, return an empty string
-        if content_start_index == -1 \
-                or content_end_index == -1 or content_start_index > content_end_index:
-            return ""
-
-        # Extract the content block from the first valid line to the last valid line
-        content_lines = lines[content_start_index : content_end_index + 1]
-
-        return "\n".join(content_lines)
-
-    def _is_likely_content_line(self, line: str) -> bool:
-        """
-        A simple heuristic to determine if a line is content.
-        A line is considered content ONLY if it contains a sentence-terminating punctuation mark.
-        """
-        stripped_line = line.strip()
-        if not stripped_line:
-            return False
-
-        # A line is content if it has punctuation. All other heuristics are removed.
-        has_punctuation = any(p in stripped_line for p in ['।', '?', '!'])
-        return has_punctuation
-
-    def _get_default_stop_phrases(self) -> set[str]:
-        """
-        Returns a list of stop phrases that are used to identify non-content lines.
-        """
-        return {
-            "आहा", "आहाहा", "समझ में आया", "देखो", "है न", "आहाहाहा"
-        }
-
-    def _create_embedding_text(self, sentences: list) -> str:
-        """
-        Creates a clean string for embedding by removing stop phrases from the joined text.
-        """
-        # --- FIX: New logic to remove stop phrases from within the text ---
-        # 1. Join all sentences of the chunk to form the initial text.
-        full_chunk_text = " ".join(sentences)
-
-        # 2. Use the pre-compiled regex to replace all occurrences of stop phrases with a space.
-        cleaned_text = self._stop_phrases_pattern.sub(' ', full_chunk_text)
-
-        # 3. Clean up any resulting multiple spaces to ensure a clean final string.
-        cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
-
-        return cleaned_text

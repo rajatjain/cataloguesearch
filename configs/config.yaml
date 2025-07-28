@@ -13,7 +13,7 @@ index:
       chunk_overlap: 50
     dynamic:
       similarity_threshold: 0.5
-  chunk_strategy: "dynamic"
+  chunk_strategy: "paragraph"
 
 opensearch:
   host: localhost

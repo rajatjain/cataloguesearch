@@ -15,7 +15,6 @@ class IndexSearcher:
 
         Args:
             config: Configuration object containing OpenSearch settings.
-            opensearch_config: Dictionary containing OpenSearch index settings.
         """
         self._config = config
         self._index_name = config.OPENSEARCH_INDEX_NAME
@@ -37,25 +36,13 @@ class IndexSearcher:
 
         log_handle.info(f"Initialized IndexSearcher")
 
-    def _build_category_filters(self, categories: Dict[str, List[str]]) -> Dict[str, Any]:
-        """
-        Builds OpenSearch filter clauses for categories.
-
-        Args:
-            categories (Dict[str, List[str]]): Dictionary of category names and their values.
-
-        Returns:
-            List[Dict[str, Any]]: A list of OpenSearch query clauses for filtering.
-        """
+    def _build_category_filters(self, categories: Dict[str, List[str]]) -> List[Dict[str, Any]]:
         filters = []
         for category_key, values in categories.items():
             if not values:
                 continue
 
             if category_key == "bookmarks":
-                # Search in the dedicated bookmark field
-                # Using 'match' for text search within bookmarks, 'terms' if bookmarks are exact keywords
-                # Assuming bookmarks are text, so using match query
                 filters.append({
                     "bool": {
                         "should": [{"match": {self._bookmark_field: value}} for value in values],
@@ -64,7 +51,6 @@ class IndexSearcher:
                 })
                 log_handle.debug(f"Added bookmark filter: {self._bookmark_field} with values {values}")
             else:
-                # Search in metadata fields using .keyword for exact matching
                 field_name = f"{self._metadata_prefix}.{category_key}.keyword"
                 filters.append({
                     "terms": {
@@ -75,53 +61,158 @@ class IndexSearcher:
         return filters
 
     def _build_lexical_query(
-            self, keywords: str, proximity_distance: int,
+            self, keywords: str, proximity_distance: int, allow_typos: bool,
             categories: Dict[str, List[str]], detected_language: str) -> Dict[str, Any]:
         """
         Builds the OpenSearch DSL query for lexical search.
-
-        Args:
-            keywords (str): The search keywords.
-            proximity_distance (int): The maximum word distance for proximity search.
-            categories (Dict[str, List[str]]): Category filters.
-            detected_language (str): The detected language of the keywords.
-
-        Returns:
-            Dict[str, Any]: The OpenSearch query body.
+        When proximity_distance is 0, performs exact phrase match.
+        allow_typos determines if fuzzy matching is allowed.
         """
-        query_field = self._text_fields.get(detected_language) # Fallback to English
+        query_field = self._text_fields.get(detected_language, 'text_content')
         if not query_field:
             log_handle.warning(f"Detected language '{detected_language}' not supported. Defaulting to English field.")
-            return {}
-        log_handle.verbose(f"Lexical search targeting field: {query_field} for language: {detected_language}")
+            query_field = 'text_content'
 
-        query_body = {
-            "query": {
-                "bool": {
-                    "must": [
-                        {
-                            "match_phrase": {
-                                query_field: {
-                                    "query": keywords,
-                                    "slop": proximity_distance
+        is_exact_phrase = proximity_distance == 0
+
+        # Determine which analyzer to use for highlighting
+        analyzer_name = None
+        if detected_language == "hi":
+            analyzer_name = "hindi_analyzer"
+        elif detected_language == "gu":
+            analyzer_name = "gujarati_analyzer"
+
+        log_handle.verbose(f"Lexical search targeting field: {query_field} for language: {detected_language}, "
+                           f"exact_phrase: {is_exact_phrase}, allow_typos: {allow_typos}")
+
+        # Build the main query based on allow_typos and proximity
+        if allow_typos:
+            if is_exact_phrase:
+                # Fuzzy exact phrase match - prioritize exact matches strongly
+                main_query = {
+                    "bool": {
+                        "should": [
+                            {
+                                "match_phrase": {
+                                    query_field: {
+                                        "query": keywords,
+                                        "slop": 0,
+                                        "boost": 10  # Very high boost for exact matches
+                                    }
+                                }
+                            },
+                            {
+                                "match": {
+                                    query_field: {
+                                        "query": keywords,
+                                        "fuzziness": "AUTO",
+                                        "operator": "and",
+                                        "boost": 1  # Standard boost for fuzzy fallback
+                                    }
                                 }
                             }
-                        }
-                    ]
+                        ],
+                        "minimum_should_match": 1
+                    }
                 }
-            },
-            "highlight": {
+            else:
+                # Fuzzy proximity match
+                main_query = {
+                    "bool": {
+                        "should": [
+                            {
+                                "match_phrase": {
+                                    query_field: {
+                                        "query": keywords,
+                                        "slop": proximity_distance,
+                                        "boost": 2
+                                    }
+                                }
+                            },
+                            {
+                                "match": {
+                                    query_field: {
+                                        "query": keywords,
+                                        "fuzziness": "AUTO",
+                                        "operator": "and"
+                                    }
+                                }
+                            }
+                        ],
+                        "minimum_should_match": 1
+                    }
+                }
+        else:  # strict
+            # Strict phrase match (with or without proximity)
+            main_query = {
+                "match_phrase": {
+                    query_field: {
+                        "query": keywords,
+                        "slop": proximity_distance
+                    }
+                }
+            }
+
+        # Build highlight configuration
+        if is_exact_phrase and not allow_typos:
+            # For exact phrase without typos, highlight the entire phrase together
+            highlight_config = {
                 "fields": {
                     query_field: {
                         "pre_tags": ["<em>"],
                         "post_tags": ["</em>"],
-                        "fragment_size": 150,
-                        "number_of_fragments": 1
+                        "number_of_fragments": 0,
+                        "type": "unified",
+                        "highlight_query": {
+                            "match_phrase": {
+                                query_field: {
+                                    "query": keywords,
+                                    "slop": 0
+                                }
+                            }
+                        }
                     }
                 }
             }
+        else:
+            # For proximity/fuzzy search
+            if allow_typos:
+                # For fuzzy search, use the main query for highlighting
+                highlight_config = {
+                    "fields": {
+                        query_field: {
+                            "pre_tags": ["<em>"],
+                            "post_tags": ["</em>"],
+                            "number_of_fragments": 0,
+                            "type": "unified",
+                            "highlight_query": main_query
+                        }
+                    }
+                }
+            else:
+                # For strict proximity search, simple highlighting
+                highlight_config = {
+                    "fields": {
+                        query_field: {
+                            "pre_tags": ["<em>"],
+                            "post_tags": ["</em>"],
+                            "number_of_fragments": 0,
+                            "type": "unified"
+                        }
+                    }
+                }
+
+        # Build the final query body
+        query_body = {
+            "query": {
+                "bool": {
+                    "must": [main_query]
+                }
+            },
+            "highlight": highlight_config
         }
 
+        # Add category filters
         category_filters = self._build_category_filters(categories)
         if category_filters:
             query_body["query"]["bool"]["filter"] = category_filters
@@ -134,25 +225,13 @@ class IndexSearcher:
     def _build_vector_query(
             self, embedding: List[float],
             categories: Dict[str, List[str]]) -> Dict[str, Any]:
-        """
-        Builds the OpenSearch DSL query for vector (k-NN) search.
-
-        Args:
-            embedding (List[float]): The query vector embedding.
-            categories (Dict[str, List[str]]): Category filters.
-
-        Returns:
-            Dict[str, Any]: The OpenSearch query body.
-        """
-        # Ensure k-NN plugin is enabled and vector field is mapped correctly in OpenSearch
-        # This assumes the vector field is configured for k-NN search.
         query_body = {
-            "size": 10, # k-NN typically requires a size parameter
+            "size": 10,
             "query": {
                 "knn": {
                     self._vector_field: {
                         "vector": embedding,
-                        "k": 10 # Number of nearest neighbors to return from the vector search
+                        "k": 10
                     }
                 }
             }
@@ -161,16 +240,11 @@ class IndexSearcher:
             f"Vector query: {json_dumps(query_body, truncate_fields=['vector'])}")
 
         category_filters = self._build_category_filters(categories)
-        log_handle.verbose(f"Category filters: {category_filters}")
         if category_filters:
-            # k-NN with filters requires a 'post_filter' or combining with a 'bool' query
-            # For simplicity, we'll use a bool query with filter.
-            # Note: The exact structure for combining KNN with filters might vary based on OpenSearch version
-            # and k-NN plugin configuration. This is a common pattern.
             query_body["query"] = {
                 "bool": {
                     "must": [
-                        query_body["query"] # The KNN query itself
+                        query_body["query"]
                     ],
                     "filter": category_filters
                 }
@@ -181,56 +255,31 @@ class IndexSearcher:
     def _extract_results(
             self, hits: List[Dict[str, Any]],
             is_lexical: bool = True, language=None) -> List[Dict[str, Any]]:
-        """
-        Extracts relevant information from OpenSearch hits.
-
-        Args:
-            hits (List[Dict[str, Any]]): List of hit dictionaries from OpenSearch response.
-            is_lexical (bool): True if results are from lexical search (for highlight extraction).
-
-        Returns:
-            List[Dict[str, Any]]: A list of simplified result dictionaries.
-        """
         extracted = []
         for hit in hits:
             source = hit.get('_source', {})
             document_id = hit.get('_id')
             score = hit.get('_score')
-            content_snippet = None
+            content_snippet = ""
 
             if is_lexical:
                 if language is None:
-                    language = 'en'
+                    language = 'hi'
                 field = self._text_fields.get(language)
-                content_snippet = source.get(field, '')
+
+                # Prioritise the highlighted content if available
+                highlighted_fragment = hit.get('highlight', {}).get(field, '')
+                if highlighted_fragment:
+                    content_snippet = "...".join(highlighted_fragment)
             elif not is_lexical:
                 # For vector search, we might just take a snippet of the content
-                field = self._text_fields.get('en')
+                field = self._text_fields.get(language or 'hi')
                 content_snippet = source.get(field)
 
-            # TODO(rajatjain): Disable highlights for now. Just share the snippet
-            """
-            if is_lexical and 'highlight' in hit and self._text_fields['en'] in hit['highlight']:
-                # Assuming English field is a good fallback for highlights if language-specific isn't present
-                # Or, ideally, use the detected language field from the original query
-                highlight_field_name = None
-                for lang_key in self._text_fields.values():
-                    if lang_key in hit['highlight']:
-                        highlight_field_name = lang_key
-                        break
-                if highlight_field_name:
-                    content_snippet = " ... ".join(hit['highlight'][highlight_field_name])
-                else:
-                    log_handle.warning(f"No highlight found for expected text fields in hit {document_id}. Using raw content.")
-                    content_snippet = source.get(self._text_fields.get('en'), '') + '...' # Fallback to raw snippet
-            """
-
-            # Extract metadata, handling potential missing 'metadata' key
             metadata = source.get(self._metadata_prefix, {})
-            # Ensure 'categories' in metadata is a list of strings
             metadata_categories = metadata.get('categories', [])
             if not isinstance(metadata_categories, list):
-                metadata_categories = [str(metadata_categories)] # Ensure it's a list
+                metadata_categories = [str(metadata_categories)]
 
             extracted.append({
                 "document_id": document_id,
@@ -239,30 +288,18 @@ class IndexSearcher:
                 "content_snippet": content_snippet,
                 "score": score,
                 "bookmarks": source.get(self._bookmark_field, {}),
-                "metadata": source.get(self._metadata_prefix, {})
+                "metadata": source.get(self._metadata_prefix, {}),
             })
         return extracted
 
     def perform_lexical_search(
-            self, keywords: str, proximity_distance: int, categories: Dict[str, List[str]],
-            detected_language: str, page_size: int, page_number: int) -> Tuple[List[Dict[str, Any]], int]:
-        """
-        Performs a lexical search in OpenSearch.
-
-        Args:
-            keywords (str): The search keywords.
-            proximity_distance (int): The maximum word distance for proximity search.
-            categories (Dict[str, List[str]]): Category filters.
-            detected_language (str): The detected language of the keywords.
-            page_size (int): Number of results per page.
-            page_number (int): Page number for pagination.
-
-        Returns:
-            Tuple[List[Dict[str, Any]], int]: A tuple containing the list of lexical results and total hits.
-        """
-        query_body = self._build_lexical_query(keywords, proximity_distance, categories, detected_language)
+            self, keywords: str, proximity_distance: int, allow_typos: bool,
+            categories: Dict[str, List[str]], detected_language: str,
+            page_size: int, page_number: int) -> Tuple[List[Dict[str, Any]], int]:
+        query_body = self._build_lexical_query(keywords, proximity_distance,
+                                               allow_typos, categories, detected_language)
         from_ = (page_number - 1) * page_size
-        log_handle.verbose(f"Lexical query: {query_body}")
+        log_handle.verbose(f"Lexical query: {json_dumps(query_body)}")
         try:
             response = self._opensearch_client.search(
                 index=self._index_name,
@@ -273,6 +310,8 @@ class IndexSearcher:
             hits = response.get('hits', {}).get('hits', [])
             total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
             log_handle.info(f"Lexical search executed. Total hits: {total_hits}.")
+            log_handle.info(
+                f"Lexical search response: {json_dumps(response, truncate_fields=['content_snippet'])}")
             return self._extract_results(hits, is_lexical=True, language=detected_language), total_hits
         except Exception as e:
             log_handle.error(f"Error during lexical search: {e}", exc_info=True)
@@ -281,26 +320,14 @@ class IndexSearcher:
     def perform_vector_search(
             self, embedding: List[float], categories: Dict[str, List[str]],
             page_size: int, page_number: int, language) -> Tuple[List[Dict[str, Any]], int]:
-        """
-        Performs a vector (k-NN) search in OpenSearch.
-
-        Args:
-            embedding (List[float]): The query vector embedding.
-            categories (Dict[str, List[str]]): Category filters.
-            page_size (int): Number of results per page.
-            page_number (int): Page number for pagination.
-
-        Returns:
-            Tuple[List[Dict[str, Any]], int]: A tuple containing the list of vector results and total hits.
-        """
         query_body = self._build_vector_query(embedding, categories)
-        from_ = (page_number - 1) * page_size # k-NN often ignores 'from' for ranking, but include for consistency
+        from_ = (page_number - 1) * page_size
         log_handle.debug(f"Vector query: {query_body}")
         try:
             response = self._opensearch_client.search(
                 index=self._index_name,
                 body=query_body,
-                size=page_size, # k-NN 'k' param is for number of nearest neighbors, 'size' is for results returned
+                size=page_size,
                 from_=from_
             )
             hits = response.get('hits', {}).get('hits', [])
@@ -311,4 +338,3 @@ class IndexSearcher:
         except Exception as e:
             log_handle.error(f"Error during vector search: {e}", exc_info=True)
             return [], 0
-

@@ -21,13 +21,13 @@ Test Setup:
   - Copy the various PDF files from the test data directory to the temporary directory.
   - Build JSON config files for some directories.
   - Build JSON config files for some PDF files.
-  
+
 Test Suite 1: Test get_metadata function for various files
   - get metadata for all the files created
   - change the config file in one of those directories
     - get metadata for the changed files again and confirm
   - delete a config file and confirm that the metadata is updated accordingly
-  
+
 Test Suite 2: Check the state
   - Setup: index_document() and pdf_process() are no-ops.
   - Define mocks for them.

@@ -1,16 +1,25 @@
 import hashlib
 import logging
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from backend.common.embedding_models import get_embedding
 from backend.config import Config
+from backend.utils import json_dumps
 
 log_handle = logging.getLogger(__name__)
 
 class BaseChunkSplitter:
     def __init__(self, config: Config):
         self._config = config
+        self._stop_phrases = self._get_default_stop_phrases()
+        # --- NEW: Pre-compile the regex pattern for efficiency ---
+        sorted_phrases = sorted(list(self._stop_phrases), key=len, reverse=True)
+        self._stop_phrases_pattern = re.compile(
+            r'\s*(' + '|'.join(re.escape(p) for p in sorted_phrases) + r')\s*[।?!]*'
+        )
+
 
     def get_chunks(self, document_id: str, pages_text_path: list[str]) -> list[dict]:
         """
@@ -38,16 +47,16 @@ class BaseChunkSplitter:
         where X can be any number of digits.
         """
         fname = os.path.basename(file_path)
-        
+
         if not (fname.startswith("page_") and fname.endswith(".txt")):
             return None
-            
+
         # Extract the numeric part between 'page_' and '.txt'
         page_part = fname[5:-4]  # Remove 'page_' prefix and '.txt' suffix
-        
+
         if not page_part:  # Handle empty string case
             return None
-            
+
         try:
             return int(page_part)
         except ValueError:
@@ -100,3 +109,89 @@ class BaseChunkSplitter:
         # Sort chunks by page_number
         processed_chunks.sort(key=lambda chunk: chunk["page_number"])
         return processed_chunks
+
+    def _is_likely_content_line(self, line: str, max_content_len: int) -> bool:
+        """
+        An adaptive heuristic to determine if a line is content based on a set of rules.
+        """
+        stripped_line = line.strip()
+        if not stripped_line:
+            return False
+
+        # Rule 1: If the line has punctuation, it is always considered content.
+        if any(p in stripped_line for p in ['।', '?', '!', '|']):
+            return True
+
+        # Rule 2: If no punctuation, apply further checks.
+
+        # Check for non-Hindi character ratio
+        all_alpha_chars = re.findall(r'[a-zA-Z\u0900-\u097F]', stripped_line)
+        if not all_alpha_chars:
+            return False # Line has no alphabetic characters to judge
+
+        hindi_chars = re.findall(r'[\u0900-\u097F]', stripped_line)
+
+        # If more than 20% of characters are non-Hindi, it's not content.
+        if len(hindi_chars) / len(all_alpha_chars) < 0.80:
+            return False
+
+        # Check line length against the page's benchmark.
+        # If line length is less than 50% of max line length, it's not content.
+        log_handle.verbose(f"Line length: {len(stripped_line)}")
+        if max_content_len > 0 and len(stripped_line) < (max_content_len * 0.6):
+            return False
+
+        # If it passes all the negative checks, it's considered a valid content line.
+        return True
+
+
+    def _get_default_stop_phrases(self) -> set[str]:
+        """
+        Returns a list of stop phrases that are used to identify non-content lines.
+        """
+        return {
+            "आहा", "आहाहा", "समझ में आया", "देखो", "है न", "आहाहाहा"
+        }
+
+    def _create_embedding_text(self, sentences: list) -> str:
+        """
+        Creates a clean string for embedding by removing stop phrases from the joined text.
+        """
+        # Remove stop phrases from within the text
+        # 1. Join all sentences of the chunk to form the initial text.
+        full_chunk_text = " ".join(sentences)
+
+        # 2. Use the pre-compiled regex to replace all occurrences of stop phrases with a space.
+        cleaned_text = self._stop_phrases_pattern.sub(' ', full_chunk_text)
+
+        # 3. Clean up any resulting multiple spaces to ensure a clean final string.
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
+
+        return cleaned_text
+
+    def _clean_page_content(self, text: str) -> str:
+        sentences = text.split('\n')
+        log_handle.verbose(f"Sentences: {json_dumps(sentences)}")
+
+        max_char_length = 0
+        for line in sentences:
+            line_len = len(line.strip())
+
+            if line_len > max_char_length:
+                max_char_length = line_len
+        content_start_index = 0
+        for line_num, line in enumerate(sentences):
+            line = line.strip()
+            if self._is_likely_content_line(line, max_char_length):
+                content_start_index = line_num
+                break
+
+        content_end_index = -1
+        for line_num in range(len(sentences) - 1, -1, -1):
+            line = sentences[line_num].strip()
+            if self._is_likely_content_line(line, max_char_length):
+                content_end_index = line_num
+                break
+        log_handle.verbose(f"len(sentences): {len(sentences)}")
+
+        return "\n".join(sentences[content_start_index : content_end_index + 1])

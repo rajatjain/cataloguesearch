@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
 // --- API SERVICE ---
-// The getMetadata call is now only used for the dynamic category filters.
 const API_BASE_URL = 'http://localhost:8000';
 
 const api = {
@@ -62,6 +61,7 @@ const Banner = () => (
             src="/images/banner.jpg"
             alt="Jain Catalogue Search Banner"
             className="w-full h-full object-contain rounded-lg"
+            onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/1200x200/E0F2FE/334155?text=Jain+Catalogue+Search' }}
         />
     </div>
 );
@@ -69,7 +69,6 @@ const Banner = () => (
 const Description = () => (
     <div className="text-center mb-8 px-4 text-gray-600 leading-relaxed">
         <h1 className="text-3xl font-bold text-gray-800 mb-2">Jain Catalogue Search</h1>
-        <p></p>
         <p>This interface allows a Mumukshu to search through a vast collection of sermons</p>
         <p>delivered by Pujya Gurudev Shri Kanji Swami.</p>
     </div>
@@ -92,7 +91,6 @@ const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter 
     const [selectedValue, setSelectedValue] = useState("");
     const [availableValues, setAvailableValues] = useState([]);
 
-    // Get all keys from the metadata object for the dropdowns
     const dropdownFilterKeys = Object.keys(metadata);
 
     useEffect(() => {
@@ -158,20 +156,35 @@ const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter 
     );
 };
 
-/**
- * MODIFICATION: This component now uses static, hardcoded data for its options
- * as per the new requirements. It no longer needs the `metadata` prop.
- */
-const SearchOptions = ({ language, setLanguage, proximity, setProximity }) => {
+const SearchOptions = ({ language, setLanguage, proximity, setProximity, allowTypos, setAllowTypos }) => {
     const languageOptions = ['hindi', 'gujarati', 'both'];
     const proximityOptions = [
+        { label: 'exact phrase', value: 0 },
         { label: 'near (10 words)', value: 10 },
         { label: 'medium (20 words)', value: 20 },
         { label: 'far (30 words)', value: 30 }
     ];
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-gray-200">
+            <div>
+                <label className="flex items-center gap-3 text-gray-800">
+                    <input 
+                        type="checkbox" 
+                        checked={allowTypos} 
+                        onChange={(e) => {
+                            const checked = e.target.checked;
+                            setAllowTypos(checked);
+                            // If enabling typos and currently on exact phrase, switch to near
+                            if (checked && proximity === 0) {
+                                setProximity(10);
+                            }
+                        }} 
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" 
+                    />
+                    <span className="text-md font-semibold text-gray-700">Allow Typos</span>
+                </label>
+            </div>
             <div>
                 <h3 className="text-md font-semibold mb-3 text-gray-700">Language</h3>
                 <div className="flex gap-4">
@@ -187,8 +200,16 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity }) => {
                 <h3 className="text-md font-semibold mb-3 text-gray-700">Proximity</h3>
                 <div className="flex flex-wrap gap-4">
                     {proximityOptions.map(opt => (
-                        <label key={opt.value} className="flex items-center gap-2 text-gray-800">
-                            <input type="radio" name="proximity" value={opt.value} checked={proximity === opt.value} onChange={() => setProximity(opt.value)} className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500" />
+                        <label key={opt.value} className={`flex items-center gap-2 ${allowTypos && opt.value === 0 ? 'text-gray-400' : 'text-gray-800'}`}>
+                            <input 
+                                type="radio" 
+                                name="proximity" 
+                                value={opt.value} 
+                                checked={proximity === opt.value} 
+                                onChange={() => setProximity(opt.value)} 
+                                disabled={allowTypos && opt.value === 0}
+                                className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" 
+                            />
                             {opt.label}
                         </label>
                     ))}
@@ -198,26 +219,23 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity }) => {
     );
 };
 
-
-const ResultCard = ({ result, highlightWords = [] }) => {
-    const highlightSnippet = (snippet) => {
-        if (!highlightWords || highlightWords.length === 0) {
-            return { __html: snippet };
+/**
+ * Renders a single search result card.
+ * It now receives HTML with <em> tags in `content_snippet` and styles them.
+ */
+const ResultCard = ({ result }) => {
+    /**
+     * Replaces <em> tags from OpenSearch with styled <mark> tags
+     * and returns an object suitable for dangerouslySetInnerHTML.
+     */
+    const getHighlightedHTML = () => {
+        if (!result.content_snippet) {
+            return { __html: '' };
         }
-        
-        let highlighted = snippet;
-        // Sort words by length in descending order to avoid partial matches
-        const sortedWords = [...highlightWords].sort((a, b) => b.length - a.length);
-        
-        sortedWords.forEach(word => {
-            // Escape special regex characters
-            const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            // Use global case-insensitive search without word boundaries for Indic text
-            const regex = new RegExp(`(${escapedWord})`, 'giu');
-            highlighted = highlighted.replace(regex, `<span class="bg-yellow-300 text-black px-1 rounded-sm font-semibold">$1</span>`);
-        });
-        
-        return { __html: highlighted };
+        const styledSnippet = result.content_snippet
+            .replace(/<em>/g, '<mark class="bg-yellow-200 text-black px-1 rounded font-medium">')
+            .replace(/<\/em>/g, '</mark>');
+        return { __html: styledSnippet };
     };
 
     return (
@@ -230,7 +248,8 @@ const ResultCard = ({ result, highlightWords = [] }) => {
                 )}
             </div>
             <div className="space-y-3 text-gray-700">
-                <p dangerouslySetInnerHTML={highlightSnippet(result.content_snippet)} />
+                {/* Use dangerouslySetInnerHTML to render the HTML from the API */}
+                <p dangerouslySetInnerHTML={getHighlightedHTML()} />
             </div>
         </div>
     );
@@ -257,6 +276,9 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
     );
 };
 
+/**
+ * Renders the list of search results.
+ */
 const Results = ({ searchData, isLoading, currentPage, onPageChange }) => {
     if (isLoading) {
         return (
@@ -284,10 +306,9 @@ const Results = ({ searchData, isLoading, currentPage, onPageChange }) => {
             </div>
             <div className="space-y-6">
                 {searchData.results.map((result, index) => (
-                    <ResultCard 
-                        key={`${result.original_filename}-${index}`} 
-                        result={result} 
-                        highlightWords={searchData.highlight_words || []} 
+                    <ResultCard
+                        key={`${result.original_filename}-${index}`}
+                        result={result}
                     />
                 ))}
             </div>
@@ -302,9 +323,9 @@ const Results = ({ searchData, isLoading, currentPage, onPageChange }) => {
 export default function App() {
     const [query, setQuery] = useState('');
     const [activeFilters, setActiveFilters] = useState([]);
-    // Set static defaults for language and proximity
     const [language, setLanguage] = useState('hindi');
     const [proximity, setProximity] = useState(20);
+    const [allowTypos, setAllowTypos] = useState(false);
 
     const [showFilters, setShowFilters] = useState(false);
     const [metadata, setMetadata] = useState({});
@@ -313,7 +334,6 @@ export default function App() {
 
     const [currentPage, setCurrentPage] = useState(1);
 
-    // useEffect now only fetches metadata for the category filters.
     useEffect(() => {
         api.getMetadata().then(data => setMetadata(data));
     }, []);
@@ -330,35 +350,36 @@ export default function App() {
 
     const handleSearch = useCallback(async (page = 1) => {
         if (!query.trim()) {
+            // Using a simple browser alert for now. Consider a modal for a better UX.
             alert("Please enter a search query.");
             return;
         }
         setIsLoading(true);
         setCurrentPage(page);
 
-        // If language is 'both', send null to the API, otherwise send the selected language.
         const languageToSend = language === 'both' ? null : language;
 
         const requestPayload = {
             query: query,
+            allow_typos: allowTypos,
             categories: activeFilters.reduce((acc, filter) => {
                 if (!acc[filter.key]) acc[filter.key] = [];
                 acc[filter.key].push(filter.value);
                 return acc;
             }, {}),
             language: languageToSend,
-            proximity: proximity,
-            page: page,
-            size: 20
+            proximity_distance: proximity,
+            page_number: page,
+            page_size: 20
         };
 
         const data = await api.search(requestPayload);
         setSearchData(data);
         setIsLoading(false);
-    }, [query, activeFilters, language, proximity]);
+    }, [query, activeFilters, language, proximity, allowTypos]);
 
     const handlePageChange = (page) => {
-        if (page > 0) {
+        if (searchData && page > 0 && page <= Math.ceil(searchData.total_results / searchData.page_size)) {
             handleSearch(page);
         }
     };
@@ -412,6 +433,8 @@ export default function App() {
                                     setLanguage={setLanguage}
                                     proximity={proximity}
                                     setProximity={setProximity}
+                                    allowTypos={allowTypos}
+                                    setAllowTypos={setAllowTypos}
                                 />
                             </div>
                         )}
