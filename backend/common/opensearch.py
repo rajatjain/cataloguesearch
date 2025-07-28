@@ -165,15 +165,15 @@ def get_metadata(config: Config) -> dict[str, list[str]]:
     """
     Scans the metadata field in OpenSearch, extracts all key-value pairs,
     deduplicates them and returns as dict[str, list[str]].
-    
+
     Args:
         config: Config object containing OpenSearch settings
-        
+
     Returns:
         dict[str, list[str]]: Dictionary with metadata keys and their unique values
     """
     client = get_opensearch_client(config)
-    
+
     # Query to get all documents and extract metadata field
     query_body = {
         "size": 10000,  # Adjust based on your index size
@@ -182,34 +182,34 @@ def get_metadata(config: Config) -> dict[str, list[str]]:
             "match_all": {}
         }
     }
-    
+
     response = client.search(
         index=config.OPENSEARCH_INDEX_NAME,
         body=query_body
     )
-    
+
     # Extract and deduplicate metadata
     metadata_dict = {}
     hits = response.get('hits', {}).get('hits', [])
-    
+
     for hit in hits:
         source = hit.get('_source', {})
         document_metadata = source.get('metadata', {})
-        
+
         # Process each key-value pair in the metadata
         for key, value in document_metadata.items():
             if key not in metadata_dict:
                 metadata_dict[key] = set()
-            
+
             # Handle different value types
             if isinstance(value, list):
                 for item in value:
                     metadata_dict[key].add(str(item))
             else:
                 metadata_dict[key].add(str(value))
-    
+
     # Convert sets to sorted lists for consistent output
     result = {key: sorted(list(values)) for key, values in metadata_dict.items()}
-    
+
     log_handle.info(f"Metadata retrieved: {len(result)} unique keys found")
     return result

@@ -57,7 +57,7 @@ class DefaultChunksSplitter(BaseChunkSplitter):
                 traceback.print_exc()
                 log_handle.error(f"Error processing page {page_num} at {page_path}: {e}")
                 raise
-        
+
         # Parallelize embedding generation for all chunks
         log_handle.info(f"Generating embeddings for {len(all_chunks)} chunks in parallel...")
         all_chunks = self._add_embeddings_parallel(all_chunks)

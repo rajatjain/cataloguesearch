@@ -47,16 +47,16 @@ class BaseChunkSplitter:
         where X can be any number of digits.
         """
         fname = os.path.basename(file_path)
-        
+
         if not (fname.startswith("page_") and fname.endswith(".txt")):
             return None
-            
+
         # Extract the numeric part between 'page_' and '.txt'
         page_part = fname[5:-4]  # Remove 'page_' prefix and '.txt' suffix
-        
+
         if not page_part:  # Handle empty string case
             return None
-            
+
         try:
             return int(page_part)
         except ValueError:

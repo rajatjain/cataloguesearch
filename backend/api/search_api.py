@@ -122,7 +122,7 @@ async def search(request_data: SearchRequest = Body(...)):
                         f"detected_language={detected_language}")
 
         disable_lexical_search = False
-        
+
         # TODO(rajatjain): Enable vector search when embedding model is ready.
         disable_vector_search = True
 
