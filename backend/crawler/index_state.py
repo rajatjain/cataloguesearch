@@ -139,28 +139,28 @@ class IndexState:
         c.execute("SELECT metadata_key, metadata_values FROM metadata_cache")
         rows = c.fetchall()
         conn.close()
-        
+
         metadata = {}
         for row in rows:
             key = row[0]
             values = json.loads(row[1])
             metadata[key] = values
-        
+
         return metadata
 
     def update_metadata_cache(self, metadata: dict[str, list[str]]):
         """
         Updates the metadata cache with new metadata.
-        
+
         Args:
             metadata: Dictionary with metadata keys and their values
         """
         conn = sqlite3.connect(self.state_db_path)
         c = conn.cursor()
-        
+
         # Clear existing metadata
         c.execute("DELETE FROM metadata_cache")
-        
+
         # Insert new metadata
         timestamp = datetime.now().isoformat()
         for key, values in metadata.items():
@@ -168,7 +168,7 @@ class IndexState:
                 INSERT INTO metadata_cache (metadata_key, metadata_values, last_updated_timestamp)
                 VALUES (?, ?, ?)
             """, (key, json.dumps(values), timestamp))
-        
+
         conn.commit()
         conn.close()
         log_handle.info(f"Updated metadata cache with {len(metadata)} keys")
@@ -185,7 +185,7 @@ class IndexState:
         c.execute("SELECT COUNT(*) FROM metadata_cache")
         count = c.fetchone()[0]
         conn.close()
-        
+
         return count > 0
 
     def delete_index_state(self):

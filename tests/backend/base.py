@@ -32,7 +32,7 @@ def get_test_data_dir():
         raise ValueError("TEST_DATA_DIR is not set. Please check your .env file.")
     return TEST_DATA_DIR
 
-@pytest.fixture(scope="module", autouse=True) 
+@pytest.fixture(scope="module", autouse=True)
 def initialise():
     # Reset Config singleton for each test module
     Config.reset()

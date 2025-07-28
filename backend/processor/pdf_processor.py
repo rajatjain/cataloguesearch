@@ -59,7 +59,7 @@ class PDFProcessor:
         with ThreadPoolExecutor(max_workers=8) as executor:
             results = list(executor.map(process_image, os.listdir(images_folder)))
             file_paths = [path for path in results if path is not None]
-        
+
         return sorted(file_paths)
 
     def _detect_text(self, image_file_path: str, txt_file_path: str, file_metadata):

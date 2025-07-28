@@ -53,7 +53,7 @@ class Config:
         """
         BASE_DIR = Config._get_project_root()
         config_file_path = os.path.join(BASE_DIR, config_file_path)
-        
+
         os.environ["BASE_DIR"] = BASE_DIR
         if config_file_path and os.path.exists(config_file_path):
             print(f"Loading configuration from {config_file_path}")
@@ -108,7 +108,7 @@ class Config:
     def settings(self):
         """Returns the raw dictionary of loaded settings."""
         return self._settings
-    
+
     @classmethod
     def reset(cls):
         """Reset the singleton instance for testing.
