@@ -1,5 +1,6 @@
 import traceback
 import numpy as np
+from sentence_transformers.cross_encoder import CrossEncoder
 
 from generate_embeddings import get_opensearch_client, \
     initialize_models, MODELS, OPENSEARCH_INDEX_NAME, MODEL_CONFIG
@@ -14,6 +15,7 @@ def perform_search(vector_field: str, query_vector: list, top_k: int = 5):
     client = get_opensearch_client()
     print(f"Searching for top {top_k} results in field '{vector_field}'...")
 
+    top_k = 50
     query = {
         "size": top_k,
         "query": {
@@ -52,7 +54,7 @@ def display_results(results_by_model: dict):
         elif not hits:
             print("  No results found.")
         else:
-            for i, hit in enumerate(hits):
+            for i, hit in enumerate(hits[:5]):
                 score = hit['_score']
                 text = hit['_source']['text_content']
                 # Truncate long text for display
@@ -60,6 +62,29 @@ def display_results(results_by_model: dict):
                 print(f"  {i+1}. Score: {score:.4f}")
                 print(f"     Text: {display_text}\n")
         print("-" * 50 + "\n")
+
+def rerank_results(original_query: str, candidates: list):
+    """Reranks the candidate documents using a Cross-Encoder model."""
+    reranker = MODELS.get('reranker')
+    if not reranker or not candidates:
+        return candidates
+
+    print(f"Reranking {len(candidates)} candidates...")
+
+    # Create pairs of [query, candidate_text] for the reranker
+    pairs = [[original_query, hit['_source']['text_content']] for hit in candidates]
+
+    # Predict new, more accurate scores
+    scores = reranker.predict(pairs)
+
+    # Add the new scores to the candidate documents
+    for i in range(len(candidates)):
+        candidates[i]['rerank_score'] = scores[i]
+
+    # Sort the candidates by the new rerank_score in descending order
+    candidates.sort(key=lambda x: x['rerank_score'], reverse=True)
+
+    return candidates
 
 
 def main():
@@ -89,6 +114,7 @@ def main():
 
             # Generate embeddings and query for each model
             for key, model in MODELS.items():
+                if key == 'reranker': continue
                 if not model:
                     results_by_model[key] = None
                     continue
@@ -103,7 +129,13 @@ def main():
                     query_vector = model.encode(normalized_query, normalize_embeddings=True).tolist()
 
                 vector_field = MODEL_CONFIG[key]['field']
-                results_by_model[key] = perform_search(vector_field, query_vector)
+                candidates = perform_search(vector_field, query_vector)
+
+                # Rerank
+                reranked_results = rerank_results(normalized_query, candidates)
+                results_by_model[key] = reranked_results
+
+            # Display results
 
             display_results(results_by_model)
 

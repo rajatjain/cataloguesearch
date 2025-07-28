@@ -147,7 +147,7 @@ def normalize_hindi_text(text: str) -> str:
     return cleaned_text
 
 if __name__ == "__main__":
-    path = "/Users/r0j08wt/cataloguesearch/documentai_output/SS01"
+    path = "/Users/r0j08wt/cataloguesearch/documentai_output/Kalash_Tika_02"
     paras = get_paragraphs(path)
 
     output_file = path + ".txt"

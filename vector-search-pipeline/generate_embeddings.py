@@ -30,6 +30,7 @@ import torch
 import yaml
 from opensearchpy import OpenSearch, helpers
 from sentence_transformers import SentenceTransformer, models
+from sentence_transformers.cross_encoder import CrossEncoder
 from tqdm import tqdm
 from vertexai.language_models import TextEmbeddingModel
 import vertexai
@@ -151,6 +152,15 @@ def initialize_models():
                 MODELS[key] = None
 
     print("Model initialization complete.")
+
+    # Initialize reranker
+    try:
+        reranker_name = 'BAAI/bge-reranker-v2-m3'
+        MODELS['reranker'] = CrossEncoder(reranker_name, device=device)
+        print(f"{reranker_name} reranker model initialized.")
+    except Exception as e:
+        print(f"Failed to initialize reranker model: {e}")
+
 
 
 def generate_embeddings_for_paragraph(para_tuple: Tuple[str, str]) -> Dict[str, Any]:
