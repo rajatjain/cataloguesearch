@@ -15,10 +15,10 @@ def parse_pdf():
         _pdf_processor = PDFProcessor(Config())
     meta = {
         "language": "hi",
-        "start_page": 36,
-        "end_page": 42,
+        "start_page": 55,
+        "end_page": 69,
         "header_regex": [
-            "^.*समयसार\s+सिद्धि\s*\(\s*भाग.*\)",
+            "^.*समयसार\s+सिद्धि,?.*भाग.*",
             "^गाथा.{0,30}$",
             "^कलश.{0,30}$",
             "^प्रवचन\s+नं\.?.*$",

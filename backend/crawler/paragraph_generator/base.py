@@ -52,7 +52,8 @@ class BaseParagraphGenerator:
 
         # Define constants for clarity
         PUNCTUATION_SUFFIXES = ('।', '?', '!', ':', ')', ']', '}')
-        STOP_PREFIXES = ("श्रोता:", "मुमुक्षु:")
+        STOP_PREFIXES = ("श्रोता:", "मुमुक्षु:", "प्रश्न:")
+        ANSWER_PREFIXES = ("पूज्य गुरुदेवश्री:", "उत्तर:", "समाधान:")
 
         combined_phase1 = []
         # A buffer to hold paragraphs that are being combined into a single thought.
@@ -107,9 +108,9 @@ class BaseParagraphGenerator:
             para = para.strip()
 
             # Check if the next paragraph exists and meets the combination criteria
-            if (para.startswith(("श्रोता:", "मुमुक्षु:")) and
+            if (para.startswith(STOP_PREFIXES) and
                     i + 1 < num_paras and
-                    combined_phase1[i + 1][1].strip().startswith("पूज्य गुरुदेवश्री:")):
+                    combined_phase1[i + 1][1].strip().startswith(ANSWER_PREFIXES)):
 
                 # Combine with the next paragraph ---
                 next_para = combined_phase1[i + 1][1].strip()
