@@ -115,3 +115,21 @@ pytest
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+
+```mermaid
+graph TD
+    A[Agent] -->|Actual/Natural Language Query| B[MCP Server]
+    B --> C[Semantic Layer]
+    C -->|Converts to SQL, identifies DB| D[Data API Gateway]
+    D -->|Validates Security (DCS, Credentials)| E[Security Check]
+    D -->|Validates Safety (SafeDB)| F[Safety Check]
+    D --> G[WJC (Walmart Java Client)]
+    G -->|Executes Query| H[Database]
+    H -->|Results| G
+    G --> D
+    D --> C
+    C --> B
+    B --> A
+
+```

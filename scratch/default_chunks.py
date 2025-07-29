@@ -2,7 +2,7 @@ import logging
 import os
 
 from backend.config import Config
-from backend.index.text_splitter.default import DefaultChunksSplitter
+from backend.crawler.text_splitter.default import DefaultChunksSplitter
 from backend.utils import json_dumps
 from scratch.prod_setup import prod_setup
 

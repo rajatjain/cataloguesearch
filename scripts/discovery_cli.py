@@ -13,13 +13,12 @@ import psutil
 from datetime import datetime
 from threading import Event
 
-from backend.common import opensearch
 from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
 from backend.index.embedding_module import IndexingEmbeddingModule
-from backend.processor.pdf_processor import PDFProcessor
+from backend.crawler.pdf_processor import PDFProcessor
 from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
 
 PIDFILE = '/tmp/discovery-daemon.pid'

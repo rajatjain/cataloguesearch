@@ -1,17 +1,12 @@
 import datetime
 
-import pytest
-import os
-import shutil
-import uuid
 import tempfile
 import fitz
 
 from backend.crawler.discovery import SingleFileProcessor, Discovery
 from backend.crawler.index_state import IndexState
 from backend.index.embedding_module import IndexingEmbeddingModule
-from backend.processor.pdf_processor import PDFProcessor, log_handle
-from backend.utils import json_dumps
+from backend.crawler.pdf_processor import PDFProcessor, log_handle
 from tests.backend.base import *
 from tests.backend.common import setup, write_config_file
 

@@ -1,18 +1,13 @@
 import logging
-import traceback
 
-import langdetect
 from opensearchpy import OpenSearch
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from backend.common.embedding_models import get_embedding
-import hashlib
 from datetime import datetime, timezone
 from backend.common import language_detector
 
 from backend.config import Config
-from backend.index.text_splitter.default import DefaultChunksSplitter
-from backend.index.text_splitter.dynamic_chunks import DynamicChunksSplitter
-from backend.index.text_splitter.paragraph_splitter import ParagraphChunksSplitter
+from backend.crawler.text_splitter.default import DefaultChunksSplitter
+from backend.crawler.text_splitter.dynamic_chunks import DynamicChunksSplitter
+from backend.crawler.text_splitter.paragraph_splitter import ParagraphChunksSplitter
 
 # Setup logging for this module
 log_handle = logging.getLogger(__name__)

@@ -3,16 +3,12 @@ import traceback
 import uuid
 
 from pathlib import Path
-import pytest
-import os
-import logging
 
 from backend.common.embedding_models import get_embedding_model, get_embedding
 from backend.index.embedding_module import IndexingEmbeddingModule
 
 from backend.common.opensearch import get_opensearch_client
-from backend.index.text_splitter.default import DefaultChunksSplitter
-from backend.utils import json_dumps
+from backend.crawler.text_splitter.default import DefaultChunksSplitter
 from tests.backend.base import *
 
 log_handle = logging.getLogger(__name__)

@@ -5,8 +5,8 @@ import sys
 import traceback
 from datetime import datetime
 
-from backend.processor.pdf_processor import PDFProcessor
-from backend.utils import json_dump, json_dumps
+from backend.crawler.pdf_processor import PDFProcessor
+from backend.utils import json_dumps
 import uuid # For generating unique document IDs
 import logging
 

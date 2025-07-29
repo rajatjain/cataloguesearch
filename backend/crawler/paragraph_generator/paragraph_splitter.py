@@ -1,7 +1,7 @@
 import logging
 import re
 
-from backend.index.text_splitter.base import BaseChunkSplitter
+from backend.crawler.text_splitter.base import BaseChunkSplitter
 from backend.utils import json_dumps
 
 log_handle = logging.getLogger(__name__)

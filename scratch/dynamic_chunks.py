@@ -2,8 +2,8 @@ import logging
 import os
 
 from backend.config import Config
-from backend.index.text_splitter.dynamic_chunks import DynamicChunksSplitter
-from backend.index.text_splitter.paragraph_splitter import ParagraphChunksSplitter
+from backend.crawler.text_splitter.dynamic_chunks import DynamicChunksSplitter
+from backend.crawler.text_splitter.paragraph_splitter import ParagraphChunksSplitter
 from backend.utils import json_dumps
 from scratch.prod_setup import prod_setup
 
