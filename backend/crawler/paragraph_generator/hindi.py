@@ -8,16 +8,12 @@ class HindiParagraphGenerator(BaseParagraphGenerator):
     def __init__(self, config):
         super().__init__(config)
 
-    def _normalize_text(self, para_num, text: str) -> str:
+    def _normalize_text(self, text: str) -> str:
         if not isinstance(text, str):
             return ""
 
         log_handle.info(f"Calling normalize text")
         cleaned_text = text
-
-        if para_num == 0 and len(text) < 35 \
-            and len(re.findall(f"[0-9०-९]", text)) > 2:
-            log_handle.info(f"Para 0, less text. High probability that this is a header. {text}")
 
         # Normalize common OCR misclassifications for the purn viram (।)
         # The purn viram is often misread as |, I, l, or 1.

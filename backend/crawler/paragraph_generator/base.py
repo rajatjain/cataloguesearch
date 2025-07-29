@@ -23,10 +23,10 @@ class BaseParagraphGenerator:
         processed_paras = []
         for i, (page_num, para_list) in enumerate(paragraphs):
             for para_num, para in enumerate(para_list):
-                para = self._normalize_text(para_num, para)
+                para = self._normalize_text(para)
                 log_handle.info(f"Processing param num {para_num}, para: {para}")
                 is_header, processed_para = \
-                    self._is_header_footer(para, header_prefix, header_regex)
+                    self._is_header_footer(para_num, para, header_prefix, header_regex)
                 if not is_header:
                     log_handle.info(f"para num {para_num} is indeed a para!")
                     processed_paras.append((page_num, processed_para))
@@ -171,13 +171,18 @@ class BaseParagraphGenerator:
         processed_chunks.sort(key=lambda chunk: chunk["page_number"])
         return processed_chunks
 
-    def _normalize_text(self, para_num, text: str):
+    def _normalize_text(self, text: str):
         raise NotImplementedError("Implement inside subclass")
 
-    def _is_header_footer(self, para, header_prefix, header_regex):
+    def _is_header_footer(self, para_num, para, header_prefix, header_regex):
         for prefix in header_prefix:
             para = re.sub(prefix, '', para)
             para = para.strip()
+
+        if para_num == 0 and len(para) < 35 \
+                and len(re.findall(f"[0-9०-९]", para)) > 2:
+            log_handle.info(f"Para 0, less text. High probability that this is a header. {para}")
+            return True, None
 
         # Para has many numbers in it.
         if 0 < len(para) < 20:
