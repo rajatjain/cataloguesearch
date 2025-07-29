@@ -15,18 +15,24 @@ def parse_pdf():
         _pdf_processor = PDFProcessor(Config())
     meta = {
         "language": "hi",
-        "start_page": 55,
-        "end_page": 69,
+        "start_page": 52,
+        "end_page": 60,
         "header_regex": [
             "^.*समयसार\s+सिद्धि,?.*भाग.*",
-            "^गाथा.{0,30}$",
-            "^कलश.{0,30}$",
+            "^.{0,5}गाथा.{0,30}$",
+            "^.{0,5}कलश.{0,30}$",
             "^प्रवचन\s+नं\.?.*$",
-            "^[०-९\s]*$"
+            "^प्रवच्चन\s+नं\.?.*$",
+            "^[०-९\s]*$",
+            "^.{0,5}प्रवचन\s+सुधा.*भाग.*$",
+            # "^.{0,5}प्रवच्चन\s+सुधा.*भाग.*$"
+        ],
+        "header_prefix": [
+
         ]
     }
-    pdf_file = "/Users/r0j08wt/cataloguesearch/Samaysaar_Siddhi_Part-03H.pdf"
-    output_dir = "/Users/r0j08wt/cataloguesearch/Samaysaar_Siddhi_Part-03H"
+    pdf_file = "/Users/r0j08wt/cataloguesearch/Pravachan_Sudha_Part-5_H.pdf"
+    output_dir = "/Users/r0j08wt/cataloguesearch/Pravachan_Sudha_Part-5_H"
     os.makedirs(output_dir, exist_ok=True)
     _pdf_processor.process_pdf(pdf_file, output_dir, meta)
 

@@ -23,7 +23,7 @@ class BaseParagraphGenerator:
         processed_paras = []
         for i, (page_num, para_list) in enumerate(paragraphs):
             for para_num, para in enumerate(para_list):
-                para = self._normalize_text(para)
+                para = self._normalize_text(para_num, para)
                 log_handle.info(f"Processing param num {para_num}, para: {para}")
                 is_header, processed_para = \
                     self._is_header_footer(para, header_prefix, header_regex)
@@ -171,7 +171,7 @@ class BaseParagraphGenerator:
         processed_chunks.sort(key=lambda chunk: chunk["page_number"])
         return processed_chunks
 
-    def _normalize_text(self, text: str):
+    def _normalize_text(self, para_num, text: str):
         raise NotImplementedError("Implement inside subclass")
 
     def _is_header_footer(self, para, header_prefix, header_regex):
