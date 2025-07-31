@@ -2,7 +2,7 @@ from backend.common import embedding_models
 from backend.common.opensearch import get_opensearch_client
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
-from backend.index.embedding_module import IndexingEmbeddingModule
+from backend.crawler.index_generator import IndexGenerator
 from backend.crawler.pdf_processor import PDFProcessor
 from backend.search.index_searcher import IndexSearcher
 from tests.backend.common import setup, get_all_documents
@@ -21,7 +21,7 @@ class MockPDFProcessor(PDFProcessor):
         """
         super().__init__(config)
 
-    def process_pdf(self, pdf_path: str, output_dir: str, images_dir: str, file_metadata):
+    def process_pdf(self, pdf_path: str, output_dir: str, images_dir: str, scan_config):
         """
         1. Return the page_text_paths from the BASE_TEXT_PATH
         2. Return the bookmarks of the PDF file
@@ -57,7 +57,7 @@ def build_index(initialise):
     pdf_processor = MockPDFProcessor(config)
     opensearch_client = get_opensearch_client(config, force_clean=True)
     discovery = Discovery(
-        config, IndexingEmbeddingModule(config, opensearch_client),
+        config, IndexGenerator(config, opensearch_client),
         pdf_processor, IndexState(config.SQLITE_DB_PATH)
     )
 

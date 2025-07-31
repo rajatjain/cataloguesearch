@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from backend.common import embedding_models, opensearch
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
-from backend.index.embedding_module import IndexingEmbeddingModule
+from backend.crawler.index_generator import IndexGenerator
 from backend.crawler.pdf_processor import PDFProcessor
 from backend.search.index_searcher import IndexSearcher
 from tests.backend.common import setup
@@ -99,7 +99,7 @@ def build_index():
     pdf_processor = MockPDFProcessor(config)
     opensearch_client = get_opensearch_client(config, force_clean=True)
     discovery = Discovery(
-        config, IndexingEmbeddingModule(config, opensearch_client),
+        config, IndexGenerator(config, opensearch_client),
         pdf_processor, IndexState(config.SQLITE_DB_PATH)
     )
 

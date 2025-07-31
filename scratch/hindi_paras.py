@@ -28,11 +28,11 @@ def parse_pdf():
             # "^.{0,5}प्रवच्चन\s+सुधा.*भाग.*$"
         ],
         "header_prefix": [
-
+            r"^[०-९\s]*समयसार\s+सिद्धि,?.*भाग-[०-९]\s*[-।]?,?\s*",
         ]
     }
-    pdf_file = "/Users/r0j08wt/cataloguesearch/Pravachan_Sudha_Part-5_H.pdf"
-    output_dir = "/Users/r0j08wt/cataloguesearch/Pravachan_Sudha_Part-5_H"
+    pdf_file = "/Users/r0j08wt/cataloguesearch/Samaysaar_Siddhi_Part-01H.pdf"
+    output_dir = "/Users/r0j08wt/cataloguesearch/Samaysaar_Siddhi_Part-01H"
     os.makedirs(output_dir, exist_ok=True)
     _pdf_processor.process_pdf(pdf_file, output_dir, meta)
 

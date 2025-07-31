@@ -5,7 +5,7 @@ import fitz
 
 from backend.crawler.discovery import SingleFileProcessor, Discovery
 from backend.crawler.index_state import IndexState
-from backend.index.embedding_module import IndexingEmbeddingModule
+from backend.crawler.index_generator import IndexGenerator
 from backend.crawler.pdf_processor import PDFProcessor, log_handle
 from tests.backend.base import *
 from tests.backend.common import setup, write_config_file
@@ -32,7 +32,7 @@ Test Suite 2: Check the state
   - delete a file. ensure its config is removed.
 """
 
-class MockIndexingEmbeddingModule(IndexingEmbeddingModule):
+class MockIndexGenerator(IndexGenerator):
     def __init__(self):
         pass
 
@@ -49,7 +49,7 @@ class MockPDFProcessor(PDFProcessor):
 
     def process_pdf(
             self, pdf_path: str, output_dir: str,
-            images_dir: str, file_metadata: dict
+            images_dir: str, scan_config: dict
     ) -> tuple[list[str], dict[int: str]]:
         return [], {}
 
@@ -113,7 +113,7 @@ def test_crawl():
 
     discovery = Discovery(
         config,
-        MockIndexingEmbeddingModule(),
+        MockIndexGenerator(),
         MockPDFProcessor(),
         index_state)
 

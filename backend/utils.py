@@ -3,6 +3,10 @@ import os
 import copy
 from pathlib import Path
 import yaml
+import concurrent.futures
+import time
+from tqdm import tqdm
+from typing import Callable, List, Any
 
 def _recursive_truncate(obj, fields_to_truncate):
     """
@@ -57,3 +61,17 @@ def json_dumps(obj, **kwargs):
         return json.dumps(processed_obj, ensure_ascii=False, indent=2, **kwargs)
     else:
         return json.dumps(obj, ensure_ascii=False, indent=2, **kwargs)
+
+
+# Assuming the map_concurrently function from our previous discussion is defined here...
+def map_concurrently(func: Callable, items: List[Any], max_workers: int = 10) -> List[Any]:
+    results = [None] * len(items)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_index = {executor.submit(func, item): i for i, item in enumerate(items)}
+        for future in tqdm(concurrent.futures.as_completed(future_to_index), total=len(items), desc="Processing via Class Method"):
+            index = future_to_index[future]
+            try:
+                results[index] = future.result()
+            except Exception as e:
+                print(f"Item at index {index} generated an exception: {e}")
+    return results

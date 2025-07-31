@@ -16,7 +16,6 @@ class BaseParagraphGenerator:
     def generate_paragraphs(self, paragraphs: List[Tuple[int, List[str]]],
                             file_metadata : dict) -> List[Tuple[int, List[str]]]:
         rejected_paras = []
-        log_handle.info(f"original paragraphs: {json_dumps(paragraphs)}")
         # Pass 1: Cleanup the null lines etc.
         header_regex = file_metadata.get("header_regex", [])
         header_prefix = file_metadata.get("header_prefix", [])
@@ -24,18 +23,13 @@ class BaseParagraphGenerator:
         for i, (page_num, para_list) in enumerate(paragraphs):
             for para_num, para in enumerate(para_list):
                 para = self._normalize_text(para)
-                log_handle.info(f"Processing param num {para_num}, para: {para}")
                 is_header, processed_para = \
                     self._is_header_footer(para_num, para, header_prefix, header_regex)
                 if not is_header:
-                    log_handle.info(f"para num {para_num} is indeed a para!")
                     processed_paras.append((page_num, processed_para))
 
-        log_handle.info(f"Rejected headers: {json_dumps(rejected_paras)}")
-        log_handle.info(f"New paragraphs 1: {json_dumps(processed_paras)}")
         # Pass 2: Intelligent para reordering
         final_paragraphs = self._combine_paragraphs(processed_paras)
-        log_handle.info(f"New paragraphs 2: {json_dumps(final_paragraphs)}")
         return final_paragraphs
 
     def _combine_paragraphs(self, flattened_paras):
@@ -97,8 +91,6 @@ class BaseParagraphGenerator:
         # After the loop, there might be a remaining incomplete paragraph in the buffer.
         if final_para := _finalize_buffer(paragraph_buffer):
             combined_phase1.append(final_para)
-
-        log_handle.info(f"combined_phase1: {json_dumps(combined_phase1)}")
 
         combined_paragraphs = []
         i = 0
@@ -176,28 +168,23 @@ class BaseParagraphGenerator:
 
     def _is_header_footer(self, para_num, para, header_prefix, header_regex):
         for prefix in header_prefix:
-            para = re.sub(prefix, '', para)
+            para = re.sub(prefix, '', para, count=1)
             para = para.strip()
 
         if para_num == 0 and len(para) < 35 \
                 and len(re.findall(f"[0-9०-९]", para)) > 2:
-            log_handle.info(f"Para 0, less text. High probability that this is a header. {para}")
             return True, None
 
         # Para has many numbers in it.
         if 0 < len(para) < 20:
-            log_handle.info(f"len(para): {len(para)}")
             all_digits = r'[0-9०-९]'
             num_digits = len(re.findall(all_digits, para))
-            log_handle.info(f"num_digits: {num_digits}")
             if num_digits / len(para) >= 0.3:
-                log_handle.info(f"Rejected! {para}")
                 return True, None
 
         # Check if para is a header_regex
         for regex in header_regex:
             if re.search(regex, para):
-                log_handle.info(f"Rejected! {para}")
                 return True, None
 
         return False, para

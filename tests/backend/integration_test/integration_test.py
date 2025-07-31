@@ -4,7 +4,7 @@ import fitz
 
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
-from backend.index.embedding_module import IndexingEmbeddingModule
+from backend.crawler.index_generator import IndexGenerator
 from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.crawler.pdf_processor import PDFProcessor
 from tests.backend.base import *
@@ -28,7 +28,7 @@ def test_full_integration(initialise):
 
     discovery = Discovery(
         config,
-        IndexingEmbeddingModule(config, opensearch_client),
+        IndexGenerator(config, opensearch_client),
         PDFProcessor(config),
         index_state
     )

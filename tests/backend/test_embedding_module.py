@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 
 from backend.common.embedding_models import get_embedding_model, get_embedding
-from backend.index.embedding_module import IndexingEmbeddingModule
+from backend.crawler.index_generator import IndexGenerator
 
 from backend.common.opensearch import get_opensearch_client
 from backend.crawler.text_splitter.default import DefaultChunksSplitter
@@ -30,7 +30,7 @@ def indexing_module():
         traceback.print_exc()
         log_handle.error(f"Error deleting index '{config.OPENSEARCH_INDEX_NAME}': {e}")
 
-    module = IndexingEmbeddingModule(config, opensearch_client)
+    module = IndexGenerator(config, opensearch_client)
     return module
 
 def dummy_text_files(tmp_path):

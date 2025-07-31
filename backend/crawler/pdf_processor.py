@@ -7,6 +7,8 @@ import fitz
 import pytesseract
 import os
 import logging
+
+from PIL import Image
 from pdf2image import convert_from_path
 from tqdm import tqdm
 
@@ -46,18 +48,21 @@ class PDFProcessor:
     def _write_paragraphs(self, output_dir, paragraphs):
         page_paras = dict()
         for page_num, para in paragraphs:
-            if not page_paras.get(page_num):
+            if page_num not in page_paras:
                 page_paras[page_num] = []
             page_paras[page_num].append(para)
 
         page_nums = sorted(page_paras.keys())
         for page_num in page_nums:
             para_list = page_paras[page_num]
-            fname = "%s/%04d.txt" % (output_dir, page_num)
+            fname = f"{output_dir}/page_{page_num:04d}.txt"
             content = "\n----\n".join(para_list)
-            fh = open(fname, 'w', encoding='utf-8')
-            fh.write(content)
-            fh.close()
+            try:
+                with open(fname, 'w', encoding='utf-8') as fh:
+                    fh.write(content)
+            except IOError as e:
+                traceback.print_exc()
+                log_handle.error(f"Failed to write {fname}")
 
     def _generate_paragraphs(self, pdf_file: str, start_page, end_page, language):
         """
@@ -82,13 +87,29 @@ class PDFProcessor:
         if start_page < 1 or end_page < start_page:
             raise ValueError("Error: Invalid page range provided.")
 
-        log_handle.verbose(f"Processing PDF: {pdf_file}")
-
+        images = []
         try:
-            images = convert_from_path(
-                pdf_file, dpi=350, first_page=start_page, last_page=end_page)
+            doc = fitz.open(pdf_file)
+
+            # Loop through the specified page range (adjusting for 0-based index)
+            for page_num in range(start_page - 1, end_page):
+                if page_num >= len(doc):
+                    break  # Avoids errors if end_page exceeds total pages
+
+                page = doc.load_page(page_num)
+
+                # Render page to a pixmap (image) at 350 DPI
+                pix = page.get_pixmap(dpi=350)
+
+                # Convert the pixmap to a PIL Image for the OCR step
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                images.append(img)
+
+            doc.close()
+
         except Exception as e:
-            log_handle.error(f"Error during PDF to image conversion: {e}")
+            # Assuming log_handle is defined elsewhere in your class
+            log_handle.error(f"Error during PDF to image conversion with PyMuPDF: {e}")
             return []
 
         pyt_lang = self._pytesseract_language_map.get(language)
@@ -105,6 +126,7 @@ class PDFProcessor:
 
         # 4. Sort results by page number to guarantee order
         extracted_data.sort(key=lambda x: x[0])
+
         return extracted_data
 
 
@@ -140,7 +162,7 @@ class PDFProcessor:
 
     def process_pdf(
             self, pdf_path: str, output_dir: str,
-            file_metadata: dict):
+            scan_config: dict):
         """
         Processes a PDF file, extracts text page by page, saves them,
         and extracts bookmarks.
@@ -150,7 +172,7 @@ class PDFProcessor:
             output_dir (str): The base directory where page-wise text files will be saved.
                               It is assumed that this directory exists.
             images_dir (str): Directory where images will be temporarily stored.
-            file_metadata (dict): Metadata associated with the PDF file.
+            scan_config (dict): Metadata associated with the PDF file.
         """
         pdf_name = os.path.splitext(os.path.basename(pdf_path))[0]
         log_handle.verbose(f"pdf_name: {pdf_name} output_dir: {output_dir}")
@@ -160,9 +182,9 @@ class PDFProcessor:
 
         doc = fitz.open(pdf_path)
         num_pages = doc.page_count
-        start_page = file_metadata.get("start_page", 0)
-        end_page = file_metadata.get("end_page", num_pages)
-        language = file_metadata.get("language", "hi")
+        start_page = scan_config.get("start_page", 1)
+        end_page = scan_config.get("end_page", num_pages)
+        language = scan_config.get("language", "hi")
 
         # Process only if some pages do not exist
         to_process = False
@@ -176,17 +198,13 @@ class PDFProcessor:
         if not to_process:
             log_handle.info(
                 f"Skipping process for {pdf_path} as it already exists and has {end_page - start_page + 1} files.")
-            text_files = [f for f in os.listdir(output_dir) if f.endswith('.txt')]
-            text_files.sort()
-
-            shutil.rmtree(output_dir, ignore_errors=True)
             return None
 
         paragraphs = self._generate_paragraphs(
             pdf_path, start_page, end_page, language)
 
         paragraphs = self._paragraph_gen.generate_paragraphs(
-            paragraphs, file_metadata
+            paragraphs, scan_config
         )
         self._write_paragraphs(output_dir, paragraphs)
         return None
@@ -194,22 +212,34 @@ class PDFProcessor:
     @staticmethod
     def _process_single_page(args):
         """
-        Worker function to process a single image.
+        Worker function to process a single image with preprocessing for better OCR.
         This function must be at the top level of the module for pickling.
         """
         page_num, image, language_code = args
         try:
-            # Perform OCR on the image
-            text = pytesseract.image_to_string(image, lang=language_code, config='--psm 3')
+            # 1. --- Image Preprocessing ---
+            # Convert the image to grayscale for better processing.
+            processed_image = image.convert('L')
 
-            # Split text into paragraphs and clean them up
+            # Apply a binary threshold to create a clean, high-contrast
+            # black and white image. This is often the most critical step.
+            # The '180' is a threshold value; you may need to tune it (127 is a common default).
+            processed_image = processed_image.point(lambda x: 0 if x < 180 else 255, '1')
+
+            # 2. --- Perform OCR ---
+            # Use the preprocessed image and your existing configuration.
+            config = f'--psm 3 -l {language_code}'
+            text = pytesseract.image_to_string(processed_image, config=config)
+
+            # 3. --- Clean Up Text ---
+            # Split text into paragraphs and clean them up.
             raw_paragraphs = re.split(r'\n\s*\n', text)
             paragraphs = [p.strip().replace('\n', ' ') for p in raw_paragraphs if p.strip()]
 
             return page_num, paragraphs
 
         except Exception as e:
-            # Log the error and return an empty result for this page
+            # Log the error and return an empty result for this page.
             print(f"An error occurred while processing page {page_num}: {e}")
             traceback.print_exc()
             return page_num, []

@@ -78,8 +78,6 @@ class Config:
             return self._settings.get("crawler", {}).get("base_pdf_path", None)
         elif name == "BASE_TEXT_PATH":
             return self._settings.get("crawler", {}).get("base_text_path", None)
-        elif name == "TMP_IMAGES_PATH":
-            return self._settings.get("crawler", {}).get("tmp_images_path", None)
         elif name == "SQLITE_DB_PATH":
             return self._settings.get("crawler", {}).get("sqlite_db_path", None)
         elif name == "OPENSEARCH_CONFIG_PATH":
@@ -97,7 +95,9 @@ class Config:
         elif name == "OPENSEARCH_INDEX_NAME":
             return self._settings.get("opensearch", {}).get("index_name", "document_chunks")
         elif name == "EMBEDDING_MODEL_NAME":
-            return self._settings.get("embedding_model", {}).get("name", "ai4bharat/indic-bert")
+            return self._settings.get("vector_embeddings", {}).get("embedding_model", "BAAI/bge-m3")
+        elif name == "RERANKING_MODEL_NAME":
+            return self._settings.get("vector_embeddings", {}).get("reranking_model", "BAAI/bge-reranker-v2-m3")
         elif name == "LLM_MODEL_NAME":
             return self._settings.get("llm_model", {}).get("name", "gemini-2.0-flash")
         elif name == "LLM_API_KEY":

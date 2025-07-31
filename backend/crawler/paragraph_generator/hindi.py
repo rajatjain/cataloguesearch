@@ -12,7 +12,6 @@ class HindiParagraphGenerator(BaseParagraphGenerator):
         if not isinstance(text, str):
             return ""
 
-        log_handle.info(f"Calling normalize text")
         cleaned_text = text
 
         # Normalize common OCR misclassifications for the purn viram (।)
@@ -42,10 +41,9 @@ class HindiParagraphGenerator(BaseParagraphGenerator):
 
         # Join multiple lines into a single line with spaces
         # BUT do not join lines that start with "श्रोता:" or "पूज्य गुरुदेवश्री:" or "मुमुक्षु:"
-        cleaned_text = re.sub(r'\n(?!श्रोता:|पूज्य गुरुदेवश्री:|मुमुक्षु:)', ' ', cleaned_text)
+        cleaned_text = re.sub(r'\n(?!श्रोता:|पूज्य गुरुदेवश्री:|मुमुक्षु:|शंका:)', ' ', cleaned_text)
 
         # Clean up any potential multiple spaces that might have been created
         cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
 
-        log_handle.info(f"Normalized text: {cleaned_text}")
         return cleaned_text

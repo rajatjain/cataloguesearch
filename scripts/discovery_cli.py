@@ -9,6 +9,8 @@ import os
 import signal
 import sys
 import time
+import traceback
+
 import psutil
 from datetime import datetime
 from threading import Event
@@ -17,7 +19,7 @@ from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
-from backend.index.embedding_module import IndexingEmbeddingModule
+from backend.crawler.index_generator import IndexGenerator
 from backend.crawler.pdf_processor import PDFProcessor
 from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
 
@@ -118,7 +120,7 @@ class DiscoveryDaemon:
         # Initialize discovery components
         self.index_state = IndexState(config.SQLITE_DB_PATH)
         self.pdf_processor = PDFProcessor(config)
-        self.indexing_module = IndexingEmbeddingModule(config)
+        self.indexing_module = IndexGenerator(config)
         self.discovery = Discovery(config, self.indexing_module, self.pdf_processor, self.index_state)
 
         logging.info("Discovery daemon initialized")
@@ -171,7 +173,7 @@ class DiscoveryDaemon:
             logging.info("Discovery daemon stopped")
 
 
-def run_discovery_once(config: Config):
+def run_discovery_once(config: Config, crawl=False, index=False):
     """Run discovery once"""
     try:
         logging.info("Starting one-time discovery...")
@@ -179,11 +181,11 @@ def run_discovery_once(config: Config):
         # Initialize components
         index_state = IndexState(config.SQLITE_DB_PATH)
         pdf_processor = PDFProcessor(config)
-        indexing_module = IndexingEmbeddingModule(config, get_opensearch_client(config))
+        indexing_module = IndexGenerator(config, get_opensearch_client(config))
         discovery = Discovery(config, indexing_module, pdf_processor, index_state)
 
         # Run discovery
-        discovery.crawl()
+        discovery.crawl(crawl, index)
 
         # Update metadata cache after discovery
         logging.info("Updating metadata cache...")
@@ -192,6 +194,7 @@ def run_discovery_once(config: Config):
         logging.info("Metadata cache updated successfully")
 
     except Exception as e:
+        traceback.print_exc()
         logging.error(f"Discovery failed: {e}")
         sys.exit(1)
 
@@ -209,6 +212,10 @@ def main():
     parser.add_argument('--daemon', action='store_true', help='Run as daemon (every 6 hours)')
     parser.add_argument('--delete-index', action='store_true',
                         help='Delete OpenSearch index before starting discovery')
+    parser.add_argument("--crawl", action='store_true',
+                        help="Crawl the PDF dir for new files")
+    parser.add_argument("--index", action='store_true',
+                        help="Create the index for files not yet indexed.")
 
     args = parser.parse_args()
 
@@ -235,7 +242,7 @@ def main():
             daemon = DiscoveryDaemon(config)
             daemon.start()
         else:
-            run_discovery_once(config)
+            run_discovery_once(config, args.crawl, args.index)
 
 
 if __name__ == '__main__':
