@@ -94,10 +94,51 @@ const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter 
 
 const SearchOptions = ({ language, setLanguage, proximity, setProximity, allowTypos, setAllowTypos }) => {
     const languageOptions = ['hindi', 'gujarati', 'both'];
+    const proximityOptions = [
+        { label: 'Exact Phrase', value: 0 },
+        { label: 'Near (10)', value: 10 },
+        { label: 'Medium (20)', value: 20 },
+        { label: 'Far (30)', value: 30 }
+    ];
     return (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-slate-200">
-             <div><h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Language</h3><div className="flex gap-4">{languageOptions.map(lang => (<label key={lang} className="flex items-center gap-1.5 text-slate-700 capitalize text-base"><input type="radio" name="language" value={lang} checked={language === lang} onChange={(e) => setLanguage(e.target.value)} className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500" />{lang}</label>))}</div></div>
-             <div><label className="flex items-center gap-2 text-slate-700 mt-5"><input type="checkbox" checked={allowTypos} onChange={(e) => { const checked = e.target.checked; setAllowTypos(checked); if (checked && proximity === 0) { setProximity(10); } }} className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-slate-300 rounded" /><span className="text-base font-medium">Allow Typos</span></label></div>
+             <div>
+                <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Language</h3>
+                <div className="flex gap-4">
+                    {languageOptions.map(lang => (
+                        <label key={lang} className="flex items-center gap-1.5 text-slate-700 capitalize text-base">
+                            <input type="radio" name="language" value={lang} checked={language === lang} onChange={(e) => setLanguage(e.target.value)} className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500" />
+                            {lang}
+                        </label>
+                    ))}
+                </div>
+             </div>
+             <div>
+                <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Proximity</h3>
+                <div className="flex flex-wrap gap-3">
+                    {proximityOptions.map(opt => (
+                        <label key={opt.value} className={`flex items-center gap-1.5 text-base ${allowTypos && opt.value === 0 ? 'text-slate-400 cursor-not-allowed' : 'text-slate-700'}`}>
+                            <input
+                                type="radio"
+                                name="proximity"
+                                value={opt.value}
+                                checked={proximity === opt.value}
+                                onChange={() => setProximity(opt.value)}
+                                disabled={allowTypos && opt.value === 0}
+                                className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500 disabled:opacity-50"
+                            />
+                            {opt.label}
+                        </label>
+                    ))}
+                </div>
+             </div>
+             <div>
+                <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Options</h3>
+                <label className="flex items-center gap-2 text-slate-700">
+                    <input type="checkbox" checked={allowTypos} onChange={(e) => { const checked = e.target.checked; setAllowTypos(checked); if (checked && proximity === 0) { setProximity(10); } }} className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-slate-300 rounded" />
+                    <span className="text-base font-medium">Allow Typos</span>
+                </label>
+            </div>
         </div>
     );
 };
