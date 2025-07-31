@@ -245,7 +245,7 @@ const ResultCard = ({ result, onFindSimilar }) => {
                     <span>🔖 Bookmarks: {result.bookmarks}</span>
                 )}
                 <button
-                    onClick={() => onFindSimilar(result.document_id)}
+                    onClick={() => onFindSimilar(result)}
                     className="text-blue-600 hover:text-blue-800 font-semibold text-xs ml-auto flex items-center"
                 >
                     <SimilarIcon />
@@ -291,9 +291,12 @@ const Tabs = ({ activeTab, setActiveTab, searchData, similarDocumentsData, onCle
 
     return (
         <div className="flex border-b border-gray-300">
-            <button onClick={() => setActiveTab('keyword')} className={`${tabStyle} ${activeTab === 'keyword' ? activeTabStyle : inactiveTabStyle}`}>
-                Keyword Results <span className="text-sm font-normal bg-gray-300 px-2 py-1 rounded-full">{keywordCount}</span>
-            </button>
+            {/* Conditionally render Keyword Results tab */}
+            {searchData?.results?.length > 0 && (
+                 <button onClick={() => setActiveTab('keyword')} className={`${tabStyle} ${activeTab === 'keyword' ? activeTabStyle : inactiveTabStyle}`}>
+                    Keyword Results <span className="text-sm font-normal bg-gray-300 px-2 py-1 rounded-full">{keywordCount}</span>
+                </button>
+            )}
             <button onClick={() => setActiveTab('vector')} className={`${tabStyle} ${activeTab === 'vector' ? activeTabStyle : inactiveTabStyle}`}>
                 Semantic Results <span className="text-sm font-normal bg-gray-300 px-2 py-1 rounded-full">{vectorCount}</span>
             </button>
@@ -303,6 +306,31 @@ const Tabs = ({ activeTab, setActiveTab, searchData, similarDocumentsData, onCle
                     <span onClick={(e) => { e.stopPropagation(); onClearSimilar(); }} className="text-red-500 hover:text-red-700 font-bold text-lg">&times;</span>
                 </button>
             )}
+        </div>
+    );
+};
+
+const SimilarSourceInfoCard = ({ sourceDoc }) => {
+    if (!sourceDoc) return null;
+
+    const getHighlightedHTML = () => {
+        const content = sourceDoc.content_snippet || sourceDoc.text_content_hindi || '';
+        const styledSnippet = content
+            .replace(/<em>/g, '<mark class="bg-blue-100 text-blue-900 px-1 rounded font-medium">')
+            .replace(/<\/em>/g, '</mark>');
+        return { __html: styledSnippet };
+    };
+
+    return (
+        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-6 text-blue-800">
+            <h3 className="font-bold text-lg mb-2">Showing results similar to:</h3>
+            <div className="text-md mb-3">
+                <span className="font-semibold">📄 {sourceDoc.original_filename}</span>
+                <span className="ml-4">Page: {sourceDoc.page_number}</span>
+            </div>
+            <blockquote className="border-l-4 border-blue-300 pl-4 italic text-gray-700">
+                 <p dangerouslySetInnerHTML={getHighlightedHTML()} />
+            </blockquote>
         </div>
     );
 };
@@ -350,8 +378,9 @@ export default function App() {
     const [vectorPage, setVectorPage] = useState(1);
     const [similarDocsPage, setSimilarDocsPage] = useState(1);
 
-    // State for the new "Similar Documents" feature
+    // State for the new "More Like This" feature
     const [similarDocumentsData, setSimilarDocumentsData] = useState(null);
+    const [sourceDocForSimilarity, setSourceDocForSimilarity] = useState(null);
 
     const PAGE_SIZE = 20;
 
@@ -377,7 +406,8 @@ export default function App() {
         setIsLoading(true);
         setKeywordPage(page);
         setVectorPage(1);
-        setSimilarDocumentsData(null); // Clear similar docs on new search
+        setSimilarDocumentsData(null);
+        setSourceDocForSimilarity(null);
 
         const languageToSend = language === 'both' ? null : language;
 
@@ -391,14 +421,22 @@ export default function App() {
 
         const data = await api.search(requestPayload);
         setSearchData(data);
-        setActiveTab('keyword'); // Default to keyword tab after search
+
+        // If keyword results exist, show them by default. Otherwise, default to semantic.
+        if (data.results && data.results.length > 0) {
+            setActiveTab('keyword');
+        } else {
+            setActiveTab('vector');
+        }
+
         setIsLoading(false);
     }, [query, activeFilters, language, proximity, allowTypos]);
 
-    const handleFindSimilar = async (docId) => {
+    const handleFindSimilar = async (sourceDoc) => {
         setIsLoading(true);
-        setSimilarDocsPage(1); // Reset page number for new similar search
-        const data = await api.getSimilarDocuments(docId);
+        setSourceDocForSimilarity(sourceDoc);
+        setSimilarDocsPage(1);
+        const data = await api.getSimilarDocuments(sourceDoc.document_id);
         setSimilarDocumentsData(data);
         setActiveTab('similar');
         setIsLoading(false);
@@ -406,13 +444,18 @@ export default function App() {
 
     const handleClearSimilar = () => {
         setSimilarDocumentsData(null);
-        setActiveTab('keyword'); // Go back to the keyword tab
+        setSourceDocForSimilarity(null);
+        // Return to keyword tab if it exists, otherwise vector
+        if (searchData?.results?.length > 0) {
+            setActiveTab('keyword');
+        } else {
+            setActiveTab('vector');
+        }
     };
 
     const handlePageChange = (page) => {
         switch (activeTab) {
             case 'keyword':
-                // For keyword search, we need to make a new API call
                 handleSearch(page);
                 break;
             case 'vector':
@@ -483,19 +526,22 @@ export default function App() {
                             {activeTab === 'keyword' && (
                                 searchData?.results.length > 0 ? (
                                     <ResultsList results={searchData.results} totalResults={searchData.total_results} pageSize={PAGE_SIZE} currentPage={keywordPage} onPageChange={handlePageChange} resultType="keyword" onFindSimilar={handleFindSimilar} />
-                                ) : searchData && <div className="text-center py-10 text-gray-500 bg-white rounded-b-lg border-t-0">No keyword results found.</div>
+                                ) : null
                             )}
 
                              {activeTab === 'vector' && (
                                 searchData?.vector_results.length > 0 ? (
                                     <ResultsList results={paginatedVectorResults} totalResults={searchData.total_vector_results} pageSize={PAGE_SIZE} currentPage={vectorPage} onPageChange={handlePageChange} resultType="vector" onFindSimilar={handleFindSimilar} />
-                                ) : searchData && <div className="text-center py-10 text-gray-500 bg-white rounded-b-lg border-t-0">No similar results found.</div>
+                                ) : searchData && <div className="text-center py-10 text-gray-500 bg-white rounded-b-lg border-t-0">No results found. Try a different query.</div>
                             )}
 
                             {activeTab === 'similar' && (
-                                similarDocumentsData?.results.length > 0 ? (
-                                    <ResultsList results={paginatedSimilarResults} totalResults={similarDocumentsData.total_results} pageSize={PAGE_SIZE} currentPage={similarDocsPage} onPageChange={handlePageChange} resultType="similar" onFindSimilar={handleFindSimilar} />
-                                ) : <div className="text-center py-10 text-gray-500 bg-white rounded-b-lg border-t-0">No similar documents found.</div>
+                                <div className="bg-white p-6 rounded-b-lg">
+                                    <SimilarSourceInfoCard sourceDoc={sourceDocForSimilarity} />
+                                    {similarDocumentsData?.results.length > 0 ? (
+                                        <ResultsList results={paginatedSimilarResults} totalResults={similarDocumentsData.total_results} pageSize={PAGE_SIZE} currentPage={similarDocsPage} onPageChange={handlePageChange} resultType="similar" onFindSimilar={handleFindSimilar} />
+                                    ) : <div className="text-center py-10 text-gray-500">No similar documents found.</div>}
+                                </div>
                             )}
                         </div>
                     )}
