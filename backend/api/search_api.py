@@ -2,7 +2,7 @@ import logging
 import os
 from typing import Any, Dict, List
 
-from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi import Body, FastAPI, HTTPException, Request, Query
 from fastapi.responses import JSONResponse, FileResponse
 from langdetect import detect
 from pydantic import BaseModel, Field
@@ -194,6 +194,35 @@ async def search(request_data: SearchRequest = Body(...)):
 
     except Exception as e:
         log_handle.exception(f"An error occurred during search request processing: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
+@app.get("/similar-documents/{doc_id}", response_model=Dict[str, Any])
+async def get_similar_documents(doc_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
+    """
+    Finds and returns documents that are semantically similar to the given document ID.
+    """
+    try:
+        config = Config()
+        index_searcher = IndexSearcher(config)
+
+        log_handle.info(f"Received request for similar documents to doc_id: {doc_id}")
+
+        similar_docs, total_similar = index_searcher.find_similar_by_id(
+            doc_id=doc_id,
+            language=language,
+            size=10  # Fetch top 10 similar documents
+        )
+
+        response = {
+            "total_results": total_similar,
+            "results": similar_docs
+        }
+
+        log_handle.info(f"Found {total_similar} similar documents for doc_id: {doc_id}")
+        return JSONResponse(content=response, status_code=200)
+
+    except Exception as e:
+        log_handle.exception(f"An error occurred while finding similar documents: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
 

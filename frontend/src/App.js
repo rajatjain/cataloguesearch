@@ -1,22 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
 // --- API SERVICE ---
-// This service handles communication with your backend API.
 const API_BASE_URL = 'http://localhost:8000';
 
 const api = {
     getMetadata: async () => {
-        console.log("API: Fetching metadata for categories...");
+        console.log("API: Fetching metadata...");
         try {
             const response = await fetch(`${API_BASE_URL}/metadata`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            console.log("API: Category metadata received.", data);
-            return data;
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return await response.json();
         } catch (error) {
-            console.error("API Error: Could not fetch category metadata", error);
+            console.error("API Error: Could not fetch metadata", error);
             return {};
         }
     },
@@ -28,34 +23,41 @@ const api = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestPayload),
             });
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
-            console.log("API: Search results received.", data);
-            // Ensure the response always has the expected arrays, even if the API omits them when empty.
-            return {
-                ...data,
-                results: data.results || [],
-                vector_results: data.vector_results || []
-            };
+            return { ...data, results: data.results || [], vector_results: data.vector_results || [] };
         } catch (error) {
             console.error("API Error: Could not perform search", error);
-            // Return a default structure on error to prevent crashes.
             return { total_results: 0, results: [], total_vector_results: 0, vector_results: [] };
+        }
+    },
+    getSimilarDocuments: async (docId) => {
+        console.log(`API: Fetching similar documents for doc_id: ${docId}`);
+        try {
+            const response = await fetch(`${API_BASE_URL}/similar-documents/${docId}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            return { ...data, results: data.results || [] };
+        } catch (error) {
+            console.error("API Error: Could not fetch similar documents", error);
+            return { total_results: 0, results: [] };
         }
     }
 };
 
 // --- HELPER & ICON COMPONENTS ---
 
-const Spinner = () => (
-    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-);
+const Spinner = () => <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>;
 
 const FilterIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
         <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V15a1 1 0 01-.293.707l-2 2A1 1 0 019 17v-6.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+    </svg>
+);
+
+const SimilarIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 inline-block" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
     </svg>
 );
 
@@ -225,13 +227,10 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity, allowTy
     );
 };
 
-const ResultCard = ({ result }) => {
+const ResultCard = ({ result, onFindSimilar }) => {
     const getHighlightedHTML = () => {
-        // For vector results, there's no snippet, so we show the full text content.
-        if (!result.content_snippet) {
-            return { __html: result.text_content_hindi || '' };
-        }
-        const styledSnippet = result.content_snippet
+        const content = result.content_snippet || result.text_content_hindi || '';
+        const styledSnippet = content
             .replace(/<em>/g, '<mark class="bg-yellow-200 text-black px-1 rounded font-medium">')
             .replace(/<\/em>/g, '</mark>');
         return { __html: styledSnippet };
@@ -239,12 +238,19 @@ const ResultCard = ({ result }) => {
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 transition-shadow hover:shadow-md">
-            <div className="border-b border-gray-200 pb-3 mb-4 text-sm text-gray-500 flex flex-wrap gap-x-4 gap-y-2">
+            <div className="border-b border-gray-200 pb-3 mb-4 text-sm text-gray-500 flex flex-wrap gap-x-4 gap-y-2 items-center">
                 <span className="font-semibold text-gray-800">📄 {result.original_filename}</span>
                 <span>Page: {result.page_number}</span>
                 {result.bookmarks && result.bookmarks.length > 0 && (
                     <span>🔖 Bookmarks: {result.bookmarks}</span>
                 )}
+                <button
+                    onClick={() => onFindSimilar(result.document_id)}
+                    className="text-blue-600 hover:text-blue-800 font-semibold text-xs ml-auto flex items-center"
+                >
+                    <SimilarIcon />
+                    More Like This
+                </button>
             </div>
             <div className="space-y-3 text-gray-700">
                 <p dangerouslySetInnerHTML={getHighlightedHTML()} />
@@ -274,36 +280,34 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
     );
 };
 
-const Tabs = ({ activeTab, setActiveTab, searchData }) => {
+const Tabs = ({ activeTab, setActiveTab, searchData, similarDocumentsData, onClearSimilar }) => {
     const keywordCount = searchData?.total_results || 0;
     const vectorCount = searchData?.total_vector_results || 0;
+    const similarCount = similarDocumentsData?.total_results || 0;
 
-    const tabStyle = "px-4 py-2 font-semibold text-lg rounded-t-lg cursor-pointer transition-colors duration-200";
+    const tabStyle = "px-4 py-2 font-semibold text-lg rounded-t-lg cursor-pointer transition-colors duration-200 flex items-center gap-2";
     const activeTabStyle = "bg-white text-blue-600 border-b-2 border-blue-600";
     const inactiveTabStyle = "bg-gray-200 text-gray-600 hover:bg-gray-300";
 
     return (
         <div className="flex border-b border-gray-300">
-            <button
-                onClick={() => setActiveTab('keyword')}
-                className={`${tabStyle} ${activeTab === 'keyword' ? activeTabStyle : inactiveTabStyle}`}
-            >
+            <button onClick={() => setActiveTab('keyword')} className={`${tabStyle} ${activeTab === 'keyword' ? activeTabStyle : inactiveTabStyle}`}>
                 Keyword Results <span className="text-sm font-normal bg-gray-300 px-2 py-1 rounded-full">{keywordCount}</span>
             </button>
-            <button
-                onClick={() => setActiveTab('vector')}
-                className={`${tabStyle} ${activeTab === 'vector' ? activeTabStyle : inactiveTabStyle}`}
-            >
-                Similar Results <span className="text-sm font-normal bg-gray-300 px-2 py-1 rounded-full">{vectorCount}</span>
+            <button onClick={() => setActiveTab('vector')} className={`${tabStyle} ${activeTab === 'vector' ? activeTabStyle : inactiveTabStyle}`}>
+                Semantic Results <span className="text-sm font-normal bg-gray-300 px-2 py-1 rounded-full">{vectorCount}</span>
             </button>
+            {similarDocumentsData && (
+                 <button onClick={() => setActiveTab('similar')} className={`${tabStyle} ${activeTab === 'similar' ? activeTabStyle : inactiveTabStyle}`}>
+                    More Like This <span className="text-sm font-normal bg-gray-300 px-2 py-1 rounded-full">{similarCount}</span>
+                    <span onClick={(e) => { e.stopPropagation(); onClearSimilar(); }} className="text-red-500 hover:text-red-700 font-bold text-lg">&times;</span>
+                </button>
+            )}
         </div>
     );
 };
 
-/**
- * Renders a generic list of search results with pagination.
- */
-const ResultsList = ({ results, totalResults, pageSize, currentPage, onPageChange, resultType }) => {
+const ResultsList = ({ results, totalResults, pageSize, currentPage, onPageChange, resultType, onFindSimilar }) => {
     const totalPages = Math.ceil(totalResults / pageSize);
 
     return (
@@ -314,8 +318,9 @@ const ResultsList = ({ results, totalResults, pageSize, currentPage, onPageChang
             <div className="space-y-6">
                 {results.map((result, index) => (
                     <ResultCard
-                        key={`${resultType}-${result.original_filename}-${index}`}
+                        key={`${resultType}-${result.document_id}-${index}`}
                         result={result}
+                        onFindSimilar={onFindSimilar}
                     />
                 ))}
             </div>
@@ -343,6 +348,10 @@ export default function App() {
     const [activeTab, setActiveTab] = useState('keyword');
     const [keywordPage, setKeywordPage] = useState(1);
     const [vectorPage, setVectorPage] = useState(1);
+    const [similarDocsPage, setSimilarDocsPage] = useState(1);
+
+    // State for the new "Similar Documents" feature
+    const [similarDocumentsData, setSimilarDocumentsData] = useState(null);
 
     const PAGE_SIZE = 20;
 
@@ -366,47 +375,64 @@ export default function App() {
             return;
         }
         setIsLoading(true);
-        // When a new search starts, reset both pages to 1
-        setKeywordPage(1);
+        setKeywordPage(page);
         setVectorPage(1);
+        setSimilarDocumentsData(null); // Clear similar docs on new search
 
         const languageToSend = language === 'both' ? null : language;
 
         const requestPayload = {
-            query: query,
-            allow_typos: allowTypos,
-            categories: activeFilters.reduce((acc, filter) => {
+            query: query, allow_typos: allowTypos, categories: activeFilters.reduce((acc, filter) => {
                 if (!acc[filter.key]) acc[filter.key] = [];
                 acc[filter.key].push(filter.value);
                 return acc;
-            }, {}),
-            language: languageToSend,
-            proximity_distance: proximity,
-            page_number: page, // This page number is for the keyword search
-            page_size: PAGE_SIZE
+            }, {}), language: languageToSend, proximity_distance: proximity, page_number: page, page_size: PAGE_SIZE
         };
 
         const data = await api.search(requestPayload);
         setSearchData(data);
+        setActiveTab('keyword'); // Default to keyword tab after search
         setIsLoading(false);
     }, [query, activeFilters, language, proximity, allowTypos]);
 
+    const handleFindSimilar = async (docId) => {
+        setIsLoading(true);
+        setSimilarDocsPage(1); // Reset page number for new similar search
+        const data = await api.getSimilarDocuments(docId);
+        setSimilarDocumentsData(data);
+        setActiveTab('similar');
+        setIsLoading(false);
+    };
+
+    const handleClearSimilar = () => {
+        setSimilarDocumentsData(null);
+        setActiveTab('keyword'); // Go back to the keyword tab
+    };
+
     const handlePageChange = (page) => {
-        if (activeTab === 'keyword') {
-            setKeywordPage(page);
-            // For keyword search, we need to make a new API call
-            handleSearch(page);
-        } else {
-            // For vector search, we just update the page state for frontend pagination
-            setVectorPage(page);
+        switch (activeTab) {
+            case 'keyword':
+                // For keyword search, we need to make a new API call
+                handleSearch(page);
+                break;
+            case 'vector':
+                setVectorPage(page);
+                break;
+            case 'similar':
+                setSimilarDocsPage(page);
+                break;
+            default:
+                break;
         }
     };
 
-    // Calculate paginated vector results on the frontend
-    const paginatedVectorResults = searchData?.vector_results.slice(
-        (vectorPage - 1) * PAGE_SIZE,
-        vectorPage * PAGE_SIZE
-    );
+    const getPaginatedResults = (results, page) => {
+        if (!results) return [];
+        return results.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    };
+
+    const paginatedVectorResults = getPaginatedResults(searchData?.vector_results, vectorPage);
+    const paginatedSimilarResults = getPaginatedResults(similarDocumentsData?.results, similarDocsPage);
 
     return (
         <div className="bg-gray-50 text-gray-900 min-h-screen font-sans">
@@ -422,44 +448,23 @@ export default function App() {
                             <div className="md:col-span-3">
                                 <SearchBar query={query} setQuery={setQuery} />
                             </div>
-                            <button
-                                onClick={() => handleSearch(1)}
-                                disabled={isLoading}
-                                className="bg-green-600 text-white font-bold py-4 px-6 rounded-lg text-lg hover:bg-green-700 transition duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center w-full"
-                            >
+                            <button onClick={() => handleSearch(1)} disabled={isLoading} className="bg-green-600 text-white font-bold py-4 px-6 rounded-lg text-lg hover:bg-green-700 transition duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center w-full">
                                 {isLoading ? <Spinner /> : 'Search'}
                             </button>
                         </div>
 
                         <div className="mt-4">
-                            <button
-                                onClick={() => setShowFilters(!showFilters)}
-                                className="flex items-center text-blue-600 font-semibold hover:text-blue-800"
-                            >
+                            <button onClick={() => setShowFilters(!showFilters)} className="flex items-center text-blue-600 font-semibold hover:text-blue-800">
                                 <FilterIcon />
                                 {showFilters ? 'Hide Filters' : 'Show Filters'}
-                                <span className="ml-2 bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded-full">
-                                    {activeFilters.length}
-                                </span>
+                                <span className="ml-2 bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded-full">{activeFilters.length}</span>
                             </button>
                         </div>
 
                         {showFilters && (
                             <div className="mt-6 space-y-6">
-                                <MetadataFilters
-                                    metadata={metadata}
-                                    activeFilters={activeFilters}
-                                    onAddFilter={addFilter}
-                                    onRemoveFilter={removeFilter}
-                                />
-                                <SearchOptions
-                                    language={language}
-                                    setLanguage={setLanguage}
-                                    proximity={proximity}
-                                    setProximity={setProximity}
-                                    allowTypos={allowTypos}
-                                    setAllowTypos={setAllowTypos}
-                                />
+                                <MetadataFilters metadata={metadata} activeFilters={activeFilters} onAddFilter={addFilter} onRemoveFilter={removeFilter} />
+                                <SearchOptions language={language} setLanguage={setLanguage} proximity={proximity} setProximity={setProximity} allowTypos={allowTypos} setAllowTypos={setAllowTypos} />
                             </div>
                         )}
                     </div>
@@ -471,36 +476,26 @@ export default function App() {
                         </div>
                     )}
 
-                    {!isLoading && searchData && (
+                    {!isLoading && (searchData || similarDocumentsData) && (
                         <div>
-                            <Tabs activeTab={activeTab} setActiveTab={setActiveTab} searchData={searchData} />
-                            {activeTab === 'keyword' && searchData.results.length > 0 && (
-                                <ResultsList
-                                    results={searchData.results}
-                                    totalResults={searchData.total_results}
-                                    pageSize={PAGE_SIZE}
-                                    currentPage={keywordPage}
-                                    onPageChange={handlePageChange}
-                                    resultType="keyword"
-                                />
-                            )}
-                             {activeTab === 'vector' && searchData.vector_results.length > 0 && (
-                                <ResultsList
-                                    results={paginatedVectorResults}
-                                    totalResults={searchData.total_vector_results}
-                                    pageSize={PAGE_SIZE}
-                                    currentPage={vectorPage}
-                                    onPageChange={handlePageChange}
-                                    resultType="vector"
-                                />
+                            <Tabs activeTab={activeTab} setActiveTab={setActiveTab} searchData={searchData} similarDocumentsData={similarDocumentsData} onClearSimilar={handleClearSimilar} />
+
+                            {activeTab === 'keyword' && (
+                                searchData?.results.length > 0 ? (
+                                    <ResultsList results={searchData.results} totalResults={searchData.total_results} pageSize={PAGE_SIZE} currentPage={keywordPage} onPageChange={handlePageChange} resultType="keyword" onFindSimilar={handleFindSimilar} />
+                                ) : searchData && <div className="text-center py-10 text-gray-500 bg-white rounded-b-lg border-t-0">No keyword results found.</div>
                             )}
 
-                            {/* Handle case where the active tab has no results */}
-                            {((activeTab === 'keyword' && searchData.results.length === 0) ||
-                              (activeTab === 'vector' && searchData.vector_results.length === 0)) && (
-                                <div className="text-center py-10 text-gray-500 bg-white rounded-b-lg border-t-0">
-                                    No results found for this category.
-                                </div>
+                             {activeTab === 'vector' && (
+                                searchData?.vector_results.length > 0 ? (
+                                    <ResultsList results={paginatedVectorResults} totalResults={searchData.total_vector_results} pageSize={PAGE_SIZE} currentPage={vectorPage} onPageChange={handlePageChange} resultType="vector" onFindSimilar={handleFindSimilar} />
+                                ) : searchData && <div className="text-center py-10 text-gray-500 bg-white rounded-b-lg border-t-0">No similar results found.</div>
+                            )}
+
+                            {activeTab === 'similar' && (
+                                similarDocumentsData?.results.length > 0 ? (
+                                    <ResultsList results={paginatedSimilarResults} totalResults={similarDocumentsData.total_results} pageSize={PAGE_SIZE} currentPage={similarDocsPage} onPageChange={handlePageChange} resultType="similar" onFindSimilar={handleFindSimilar} />
+                                ) : <div className="text-center py-10 text-gray-500 bg-white rounded-b-lg border-t-0">No similar documents found.</div>
                             )}
                         </div>
                     )}

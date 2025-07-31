@@ -1,7 +1,7 @@
 import logging
 import traceback
 
-from opensearchpy import OpenSearch, RequestsHttpConnection
+from opensearchpy import OpenSearch, RequestsHttpConnection, NotFoundError
 import os
 from typing import List, Dict, Any, Tuple
 
@@ -372,4 +372,66 @@ class IndexSearcher:
             return self._extract_results(paginated_hits, is_lexical=False, language=language), total_hits
         except Exception as e:
             log_handle.error(f"Error during vector search: {e}", exc_info=True)
+            return [], 0
+
+
+    def find_similar_by_id(self, doc_id: str, language: str, size: int = 10) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        Finds documents similar to the one with the given doc_id.
+        """
+        try:
+            # 1. Fetch the source document to get its vector
+            source_doc = self._opensearch_client.get(index=self._index_name, id=doc_id)
+            source_vector = source_doc['_source'].get(self._vector_field)
+
+            if not source_vector:
+                log_handle.warning(f"Document {doc_id} does not have a vector embedding. Cannot find similar documents.")
+                return [], 0
+
+            # 2. Build a k-NN query to find similar vectors, excluding the source document itself
+            query_body = {
+                "size": size,
+                "query": {
+                    "bool": {
+                        "must": [
+                            {
+                                "knn": {
+                                    self._vector_field: {
+                                        "vector": source_vector,
+                                        "k": size + 1  # Fetch one extra to account for the source doc
+                                    }
+                                }
+                            }
+                        ],
+                        "must_not": [
+                            {
+                                "ids": {
+                                    "values": [doc_id]
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+
+            # 3. Execute the search
+            log_handle.info(f"Finding similar documents for doc_id: {doc_id}")
+            response = self._opensearch_client.search(
+                index=self._index_name,
+                body=query_body
+            )
+            hits = response.get('hits', {}).get('hits', [])
+            total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
+
+            # The total will be for the whole index, so we cap it at the number of results returned.
+            effective_total = len(hits)
+
+            log_handle.info(f"Found {effective_total} similar documents for doc_id: {doc_id}")
+            return self._extract_results(hits, is_lexical=False, language=language), effective_total
+
+        except NotFoundError:
+            log_handle.error(f"Document with id '{doc_id}' not found.")
+            return [], 0
+        except Exception as e:
+            log_handle.error(f"Error finding similar documents for doc_id {doc_id}: {e}", exc_info=True)
             return [], 0
