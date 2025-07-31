@@ -295,6 +295,7 @@ class IndexSearcher:
                 "document_id": document_id,
                 "original_filename": source.get('original_filename'),
                 "page_number": source.get('page_number'),
+                "paragraph_id": source.get('paragraph_id'),
                 "content_snippet": content_snippet,
                 "score": score,
                 "bookmarks": source.get(self._bookmark_field, {}),
@@ -435,3 +436,68 @@ class IndexSearcher:
         except Exception as e:
             log_handle.error(f"Error finding similar documents for doc_id {doc_id}: {e}", exc_info=True)
             return [], 0
+
+    def get_paragraph_context(self, chunk_id: str, language: str) -> Dict[str, Any]:
+        """
+        Fetches the context for a given paragraph (previous, current, next)
+        using a simplified and more robust two-step query process.
+        """
+        try:
+            # Step 1: Directly fetch the current document by its unique chunk_id.
+            # This is a fast lookup and avoids fragile string parsing.
+            current_doc_response = self._opensearch_client.get(index=self._index_name, id=chunk_id)
+
+            source = current_doc_response.get('_source', {})
+            document_id = source.get('document_id')
+            current_para_id = source.get('paragraph_id')
+
+            if document_id is None or current_para_id is None:
+                raise ValueError(f"Source document for chunk_id {chunk_id} is missing 'document_id' or 'paragraph_id'")
+
+            current_para_id = int(current_para_id)
+
+            # Initialize the context with the current document we already have.
+            context = {
+                "previous": None,
+                "current": self._extract_results([current_doc_response], is_lexical=False, language=language)[0],
+                "next": None
+            }
+
+            # Step 2: Build a single query to fetch only the previous and next paragraphs.
+            para_ids_to_fetch = [current_para_id - 1, current_para_id + 1]
+            query_body = {
+                "size": 2,
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {"term": {"document_id": document_id}},
+                            {"terms": {"paragraph_id": para_ids_to_fetch}}
+                        ]
+                    }
+                }
+            }
+
+            response = self._opensearch_client.search(index=self._index_name, body=query_body)
+            neighbor_hits = self._extract_results(response.get('hits', {}).get('hits', []), is_lexical=False, language=language)
+            log_handle.info(f"response: {json_dumps(response, truncate_fields=['vector_embedding'])}")
+            log_handle.info(f"neighbor_hits: {json_dumps(neighbor_hits, truncate_fields=['vector_embedding'])}")
+            # Step 3: Populate the context with the neighbors.
+            for doc in neighbor_hits:
+                para_id = int(doc.get('paragraph_id', 0))
+                if para_id == current_para_id - 1:
+                    context['previous'] = doc
+                elif para_id == current_para_id + 1:
+                    context['next'] = doc
+
+            log_handle.info(f"Context: {json_dumps(context, truncate_fields=['vector_embedding'])}")
+            return context
+
+        except NotFoundError:
+            log_handle.error(f"Document with chunk_id '{chunk_id}' not found.")
+            return {}
+        except (ValueError, TypeError) as e:
+            log_handle.error(f"Could not process context for chunk_id '{chunk_id}': {e}")
+            return {}
+        except Exception as e:
+            log_handle.error(f"An unexpected error occurred getting paragraph context for {chunk_id}: {e}", exc_info=True)
+            return {}

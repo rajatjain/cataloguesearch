@@ -57,6 +57,9 @@ def initialize():
     relative_config_path = "configs/config.yaml"
     config = Config(relative_config_path)
 
+    # initialize opensearch client
+    get_opensearch_client(config)
+
 @app.get("/metadata", response_model=Dict[str, List[str]])
 async def get_metadata_api():
     """
@@ -223,6 +226,23 @@ async def get_similar_documents(doc_id: str, language: str = Query("hi", enum=["
 
     except Exception as e:
         log_handle.exception(f"An error occurred while finding similar documents: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
+@app.get("/context/{chunk_id}", response_model=Dict[str, Any])
+async def get_context(chunk_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
+    """
+    Fetches the context (previous, current, next paragraph) for a given chunk_id.
+    """
+    try:
+        config = Config()
+        index_searcher = IndexSearcher(config)
+        log_handle.info(f"Received request for context for chunk_id: {chunk_id}")
+        context_data = index_searcher.get_paragraph_context(chunk_id=chunk_id, language=language)
+        if not context_data.get("current"):
+            raise HTTPException(status_code=404, detail="Context not found for the given ID.")
+        return JSONResponse(content=context_data, status_code=200)
+    except Exception as e:
+        log_handle.exception(f"An error occurred while fetching context: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
 
