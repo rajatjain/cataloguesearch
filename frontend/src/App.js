@@ -158,6 +158,8 @@ const ResultCard = ({ result, onFindSimilar, onExpand, isFirst }) => {
             <div className="border-b border-slate-200 pb-2 mb-2 text-sm text-slate-500 flex flex-wrap gap-x-3 gap-y-1 items-center">
                 <span className="font-semibold text-slate-600">📄 {result.original_filename}</span>
                 <span>Page: {result.page_number}</span>
+                {/* CORRECTED: Added the bookmarks back in */}
+                {result.bookmarks && <span className="truncate max-w-xs">🔖 {result.bookmarks}</span>}
                 <div className="ml-auto flex items-center gap-3 text-sm">
                     <button onClick={() => onExpand(result.document_id)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center"><ExpandIcon />Expand</button>
                     <button onClick={() => onFindSimilar(result)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center"><SimilarIcon />More Like This</button>
