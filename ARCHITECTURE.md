@@ -36,7 +36,7 @@ This involves multiple strategies including
 * Efficient chunking of paragraphs to ensure Q&A chunks occur in a single paragraph 
 * Ensuring that paragraphs that span multiple pages are part of the same chunk
 
-More details here: [https://github.com/rajatjain/cataloguesearch/issues/24]()
+More details here: [https://github.com/rajatjain/cataloguesearch/issues/24](https://github.com/rajatjain/cataloguesearch/issues/24) and [https://github.com/rajatjain/cataloguesearch/issues/30](https://github.com/rajatjain/cataloguesearch/issues/30).
 
 ## OpenSearch Index
 OpenSearch Index is also carefully designed to handle hybrid search tailored for indic content
