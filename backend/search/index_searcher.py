@@ -1,7 +1,11 @@
 import logging
+import traceback
+
 from opensearchpy import OpenSearch, RequestsHttpConnection
 import os
 from typing import List, Dict, Any, Tuple
+
+from sentence_transformers import CrossEncoder
 
 from backend.common.opensearch import get_opensearch_config, get_opensearch_client
 from backend.utils import json_dumps
@@ -33,6 +37,12 @@ class IndexSearcher:
         self._vector_field = "vector_embedding"
         self._bookmark_field = "bookmarks"
         self._metadata_prefix = "metadata"
+        try:
+            self._reranker = CrossEncoder(self._config.RERANKING_MODEL_NAME)
+            log_handle.info(f"Cross encoder model '{self._config.RERANKING_MODEL_NAME} loaded.")
+        except Exception as e:
+            traceback.print_exc()
+            self._reranker = None
 
         log_handle.info(f"Initialized IndexSearcher")
 
@@ -318,23 +328,48 @@ class IndexSearcher:
             return [], 0
 
     def perform_vector_search(
-            self, embedding: List[float], categories: Dict[str, List[str]],
-            page_size: int, page_number: int, language) -> Tuple[List[Dict[str, Any]], int]:
+            self, keywords: str, embedding: List[float], categories: Dict[str, List[str]],
+            page_size: int, page_number: int, language: str, rerank: bool = True, rerank_top_k: int = 100) \
+            -> Tuple[List[Dict[str, Any]], int]:
+        initial_fetch_size = rerank_top_k if rerank else page_size
+        from_ = 0 if rerank else (page_number - 1) * page_size
+
         query_body = self._build_vector_query(embedding, categories)
-        from_ = (page_number - 1) * page_size
         log_handle.debug(f"Vector query: {query_body}")
         try:
             response = self._opensearch_client.search(
                 index=self._index_name,
                 body=query_body,
-                size=page_size,
+                size=initial_fetch_size,
                 from_=from_
             )
             hits = response.get('hits', {}).get('hits', [])
             log_handle.verbose(f"Vector search response: {json_dumps(response, truncate_fields=['vector_embedding'])}")
             total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
             log_handle.info(f"Vector search executed. Total hits: {total_hits}.")
-            return self._extract_results(hits, is_lexical=False, language=language), total_hits
+
+            # Rerank, if required
+            if not rerank or not self._reranker or not hits:
+                log_handle.info(f"Vector search executed (no reranking). Total hits: {total_hits}")
+                return self._extract_results(hits, is_lexical=False, language=language), total_hits
+
+            text_field = self._text_fields.get(language, "hi")
+            log_handle.info(f"Performing reranking on {len(hits)}, query {keywords}")
+
+            sentence_pairs = [[keywords, hit["_source"].get(text_field)] for hit in hits]
+            rerank_scores = self._reranker.predict(sentence_pairs)
+
+            for hit, score in zip(hits, rerank_scores):
+                hit["rerank_score"] = score
+
+            reranked_hits = sorted(hits, key=lambda x: x["rerank_score"], reverse=True)
+
+            # Pagination
+            final_from = (page_number - 1) * page_size
+            final_to = final_from + page_size
+            paginated_hits = reranked_hits[final_from:final_to]
+
+            return self._extract_results(paginated_hits, is_lexical=False, language=language), total_hits
         except Exception as e:
             log_handle.error(f"Error during vector search: {e}", exc_info=True)
             return [], 0

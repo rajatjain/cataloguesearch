@@ -92,6 +92,15 @@ class SearchRequest(BaseModel):
     page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
     page_number: int = Field(1, ge=1, description="Page number for pagination.")
 
+class VectorSearchRequest(BaseModel):
+    """
+    Pydantic model for the vector search request payload.
+    """
+    query: str = Field(..., example="Bangalore city history")
+    categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
+    page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
+    page_number: int = Field(1, ge=1, description="Page number for pagination.")
+
 
 @app.post("/search", response_model=Dict[str, Any])
 async def search(request_data: SearchRequest = Body(...)):
@@ -124,7 +133,7 @@ async def search(request_data: SearchRequest = Body(...)):
         disable_lexical_search = False
 
         # TODO(rajatjain): Enable vector search when embedding model is ready.
-        disable_vector_search = True
+        disable_vector_search = False
 
         # Perform Lexical Search
         lexical_results = []
@@ -152,6 +161,7 @@ async def search(request_data: SearchRequest = Body(...)):
                 vector_results = []
             else:
                 vector_results, vector_total_hits = index_searcher.perform_vector_search(
+                    keywords=keywords,
                     embedding=query_embedding,
                     categories=categories,
                     page_size=page_size,
@@ -162,16 +172,21 @@ async def search(request_data: SearchRequest = Body(...)):
                     f"Vector search returned {len(vector_results)} "
                     f"results (total: {vector_total_hits}).")
 
-        final_results, total_results = ResultRanker.collate_and_rank(
-            lexical_results, vector_results, page_size, page_number
-        )
-        log_handle.info(f"Collation and ranking produced {len(final_results)} final results (total: {total_results}).")
+        final_search_results, total_search_results = ResultRanker.collate_and_rank(
+            lexical_results, [], page_size, page_number)
+
+        final_vector_results, total_vector_results = ResultRanker.collate_and_rank(
+            [], vector_results, page_size, page_number)
+
+        log_handle.info(f"Collation and ranking produced {len(final_search_results)} final results (total: {total_search_results}).")
 
         response = {
-            "total_results": total_results,
+            "total_results": total_search_results,
             "page_size": page_size,
             "page_number": page_number,
-            "results": final_results,
+            "results": final_search_results,
+            "vector_results": final_vector_results,
+            "total_vector_results": total_vector_results
         }
 
         log_handle.info(f"Search response: {json_dumps(response)}")
@@ -180,6 +195,7 @@ async def search(request_data: SearchRequest = Body(...)):
     except Exception as e:
         log_handle.exception(f"An error occurred during search request processing: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
 
 initialize()
 

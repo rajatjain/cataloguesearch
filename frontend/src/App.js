@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
 // --- API SERVICE ---
+// This service handles communication with your backend API.
 const API_BASE_URL = 'http://localhost:8000';
 
 const api = {
@@ -32,10 +33,16 @@ const api = {
             }
             const data = await response.json();
             console.log("API: Search results received.", data);
-            return data;
+            // Ensure the response always has the expected arrays, even if the API omits them when empty.
+            return {
+                ...data,
+                results: data.results || [],
+                vector_results: data.vector_results || []
+            };
         } catch (error) {
             console.error("API Error: Could not perform search", error);
-            return { total: 0, results: [] };
+            // Return a default structure on error to prevent crashes.
+            return { total_results: 0, results: [], total_vector_results: 0, vector_results: [] };
         }
     }
 };
@@ -169,18 +176,17 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity, allowTy
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-gray-200">
             <div>
                 <label className="flex items-center gap-3 text-gray-800">
-                    <input 
-                        type="checkbox" 
-                        checked={allowTypos} 
+                    <input
+                        type="checkbox"
+                        checked={allowTypos}
                         onChange={(e) => {
                             const checked = e.target.checked;
                             setAllowTypos(checked);
-                            // If enabling typos and currently on exact phrase, switch to near
                             if (checked && proximity === 0) {
                                 setProximity(10);
                             }
-                        }} 
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" 
+                        }}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
                     <span className="text-md font-semibold text-gray-700">Allow Typos</span>
                 </label>
@@ -201,14 +207,14 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity, allowTy
                 <div className="flex flex-wrap gap-4">
                     {proximityOptions.map(opt => (
                         <label key={opt.value} className={`flex items-center gap-2 ${allowTypos && opt.value === 0 ? 'text-gray-400' : 'text-gray-800'}`}>
-                            <input 
-                                type="radio" 
-                                name="proximity" 
-                                value={opt.value} 
-                                checked={proximity === opt.value} 
-                                onChange={() => setProximity(opt.value)} 
+                            <input
+                                type="radio"
+                                name="proximity"
+                                value={opt.value}
+                                checked={proximity === opt.value}
+                                onChange={() => setProximity(opt.value)}
                                 disabled={allowTypos && opt.value === 0}
-                                className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" 
+                                className="form-radio h-4 w-4 text-blue-600 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             {opt.label}
                         </label>
@@ -219,18 +225,11 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity, allowTy
     );
 };
 
-/**
- * Renders a single search result card.
- * It now receives HTML with <em> tags in `content_snippet` and styles them.
- */
 const ResultCard = ({ result }) => {
-    /**
-     * Replaces <em> tags from OpenSearch with styled <mark> tags
-     * and returns an object suitable for dangerouslySetInnerHTML.
-     */
     const getHighlightedHTML = () => {
+        // For vector results, there's no snippet, so we show the full text content.
         if (!result.content_snippet) {
-            return { __html: '' };
+            return { __html: result.text_content_hindi || '' };
         }
         const styledSnippet = result.content_snippet
             .replace(/<em>/g, '<mark class="bg-yellow-200 text-black px-1 rounded font-medium">')
@@ -248,7 +247,6 @@ const ResultCard = ({ result }) => {
                 )}
             </div>
             <div className="space-y-3 text-gray-700">
-                {/* Use dangerouslySetInnerHTML to render the HTML from the API */}
                 <p dangerouslySetInnerHTML={getHighlightedHTML()} />
             </div>
         </div>
@@ -276,38 +274,47 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
     );
 };
 
-/**
- * Renders the list of search results.
- */
-const Results = ({ searchData, isLoading, currentPage, onPageChange }) => {
-    if (isLoading) {
-        return (
-             <div className="text-center py-10">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                <p className="mt-4 text-lg text-gray-600">Searching...</p>
-            </div>
-        );
-    }
+const Tabs = ({ activeTab, setActiveTab, searchData }) => {
+    const keywordCount = searchData?.total_results || 0;
+    const vectorCount = searchData?.total_vector_results || 0;
 
-    if (!searchData) {
-        return <div className="text-center py-10 text-gray-500 bg-gray-100 rounded-lg border border-gray-200">Enter a query and click Search to see results.</div>;
-    }
-
-    if (searchData.results.length === 0) {
-        return <div className="text-center py-10 text-gray-500 bg-white rounded-lg border border-gray-200">No results found for your query.</div>;
-    }
-
-    const totalPages = Math.ceil(searchData.total_results / searchData.page_size);
+    const tabStyle = "px-4 py-2 font-semibold text-lg rounded-t-lg cursor-pointer transition-colors duration-200";
+    const activeTabStyle = "bg-white text-blue-600 border-b-2 border-blue-600";
+    const inactiveTabStyle = "bg-gray-200 text-gray-600 hover:bg-gray-300";
 
     return (
-        <div className="mt-10">
+        <div className="flex border-b border-gray-300">
+            <button
+                onClick={() => setActiveTab('keyword')}
+                className={`${tabStyle} ${activeTab === 'keyword' ? activeTabStyle : inactiveTabStyle}`}
+            >
+                Keyword Results <span className="text-sm font-normal bg-gray-300 px-2 py-1 rounded-full">{keywordCount}</span>
+            </button>
+            <button
+                onClick={() => setActiveTab('vector')}
+                className={`${tabStyle} ${activeTab === 'vector' ? activeTabStyle : inactiveTabStyle}`}
+            >
+                Similar Results <span className="text-sm font-normal bg-gray-300 px-2 py-1 rounded-full">{vectorCount}</span>
+            </button>
+        </div>
+    );
+};
+
+/**
+ * Renders a generic list of search results with pagination.
+ */
+const ResultsList = ({ results, totalResults, pageSize, currentPage, onPageChange, resultType }) => {
+    const totalPages = Math.ceil(totalResults / pageSize);
+
+    return (
+        <div className="bg-white p-6 rounded-b-lg">
             <div className="text-gray-600 mb-4">
-                Showing {searchData.results.length} of {searchData.total_results} results.
+                Showing {results.length} of {totalResults} results.
             </div>
             <div className="space-y-6">
-                {searchData.results.map((result, index) => (
+                {results.map((result, index) => (
                     <ResultCard
-                        key={`${result.original_filename}-${index}`}
+                        key={`${resultType}-${result.original_filename}-${index}`}
                         result={result}
                     />
                 ))}
@@ -332,7 +339,12 @@ export default function App() {
     const [searchData, setSearchData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    const [currentPage, setCurrentPage] = useState(1);
+    // State for tabs and independent pagination
+    const [activeTab, setActiveTab] = useState('keyword');
+    const [keywordPage, setKeywordPage] = useState(1);
+    const [vectorPage, setVectorPage] = useState(1);
+
+    const PAGE_SIZE = 20;
 
     useEffect(() => {
         api.getMetadata().then(data => setMetadata(data));
@@ -350,12 +362,13 @@ export default function App() {
 
     const handleSearch = useCallback(async (page = 1) => {
         if (!query.trim()) {
-            // Using a simple browser alert for now. Consider a modal for a better UX.
             alert("Please enter a search query.");
             return;
         }
         setIsLoading(true);
-        setCurrentPage(page);
+        // When a new search starts, reset both pages to 1
+        setKeywordPage(1);
+        setVectorPage(1);
 
         const languageToSend = language === 'both' ? null : language;
 
@@ -369,8 +382,8 @@ export default function App() {
             }, {}),
             language: languageToSend,
             proximity_distance: proximity,
-            page_number: page,
-            page_size: 20
+            page_number: page, // This page number is for the keyword search
+            page_size: PAGE_SIZE
         };
 
         const data = await api.search(requestPayload);
@@ -379,10 +392,21 @@ export default function App() {
     }, [query, activeFilters, language, proximity, allowTypos]);
 
     const handlePageChange = (page) => {
-        if (searchData && page > 0 && page <= Math.ceil(searchData.total_results / searchData.page_size)) {
+        if (activeTab === 'keyword') {
+            setKeywordPage(page);
+            // For keyword search, we need to make a new API call
             handleSearch(page);
+        } else {
+            // For vector search, we just update the page state for frontend pagination
+            setVectorPage(page);
         }
     };
+
+    // Calculate paginated vector results on the frontend
+    const paginatedVectorResults = searchData?.vector_results.slice(
+        (vectorPage - 1) * PAGE_SIZE,
+        vectorPage * PAGE_SIZE
+    );
 
     return (
         <div className="bg-gray-50 text-gray-900 min-h-screen font-sans">
@@ -440,12 +464,52 @@ export default function App() {
                         )}
                     </div>
 
-                    <Results
-                        searchData={searchData}
-                        isLoading={isLoading}
-                        currentPage={currentPage}
-                        onPageChange={handlePageChange}
-                    />
+                    {isLoading && (
+                         <div className="text-center py-10">
+                            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                            <p className="mt-4 text-lg text-gray-600">Searching...</p>
+                        </div>
+                    )}
+
+                    {!isLoading && searchData && (
+                        <div>
+                            <Tabs activeTab={activeTab} setActiveTab={setActiveTab} searchData={searchData} />
+                            {activeTab === 'keyword' && searchData.results.length > 0 && (
+                                <ResultsList
+                                    results={searchData.results}
+                                    totalResults={searchData.total_results}
+                                    pageSize={PAGE_SIZE}
+                                    currentPage={keywordPage}
+                                    onPageChange={handlePageChange}
+                                    resultType="keyword"
+                                />
+                            )}
+                             {activeTab === 'vector' && searchData.vector_results.length > 0 && (
+                                <ResultsList
+                                    results={paginatedVectorResults}
+                                    totalResults={searchData.total_vector_results}
+                                    pageSize={PAGE_SIZE}
+                                    currentPage={vectorPage}
+                                    onPageChange={handlePageChange}
+                                    resultType="vector"
+                                />
+                            )}
+
+                            {/* Handle case where the active tab has no results */}
+                            {((activeTab === 'keyword' && searchData.results.length === 0) ||
+                              (activeTab === 'vector' && searchData.vector_results.length === 0)) && (
+                                <div className="text-center py-10 text-gray-500 bg-white rounded-b-lg border-t-0">
+                                    No results found for this category.
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {!isLoading && !searchData && (
+                        <div className="text-center py-10 text-gray-500 bg-gray-100 rounded-lg border border-gray-200">
+                            Enter a query and click Search to see results.
+                        </div>
+                    )}
                 </main>
             </div>
         </div>
