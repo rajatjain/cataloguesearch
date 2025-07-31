@@ -4,16 +4,6 @@
 
 The Discovery module is the core data processing pipeline of CatalogueSearch, responsible for discovering, processing, and indexing multilingual PDF documents into a searchable format. It implements a sophisticated ETL (Extract, Transform, Load) pipeline optimized for Hindi and Gujarati documents with advanced OCR capabilities and intelligent text processing.
 
-## Table of Contents
-
-- [Architecture Overview](#architecture-overview)
-- [Module Components](#module-components)
-- [Data Flow](#data-flow)
-- [Configuration System](#configuration-system)
-- [State Management](#state-management)
-- [Performance Considerations](#performance-considerations)
-- [Error Handling](#error-handling)
-
 ## Architecture Overview
 
 The Crawler module follows a modular, pipeline-based architecture with clear separation of concerns:
