@@ -10,49 +10,32 @@
 
 ## Introduction
 
-CatalogueSearch is a advanced document processing and search system specifically designed for multilingual PDF documents, with specialized support for Hindi and Gujarati texts. The system provides intelligent paragraph generation, semantic text processing, and powerful search capabilities combining both lexical and vector-based search methods.
+CatalogueSearch is an advanced document processing and search system specifically designed for multilingual PDF documents, with specialized support for Hindi and Gujarati texts. The system provides intelligent paragraph generation, semantic text processing, and powerful search capabilities combining both lexical and vector-based search methods.
 
-The system uses OCR technology, natural language processing, and vector embeddings to create searchable document indexes from complex multilingual PDF content.
+The system uses OCR technology, natural language processing, and vector embeddings to create searchable document indexes from complex multilingual PDF content, and exposes them through an intuitive UI.
 
 ## High Level Architecture and Components
 
-### PDF Processor
-Handles PDF document ingestion and processing. Converts PDF files to processable text and images, manages OCR operations, and preprocesses documents for further analysis.
+### Crawler
+Responsible for document discovery and crawling operations. This module monitors directories, discovers out new PDF files, extracts text through OCR, chunks them into individual documents through sophisticated and language specific paragraph generation, and creates lexical and vector indexes to make the documents searchable. In addition, it also gathers document specific metadata to allow the users to search through categories.
 
-### Discovery Module
-Responsible for document discovery and crawling operations. This module can monitor directories, receive files from various endpoints, and manage the document intake pipeline to ensure the system stays updated with new content.
+The Crawler follows standard ETL (Extract-Tranform-Load) techniques.
 
-### Paragraph Generator
-Advanced text processing system with language-specific implementations for Hindi and Gujarati. Features intelligent paragraph combination, text normalization, header/footer detection, and contextual text chunking. The system handles OCR correction, punctuation normalization, and semantic paragraph boundary detection.
+Detailed architecture [ARCHITECTURE.md](ARCHITECTURE.md)
 
-### Search Engine
+### Search Engine and API Server
 Provides dual-mode search capabilities:
 - **Lexical Search**: Traditional keyword-based search using OpenSearch
 - **Vector Search**: Semantic search using sentence transformers and vector embeddings
 - **Hybrid Search**: Combines both approaches for optimal search results
 
-### API Layer
-FastAPI-based REST API providing search endpoints and document management capabilities. Includes result ranking, search result aggregation, and response formatting.
+The Search Engine uses OpenSearch as the backend, and uses **Vector Search and Rerankers** for better search results.
 
-### Frontend Interface
-React-based web application with Tailwind CSS styling, providing an intuitive user interface for document search and management.
 
 ## Installation Instructions on macOS
 
 ### Prerequisites
 Python 3.11+.
-
-### Python Environment Setup
-1. Create and activate a virtual environment:
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-
-2. Install Python dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
 
 ### Docker Installation
 Docker is required for OpenSearch and testing components.
@@ -103,6 +86,22 @@ Download and set up the Indic NLP resources for advanced language processing.
     ```bash
     echo 'export INDIC_RESOURCES_PATH="/path/to/indic_nlp_resources"' >> ~/.zshrc
     ```
+
+### Python Environment Setup
+
+**NOTE**: Python's dependencies should be installed after setting up the above.
+
+1. Create and activate a virtual environment:
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+
+2. Install Python dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
 
 ### Google Vision API Setup
 For advanced OCR capabilities:
