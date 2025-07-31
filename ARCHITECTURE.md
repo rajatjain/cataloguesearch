@@ -49,4 +49,4 @@ Vector Embeddings are part of the same index to allow
 * Hybrid Search
 * Support for using `reranker` models for higher quality of search results.
 
-More details here [[https://github.com/rajatjain/cataloguesearch/issues/24](https://github.com/rajatjain/cataloguesearch/issues/24).
+More details here [https://github.com/rajatjain/cataloguesearch/issues/24](https://github.com/rajatjain/cataloguesearch/issues/24).
