@@ -1,10 +1,6 @@
-# Make sure to set the TEST_DATA_DIR and TEST_LLM_API_KEY
-# environment variables before running the tests.
-
 crawler:
   base_pdf_path: "{TEST_DATA_DIR}/pdfs"
   base_text_path: "{TEST_DATA_DIR}/text"
-  tmp_images_path: "{TEST_DATA_DIR}/tmp_images"
   sqlite_db_path: "{TEST_DATA_DIR}/db/cataloguesearch.db"
 
 index:
@@ -15,7 +11,7 @@ index:
       chunk_overlap: 50
     dynamic:
       similarity_threshold: 0.5
-  chunk_strategy: "default"
+  chunk_strategy: "paragraph"
 
 
 opensearch:
@@ -23,12 +19,8 @@ opensearch:
   port: 19200
   username: admin
   password: Admin@Password123!
-  index_name: opensearch-cataloguesearch-pytest
+  index_name: cataloguesearch_pytest
 
-embedding_model:
-  # Even though it is slow, but keep it in tests to have uniformity.
-  name: ai4bharat/indic-bert
-
-llm_model:
-  name: gemini-2.0-flash
-  api_key: "{TEST_LLM_API_KEY}" # This will be loaded as an environment variable
+vector_embeddings:
+  embedding_model: BAAI/bge-m3
+  reranking_model: BAAI/bge-reranker-v2-m3

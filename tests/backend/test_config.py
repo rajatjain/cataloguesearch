@@ -13,7 +13,7 @@ def test_config_instance():
     Tests that the Config instance is created correctly and has expected attributes.
     """
     config = Config()
-    index_name = "opensearch-cataloguesearch-pytest"
+    index_name = "cataloguesearch_pytest"
 
     assert isinstance(config, Config)
     assert config.BASE_PDF_PATH == "%s/pdfs" % get_test_data_dir()
@@ -23,7 +23,7 @@ def test_config_instance():
     assert config.OPENSEARCH_USERNAME == "admin"
     assert config.OPENSEARCH_PASSWORD == "Admin@Password123!"
     assert config.OPENSEARCH_INDEX_NAME == index_name
-    assert config.EMBEDDING_MODEL_NAME == "ai4bharat/indic-bert"
-    assert config.CHUNK_STRATEGY == "default"
-    assert config.LLM_MODEL_NAME == "gemini-2.0-flash"
+    assert config.EMBEDDING_MODEL_NAME == "BAAI/bge-m3"
+    assert config.RERANKING_MODEL_NAME == "BAAI/bge-reranker-v2-m3"
+    assert config.CHUNK_STRATEGY == "paragraph"
     log_handle.info(f"END TEST_CONFIG_INSTANCE")

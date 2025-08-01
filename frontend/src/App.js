@@ -146,7 +146,8 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity, allowTy
 const ResultCard = ({ result, onFindSimilar, onExpand, isFirst }) => {
     const getHighlightedHTML = () => {
         const content = result.content_snippet || result.text_content_hindi || '';
-        return { __html: content.replace(/<em>/g, `<mark class="${isFirst ? 'bg-sky-200' : 'bg-sky-100'} text-slate-800 px-1 rounded">`).replace(/<\/em>/g, '</mark>') };
+        // CORRECTED: The highlight class is now consistently `bg-sky-200` for all results to ensure visibility.
+        return { __html: content.replace(/<em>/g, `<mark class="bg-sky-200 text-slate-800 px-1 rounded">`).replace(/<\/em>/g, '</mark>') };
     };
 
     const cardClasses = isFirst
@@ -156,10 +157,9 @@ const ResultCard = ({ result, onFindSimilar, onExpand, isFirst }) => {
     return (
         <div className={cardClasses}>
             <div className="border-b border-slate-200 pb-2 mb-2 text-sm text-slate-500 flex flex-wrap gap-x-3 gap-y-1 items-center">
-                <span className="font-semibold text-slate-600">📄 {result.original_filename}</span>
+                <span className="font-semibold text-slate-600">塘 {result.original_filename}</span>
                 <span>Page: {result.page_number}</span>
-                {/* CORRECTED: Added the bookmarks back in */}
-                {result.bookmarks && <span className="truncate max-w-xs">🔖 {result.bookmarks}</span>}
+                {result.bookmarks && <span className="truncate max-w-xs">薄 {result.bookmarks}</span>}
                 <div className="ml-auto flex items-center gap-3 text-sm">
                     <button onClick={() => onExpand(result.document_id)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center"><ExpandIcon />Expand</button>
                     <button onClick={() => onFindSimilar(result)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center"><SimilarIcon />More Like This</button>
@@ -207,7 +207,7 @@ const SimilarSourceInfoCard = ({ sourceDoc }) => {
     return (
         <div className="bg-sky-50 border border-sky-200 p-3 rounded-lg mb-3 text-sky-800">
             <h3 className="font-semibold text-sm mb-1.5">Showing results similar to:</h3>
-            <div className="text-sm mb-2"><span className="font-medium">📄 {sourceDoc.original_filename}</span><span className="ml-3">Page: {sourceDoc.page_number}</span></div>
+            <div className="text-sm mb-2"><span className="font-medium">塘 {sourceDoc.original_filename}</span><span className="ml-3">Page: {sourceDoc.page_number}</span></div>
             <blockquote className="border-l-4 border-sky-300 pl-2 text-base italic text-slate-600 font-sans"><p dangerouslySetInnerHTML={getHighlightedHTML()} /></blockquote>
         </div>
     );
@@ -337,7 +337,7 @@ export default function App() {
                             <div className="sm:col-span-3"><SearchBar query={query} setQuery={setQuery} /></div>
                             <button onClick={() => handleSearch(1)} disabled={isLoading} className="bg-sky-600 text-white font-bold py-3 px-4 rounded-md text-base hover:bg-sky-700 transition duration-300 disabled:bg-slate-300 flex items-center justify-center w-full">{isLoading ? <Spinner /> : 'Search'}</button>
                         </div>
-                        <div className="mt-3"><button onClick={() => setShowFilters(!showFilters)} className="flex items-center text-sky-700 font-semibold hover:text-sky-800 text-sm"><FilterIcon />{showFilters ? 'Hide Filters' : 'Show Filters'}<span className="ml-2 bg-slate-200 text-slate-600 text-sm font-bold px-1.5 py-0.5 rounded-full">{activeFilters.length}</span></button></div>
+                        <div className="mt-3"><button onClick={() => setShowFilters(!showFilters)} className="flex items-center text-sky-700 font-semibold hover:text-sky-800 text-sm"><FilterIcon />{showFilters ? 'Hide Filters' : 'Hide Filters'}<span className="ml-2 bg-slate-200 text-slate-600 text-sm font-bold px-1.5 py-0.5 rounded-full">{activeFilters.length}</span></button></div>
                         {showFilters && <div className="mt-3 space-y-3"><MetadataFilters metadata={metadata} activeFilters={activeFilters} onAddFilter={addFilter} onRemoveFilter={removeFilter} /><SearchOptions language={language} setLanguage={setLanguage} proximity={proximity} setProximity={setProximity} allowTypos={allowTypos} setAllowTypos={setAllowTypos} /></div>}
                     </div>
                     {isLoading && <div className="text-center py-8"><div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div><p className="mt-3 text-base text-slate-500">Searching...</p></div>}

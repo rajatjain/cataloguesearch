@@ -98,10 +98,6 @@ class Config:
             return self._settings.get("vector_embeddings", {}).get("embedding_model", "BAAI/bge-m3")
         elif name == "RERANKING_MODEL_NAME":
             return self._settings.get("vector_embeddings", {}).get("reranking_model", "BAAI/bge-reranker-v2-m3")
-        elif name == "LLM_MODEL_NAME":
-            return self._settings.get("llm_model", {}).get("name", "gemini-2.0-flash")
-        elif name == "LLM_API_KEY":
-            return self._settings.get("llm_model", {}).get("api_key", "")
         else:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 

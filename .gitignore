@@ -105,6 +105,7 @@ yarn-error.log*
 .DS_Store
 .AppleDouble
 .LSOverride
+.agignore
 
 # Thumbnails
 ._*
@@ -119,3 +120,4 @@ ehthumbs_vista.db
 .idea/
 
 # Visual
+
