@@ -157,15 +157,15 @@ const ResultCard = ({ result, onFindSimilar, onExpand, isFirst }) => {
     return (
         <div className={cardClasses}>
             <div className="border-b border-slate-200 pb-2 mb-2 text-sm text-slate-500 flex flex-wrap gap-x-3 gap-y-1 items-center">
-                <span className="font-semibold text-slate-600">塘 {result.original_filename}</span>
+                <span className="font-semibold text-slate-600"> {result.original_filename}</span>
                 <span>Page: {result.page_number}</span>
-                {result.bookmarks && <span className="truncate max-w-xs">薄 {result.bookmarks}</span>}
+                {result.bookmarks && <span className="truncate max-w-xs"> {result.bookmarks}</span>}
                 <div className="ml-auto flex items-center gap-3 text-sm">
                     <button onClick={() => onExpand(result.document_id)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center"><ExpandIcon />Expand</button>
                     <button onClick={() => onFindSimilar(result)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center"><SimilarIcon />More Like This</button>
                 </div>
             </div>
-            <div className={`${isFirst ? 'text-lg' : 'text-base'} text-slate-700 leading-relaxed font-sans`}><p dangerouslySetInnerHTML={getHighlightedHTML()} /></div>
+            <div className={`${isFirst ? 'text-lg' : 'text-base'} text-slate-700 leading-relaxed font-sans`}><p className="whitespace-pre-wrap" dangerouslySetInnerHTML={getHighlightedHTML()} /></div>
         </div>
     );
 };
@@ -207,8 +207,8 @@ const SimilarSourceInfoCard = ({ sourceDoc }) => {
     return (
         <div className="bg-sky-50 border border-sky-200 p-3 rounded-lg mb-3 text-sky-800">
             <h3 className="font-semibold text-sm mb-1.5">Showing results similar to:</h3>
-            <div className="text-sm mb-2"><span className="font-medium">塘 {sourceDoc.original_filename}</span><span className="ml-3">Page: {sourceDoc.page_number}</span></div>
-            <blockquote className="border-l-4 border-sky-300 pl-2 text-base italic text-slate-600 font-sans"><p dangerouslySetInnerHTML={getHighlightedHTML()} /></blockquote>
+            <div className="text-sm mb-2"><span className="font-medium">{sourceDoc.original_filename}</span><span className="ml-3">Page: {sourceDoc.page_number}</span></div>
+            <blockquote className="border-l-4 border-sky-300 pl-2 text-base italic text-slate-600 font-sans"><p className="whitespace-pre-wrap" dangerouslySetInnerHTML={getHighlightedHTML()} /></blockquote>
         </div>
     );
 };
