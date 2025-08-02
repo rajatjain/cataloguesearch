@@ -355,26 +355,37 @@ class IndexSearcher:
                 return self._extract_results(hits, is_lexical=False, language=language), total_hits
 
             text_field = self._text_fields.get(language, "hi")
-            log_handle.info(f"Performing reranking on {len(hits)}, query {keywords}")
+            log_handle.info(f"Performing reranking on {len(hits)} documents for query: '{keywords}'")
 
-            sentence_pairs = [[keywords, hit["_source"].get(text_field)] for hit in hits]
-            rerank_scores = self._reranker.predict(sentence_pairs)
+            # Create pairs of [query, document_text] for the reranker
+            sentence_pairs = [
+                [keywords, hit["_source"].get(text_field, "")] for hit in hits
+            ]
+
+            # Use batching to significantly speed up the prediction process.
+            # A batch size of 32 is a good starting point.
+            # This allows the model to process 32 documents in parallel.
+            rerank_scores = self._reranker.predict(
+                sentence_pairs,
+                batch_size=32,
+                show_progress_bar=True  # Useful for seeing progress in logs
+            )
 
             for hit, score in zip(hits, rerank_scores):
                 hit["rerank_score"] = score
 
+            # Sort results based on the new reranked score
             reranked_hits = sorted(hits, key=lambda x: x["rerank_score"], reverse=True)
 
-            # Pagination
-            final_from = (page_number - 1) * page_size
-            final_to = final_from + page_size
-            paginated_hits = reranked_hits[final_from:final_to]
+            # Paginate the final, sorted results
+            start_index = (page_number - 1) * page_size
+            end_index = start_index + page_size
+            paginated_hits = reranked_hits[start_index:end_index]
 
             return self._extract_results(paginated_hits, is_lexical=False, language=language), total_hits
         except Exception as e:
             log_handle.error(f"Error during vector search: {e}", exc_info=True)
             return [], 0
-
 
     def find_similar_by_id(self, doc_id: str, language: str, size: int = 10) -> Tuple[List[Dict[str, Any]], int]:
         """
