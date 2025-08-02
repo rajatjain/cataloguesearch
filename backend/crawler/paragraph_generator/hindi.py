@@ -39,6 +39,12 @@ class HindiParagraphGenerator(BaseParagraphGenerator):
 
         cleaned_text = cleaned_text.replace("गुरुदेव श्री", "गुरुदेवश्री")
 
+        cleaned_text = cleaned_text.replace("श्रोता -", "श्रोता:")
+        cleaned_text = cleaned_text.replace("पूज्य गुरुदेवश्री -", "पूज्य गुरुदेवश्री:")
+
+        # correct typing mistakes
+        cleaned_text = re.sub(r"मुमु[^:]*श[^:]*:", "मुमुक्षु:", cleaned_text)
+
         # Join multiple lines into a single line with spaces
         # BUT do not join lines that start with "श्रोता:" or "पूज्य गुरुदेवश्री:" or "मुमुक्षु:"
         cleaned_text = re.sub(r'\n(?!श्रोता:|पूज्य गुरुदेवश्री:|मुमुक्षु:|शंका:)', ' ', cleaned_text)

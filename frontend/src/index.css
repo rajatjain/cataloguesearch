@@ -55,3 +55,22 @@ code {
     monospace;
 }
 
+/* Add this to the CSS file for your search result components */
+
+.result-card-content {
+  /* Makes the font slightly larger */
+  font-size: 1.05rem; /* ~17px on a 16px base, a subtle increase */
+
+  /* Makes the font appear sharper and more substantial */
+  font-weight: 500;
+
+  /* Improves font rendering on modern displays for a sharper look */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Ensure the font-family is set correctly in your main CSS file (e.g., App.css) */
+body {
+  font-family: 'Noto Sans', 'Noto Sans Devanagari', sans-serif;
+}

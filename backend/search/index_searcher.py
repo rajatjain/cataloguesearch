@@ -219,7 +219,8 @@ class IndexSearcher:
                     "must": [main_query]
                 }
             },
-            "highlight": highlight_config
+            "highlight": highlight_config,
+            "track_total_hits": 1000
         }
 
         # Add category filters

@@ -131,7 +131,7 @@ async def search(request_data: SearchRequest = Body(...)):
         detected_language = LanguageDetector.detect_language(keywords)
         log_handle.info(f"Received search request: keywords='{keywords}', "
                         f"allow_typos='{allow_typos}', proximity_distance={proximity_distance}, "
-                        f"categories={categories}, page={page_number}, size={page_size}",
+                        f"categories={categories}, page={page_number}, size={page_size}, "
                         f"detected_language={detected_language}")
 
         disable_lexical_search = False
