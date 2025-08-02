@@ -322,7 +322,7 @@ class IndexSearcher:
             total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
             log_handle.info(f"Lexical search executed. Total hits: {total_hits}.")
             log_handle.info(
-                f"Lexical search response: {json_dumps(response, truncate_fields=['content_snippet'])}")
+                f"Lexical search response: {json_dumps(response, truncate_fields=['content_snippet', 'vector_embedding'])}")
             return self._extract_results(hits, is_lexical=True, language=detected_language), total_hits
         except Exception as e:
             log_handle.error(f"Error during lexical search: {e}", exc_info=True)

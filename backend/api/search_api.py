@@ -122,6 +122,7 @@ async def search(request_data: SearchRequest = Body(...)):
 
 
     try:
+
         # If allow_typos is true and proximity_distance is 0 (exact phrase), change to near (10)
         if allow_typos and proximity_distance == 0:
             proximity_distance = 10
@@ -134,12 +135,11 @@ async def search(request_data: SearchRequest = Body(...)):
                         f"detected_language={detected_language}")
 
         disable_lexical_search = False
-
-        # TODO(rajatjain): Enable vector search when embedding model is ready.
         disable_vector_search = False
 
         # Perform Lexical Search
         lexical_results = []
+        lexical_total_hits = 0
 
         if not disable_lexical_search:
             lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
@@ -155,6 +155,7 @@ async def search(request_data: SearchRequest = Body(...)):
                             f"results (total: {lexical_total_hits}).")
 
         vector_results = []
+        vector_total_hits = 0
         if not disable_vector_search:
             model_name = config.EMBEDDING_MODEL_NAME
             log_handle.info(f"Using embedding model: {model_name}")
@@ -163,33 +164,26 @@ async def search(request_data: SearchRequest = Body(...)):
                 log_handle.warning("Could not generate embedding for query. Vector search skipped.")
                 vector_results = []
             else:
+                # For vector search, never show all results. Only the top 20 is always ok.
                 vector_results, vector_total_hits = index_searcher.perform_vector_search(
                     keywords=keywords,
                     embedding=query_embedding,
                     categories=categories,
-                    page_size=page_size,
-                    page_number=page_number,
+                    page_size=20,
+                    page_number=1,
                     language=detected_language
                 )
                 log_handle.info(
                     f"Vector search returned {len(vector_results)} "
                     f"results (total: {vector_total_hits}).")
 
-        final_search_results, total_search_results = ResultRanker.collate_and_rank(
-            lexical_results, [], page_size, page_number)
-
-        final_vector_results, total_vector_results = ResultRanker.collate_and_rank(
-            [], vector_results, page_size, page_number)
-
-        log_handle.info(f"Collation and ranking produced {len(final_search_results)} final results (total: {total_search_results}).")
-
         response = {
-            "total_results": total_search_results,
+            "total_results": lexical_total_hits,
             "page_size": page_size,
             "page_number": page_number,
-            "results": final_search_results,
-            "vector_results": final_vector_results,
-            "total_vector_results": total_vector_results
+            "results": lexical_results,
+            "vector_results": vector_results,
+            "total_vector_results": len(vector_results)  # Limit this to 10 always
         }
 
         log_handle.info(f"Search response: {json_dumps(response)}")
