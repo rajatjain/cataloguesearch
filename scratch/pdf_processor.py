@@ -1,10 +1,20 @@
 # main.py
+import datetime
+import tempfile
+
 import pytesseract
 from pdf2image import convert_from_path
 from PIL import Image
 from typing import List, Tuple
 import os
 import re
+
+from backend.config import Config
+from backend.crawler.discovery import Discovery, SingleFileProcessor
+from backend.crawler.index_state import IndexState
+from backend.crawler.pdf_processor import PDFProcessor
+from scratch.prod_setup import prod_setup
+
 
 def extract_paragraphs(
         pdf_file: str, start_page: int, end_page: int) -> List[Tuple[int, List[str]]]:
@@ -85,33 +95,50 @@ def extract_paragraphs(
     print("Extraction complete.")
     return extracted_data
 
+def process_pdf():
+    prod_setup(console_only=True)
+    scan_config = {
+        "default": {
+            "header_regex": [
+                "^.*समयसार\\s+सिद्धि,?.*भाग.*",
+                "^.{0,5}गाथा.{0,30}$",
+                "^.{0,5}कलश.{0,30}$",
+                "^.{0,5}श्लोक.{0,30}$",
+                "^प्रवचन\\s+नं\\.?.*$",
+                "^प्रवच्चन\\s+नं\\.?.*$",
+                "^[०-९\\s]*$",
+                "^.{0,5}प्रवचन\\s+सुधा.*भाग.*$",
+                "^.{0,5}प्रवच्चन\\s+सुधा.*भाग.*$"
+            ]
+        },
+        "Samaysaar_Siddhi_Part-01H": {
+            "header_prefix": [
+                "^[०-९\\s]*समयसार\\s+सिद्धि,?.*भाग-[०-९]\\s*[-।]?,?\\s*"
+            ],
+            "start_page": 19,
+            "end_page": 698
+        },
+        "Samaysaar_Siddhi_Part-02H": {
+            "header_prefix": [
+                "^[०-९\\s]*समयसार\\s+सिद्धि,?.*भाग-[०-९]\\s*[-।]?,?\\s*\\(.*\\)"
+            ],
+            "page_list": [
+                { "start": 20, "end":  509 },
+                {"start": 528, "end": 987}
+
+            ]
+        },
+        "language": "hi"
+    }
+
+    pdf_file = "/Users/r0j08wt/cataloguesearch/pdf/Pravachans/hindi/Dravyanuyog/Samaysaar/19th_time/Samaysaar_Siddhi_Part-01H.pdf"
+    index_state = IndexState(tempfile.mktemp())
+    processor = PDFProcessor(Config())
+    single = SingleFileProcessor(
+        Config(), pdf_file, None, index_state, processor, datetime.datetime.now().isoformat()
+    )
+    single.process()
+
 # --- Example Usage ---
 if __name__ == '__main__':
-    pdf_path = '/Users/r0j08wt/cataloguesearch/Pravachan_sudha_part_1_H.pdf'
-
-    if os.path.exists(pdf_path):
-        # Define the page range you want to extract
-        start_page_num = 109
-        end_page_num = 127
-
-        # Call the function to extract paragraphs
-        results = extract_paragraphs(pdf_path, start_page_num, end_page_num)
-
-        # get base: /a/b/c/defg.pdf -> defg
-        fname = os.path.splitext(os.path.basename(pdf_path))[0]
-        dir = "%s/%s" % (os.path.dirname(pdf_path), fname)
-        if not os.path.exists(dir):
-            os.makedirs(dir, exist_ok=True)
-        # Save the results to a text file
-        for page_num, paragraphs in results:
-            if paragraphs:
-                filepath = "%s/page_%04d.txt" % (dir, page_num)
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    for para in paragraphs:
-                        f.write(para + '\n\n')
-            else:
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    f.write("No paragraphs found on this page.\n")
-    else:
-        print(f"\nSkipping example execution because '{pdf_path}' was not found.")
-
+    process_pdf()

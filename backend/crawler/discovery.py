@@ -82,8 +82,7 @@ class SingleFileProcessor:
         scan_meta = {
             "header_prefix": [],
             "header_regex": [],
-            "start_page": 1,
-            "end_page": num_pages,
+            "page_list": [],
         }
 
         # Load the shared configuration file if it exists.
@@ -100,6 +99,7 @@ class SingleFileProcessor:
         default_config = scan_config_data.get("default", {})
         scan_meta["header_prefix"].extend(default_config.get("header_prefix", []))
         scan_meta["header_regex"].extend(default_config.get("header_regex", []))
+        scan_meta["page_list"].extend(default_config.get("page_list", []))
 
         # Layer 2: Apply file-specific settings, which override defaults.
         filename = os.path.splitext(os.path.basename(self._file_path))[0]
@@ -107,9 +107,12 @@ class SingleFileProcessor:
         if file_config:
             scan_meta["header_prefix"].extend(file_config.get("header_prefix", []))
             scan_meta["header_regex"].extend(file_config.get("header_regex", []))
-            # Page numbers are typically file-specific.
-            scan_meta["start_page"] = file_config.get("start_page", scan_meta["start_page"])
-            scan_meta["end_page"] = file_config.get("end_page", scan_meta["end_page"])
+            if file_config.get("start_page") and file_config.get("end_page"):
+                # Page numbers are typically file-specific.
+                scan_meta["start_page"] = file_config.get("start_page", 1)
+                scan_meta["end_page"] = file_config.get("end_page", num_pages)
+            if file_config.get("page_list"):
+                scan_meta["page_list"].extend(file_config.get("page_list"))
 
         return scan_meta
 

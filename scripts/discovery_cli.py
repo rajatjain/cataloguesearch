@@ -117,11 +117,15 @@ class DiscoveryDaemon:
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
 
+        if not os.path.exists(os.path.dirname(config.SQLITE_DB_PATH)):
+            os.makedirs(os.path.basename(config.SQLITE_DB_PATH))
+
         # Initialize discovery components
         self.index_state = IndexState(config.SQLITE_DB_PATH)
         self.pdf_processor = PDFProcessor(config)
         self.indexing_module = IndexGenerator(config)
-        self.discovery = Discovery(config, self.indexing_module, self.pdf_processor, self.index_state)
+        self.discovery = Discovery(
+            config, self.indexing_module, self.pdf_processor, self.index_state)
 
         logging.info("Discovery daemon initialized")
 
@@ -176,6 +180,7 @@ class DiscoveryDaemon:
 def run_discovery_once(config: Config, crawl=False, index=False):
     """Run discovery once"""
     try:
+        start = datetime.now()
         logging.info("Starting one-time discovery...")
 
         # Initialize components
@@ -192,7 +197,11 @@ def run_discovery_once(config: Config, crawl=False, index=False):
         metadata = get_metadata(config)
         index_state.update_metadata_cache(metadata)
         logging.info("Metadata cache updated successfully")
-
+        end = datetime.now()
+        total_secs = int((end - start).total_seconds())
+        hh, rem = divmod(total_secs, 3600)
+        mm, ss = divmod(rem, 60)
+        log_handle.info(f"Discovery completed in {hh:02}:{mm:02}:{ss:02}")
     except Exception as e:
         traceback.print_exc()
         logging.error(f"Discovery failed: {e}")

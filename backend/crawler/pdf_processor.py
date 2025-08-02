@@ -64,71 +64,80 @@ class PDFProcessor:
                 traceback.print_exc()
                 log_handle.error(f"Failed to write {fname}")
 
-    def _generate_paragraphs(self, pdf_file: str, start_page, end_page, language):
+    def _generate_paragraphs(self, pdf_file: str, page_list: list[int], language: str) -> list[tuple[int, list[str]]]:
         """
-        Extracts paragraphs from a specified range of pages in a PDF file.
+        Extracts paragraphs from a specified list of pages in a PDF file.
+
         This function converts each page of the PDF into an image and then uses
-        OCR to extract text. It then splits the text into paragraphs.
-        text into paragraphs.
+        OCR to extract text.
 
         Args:
             pdf_file: The file path to the PDF document.
-            start_page: The first page number to process (1-indexed).
-            end_page: The last page number to process (inclusive).
+            page_list: A list of 1-based page numbers to process.
+            language: The language code for OCR (e.g., 'hi', 'gu').
 
         Returns:
-            A list of tuples of the form:
-            [(start_page, ["para1", "para2", ... ]), (start_page+1, ["para1", "para2", ..]),
-             (end_page, ["para1, para2", ...])]
+            A list of tuples, where each tuple contains the page number
+            and a list of paragraph strings extracted from that page.
+            Example: [(1, ["Para 1...", "Para 2..."]), (5, [...])]
         """
         if not os.path.exists(pdf_file):
             raise FileNotFoundError(f"Error: File {pdf_file} not found.")
 
-        if start_page < 1 or end_page < start_page:
-            raise ValueError("Error: Invalid page range provided.")
+        if not page_list:
+            return []
 
         images = []
+        # Keep track of the page numbers for the images we successfully create
+        page_numbers_for_images = []
         try:
             doc = fitz.open(pdf_file)
+            total_pages = len(doc)
 
-            # Loop through the specified page range (adjusting for 0-based index)
-            for page_num in range(start_page - 1, end_page):
-                if page_num >= len(doc):
-                    break  # Avoids errors if end_page exceeds total pages
+            for page_num in page_list:
+                # Validate page number (1-based) against total pages
+                if not (1 <= page_num <= total_pages):
+                    log_handle.warning(
+                        f"Page number {page_num} is out of bounds for PDF {pdf_file} "
+                        f"which has {total_pages} pages. Skipping."
+                    )
+                    continue
 
-                page = doc.load_page(page_num)
+                # PyMuPDF uses 0-based indexing for pages, so we subtract 1
+                page = doc.load_page(page_num - 1)
 
-                # Render page to a pixmap (image) at 350 DPI
                 pix = page.get_pixmap(dpi=350)
-
-                # Convert the pixmap to a PIL Image for the OCR step
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                 images.append(img)
+                page_numbers_for_images.append(page_num)
 
             doc.close()
 
         except Exception as e:
-            # Assuming log_handle is defined elsewhere in your class
             log_handle.error(f"Error during PDF to image conversion with PyMuPDF: {e}")
+            traceback.print_exc()
             return []
 
         pyt_lang = self._pytesseract_language_map.get(language)
-        tasks = [(i, image, pyt_lang) for i, image in enumerate(images, start=start_page)]
+        log_handle.info(f"Scanning total pages: {len(page_list)}")
+
+        # This is the corrected version of the original line.
+        # It correctly pairs each image with its actual page number using zip().
+        tasks = [(page_num, image, pyt_lang) for page_num, image in zip(page_numbers_for_images, images)]
+
+        if not tasks:
+            return []
 
         extracted_data = []
-
         with ProcessPoolExecutor() as executor:
-            # Use tqdm to show a progress bar over the results iterator
-            # executor.map applies 'process_page' to each item in 'tasks'
             results = list(tqdm(executor.map(
                 PDFProcessor._process_single_page, tasks), total=len(tasks), desc="Processing Pages"))
             extracted_data = results
 
-        # 4. Sort results by page number to guarantee order
+        # Sort results by page number to guarantee order
         extracted_data.sort(key=lambda x: x[0])
 
         return extracted_data
-
 
     def fetch_bookmarks(self, pdf_file: str) -> dict[int, str]:
         doc = fitz.open(pdf_file)
@@ -182,14 +191,13 @@ class PDFProcessor:
 
         doc = fitz.open(pdf_path)
         num_pages = doc.page_count
-        start_page = scan_config.get("start_page", 1)
-        end_page = scan_config.get("end_page", num_pages)
+        pages_list = self._get_page_list(scan_config)
         language = scan_config.get("language", "hi")
 
         # Process only if some pages do not exist
         to_process = False
         if os.path.exists(output_dir):
-            for i in range(start_page, end_page + 1):
+            for i in pages_list:
                 fpath = f"{output_dir}/page_{i:04d}.txt"
                 if not os.path.exists(fpath):
                     to_process = True
@@ -197,11 +205,11 @@ class PDFProcessor:
 
         if not to_process:
             log_handle.info(
-                f"Skipping process for {pdf_path} as it already exists and has {end_page - start_page + 1} files.")
+                f"Skipping process for {pdf_path} as it already exists and has all the requisite files.")
             return None
 
         paragraphs = self._generate_paragraphs(
-            pdf_path, start_page, end_page, language)
+            pdf_path, pages_list, language)
 
         paragraphs = self._paragraph_gen.generate_paragraphs(
             paragraphs, scan_config
@@ -243,3 +251,26 @@ class PDFProcessor:
             print(f"An error occurred while processing page {page_num}: {e}")
             traceback.print_exc()
             return page_num, []
+
+    def _get_page_list(self, scan_config):
+        all_pages = set()
+
+        # Add pages from the list of ranges
+        pages_list = scan_config.get("page_list", [])
+        for i, page in enumerate(pages_list):
+            start = page.get("start")
+            end = page.get("end")
+
+            # Add pages if both start and end exist
+            if start is not None and end is not None:
+                all_pages.update(range(start, end + 1))
+
+        # Add pages from the top-level range
+        start_page = scan_config.get("start_page")
+        end_page = scan_config.get("end_page")
+
+        if start_page is not None and end_page is not None:
+            all_pages.update(range(start_page, end_page + 1))
+
+        # 3. Return the final sorted list of unique pages
+        return sorted(list(all_pages))
