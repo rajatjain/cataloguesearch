@@ -3,7 +3,7 @@ import os
 from typing import Any, Dict, List
 
 from fastapi import Body, FastAPI, HTTPException, Request, Query
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import FileResponse
 from langdetect import detect
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +18,7 @@ from backend.search.index_searcher import IndexSearcher
 from backend.search.result_ranker import ResultRanker
 from backend.utils import json_dumps
 from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
+from backend.utils import JSONResponse
 
 log_handle = logging.getLogger(__name__)
 

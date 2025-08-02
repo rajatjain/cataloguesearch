@@ -270,7 +270,7 @@ class IndexSearcher:
         for hit in hits:
             source = hit.get('_source', {})
             document_id = hit.get('_id')
-            score = hit.get('_score')
+            score = hit.get("rerank_score", hit.get("_score"))
             content_snippet = ""
 
             if is_lexical:
@@ -279,7 +279,7 @@ class IndexSearcher:
                 field = self._text_fields.get(language)
 
                 # Prioritise the highlighted content if available
-                highlighted_fragment = hit.get('highlight', {}).get(field, '')
+                highlighted_fragment = hit.get('highlight', {}).get(field, []) 
                 if highlighted_fragment:
                     content_snippet = "...".join(highlighted_fragment)
             elif not is_lexical:
@@ -331,7 +331,7 @@ class IndexSearcher:
 
     def perform_vector_search(
             self, keywords: str, embedding: List[float], categories: Dict[str, List[str]],
-            page_size: int, page_number: int, language: str, rerank: bool = True, rerank_top_k: int = 100) \
+            page_size: int, page_number: int, language: str, rerank: bool = True, rerank_top_k: int = 50) \
             -> Tuple[List[Dict[str, Any]], int]:
         initial_fetch_size = rerank_top_k if rerank else page_size
         from_ = 0 if rerank else (page_number - 1) * page_size
@@ -346,7 +346,6 @@ class IndexSearcher:
                 from_=from_
             )
             hits = response.get('hits', {}).get('hits', [])
-            log_handle.verbose(f"Vector search response: {json_dumps(response, truncate_fields=['vector_embedding'])}")
             total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
             log_handle.info(f"Vector search executed. Total hits: {total_hits}.")
 
