@@ -235,14 +235,14 @@ class IndexSearcher:
 
     def _build_vector_query(
             self, embedding: List[float],
-            categories: Dict[str, List[str]]) -> Dict[str, Any]:
+            categories: Dict[str, List[str]], size: int) -> Dict[str, Any]:
         query_body = {
-            "size": 10,
+            "size": size,
             "query": {
                 "knn": {
                     self._vector_field: {
                         "vector": embedding,
-                        "k": 10
+                        "k": size
                     }
                 }
             }
@@ -336,7 +336,7 @@ class IndexSearcher:
         initial_fetch_size = rerank_top_k if rerank else page_size
         from_ = 0 if rerank else (page_number - 1) * page_size
 
-        query_body = self._build_vector_query(embedding, categories)
+        query_body = self._build_vector_query(embedding, categories, initial_fetch_size)
         log_handle.debug(f"Vector query: {query_body}")
         try:
             response = self._opensearch_client.search(
