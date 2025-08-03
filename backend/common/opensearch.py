@@ -213,3 +213,37 @@ def get_metadata(config: Config) -> dict[str, list[str]]:
 
     log_handle.info(f"Metadata retrieved: {len(result)} unique keys found")
     return result
+
+def delete_documents_by_filename(config: Config, original_filename: str):
+    """
+    Deletes all documents from the OpenSearch index that match the given original_filename.
+
+    Args:
+        config: Config object containing OpenSearch settings.
+        original_filename: The name of the file to delete documents for.
+    """
+    client = get_opensearch_client(config)
+    index_name = config.OPENSEARCH_INDEX_NAME
+
+    query_body = {
+        "query": {
+            "term": {
+                # Use .keyword for an exact, non-analyzed match on the filename
+                "original_filename": original_filename
+            }
+        }
+    }
+
+    try:
+        log_handle.info(f"Attempting to delete documents with original_filename: {original_filename}")
+        response = client.delete_by_query(
+            index=index_name,
+            body=query_body,
+            wait_for_completion=True,  # Make the operation synchronous
+            refresh=True  # Refresh the index to make changes visible immediately
+        )
+        deleted_count = response.get('deleted', 0)
+        log_handle.info(f"Successfully deleted {deleted_count} documents for '{original_filename}'.")
+    except Exception as e:
+        log_handle.error(f"Error deleting documents for '{original_filename}': {e}", exc_info=True)
+        raise
