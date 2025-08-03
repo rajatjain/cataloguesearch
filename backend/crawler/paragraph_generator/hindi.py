@@ -37,10 +37,21 @@ class HindiParagraphGenerator(BaseParagraphGenerator):
         # This removes any space before an ellipsis.
         cleaned_text = re.sub(r'\s+(\.{2,})', r'\1', cleaned_text)
 
-        cleaned_text = cleaned_text.replace("गुरुदेव श्री", "गुरुदेवश्री")
+        typo_list = [
+            ("गुरुदेव श्री", "गुरुदेवश्री"),
+            ("श्रोता -", "श्रोता:"),
+            ("पूज्य गुरुदेवश्री -", "पूज्य गुरुदेवश्री:"),
+            ("मुमुक्षु -", "मुमुक्षु:"),
+            ("मुम॒क्षु:", "मुमुक्षु:"),
+            ("इलोक", "श्लोक"),
+            ("शलोक", "श्लोक"),
+            ("प्रव्चन", "प्रवचन"),
+            ("प्रवच्चन", "प्रवचन"),
+            ("प्रवच्चन", "pravachan")
+        ]
 
-        cleaned_text = cleaned_text.replace("श्रोता -", "श्रोता:")
-        cleaned_text = cleaned_text.replace("पूज्य गुरुदेवश्री -", "पूज्य गुरुदेवश्री:")
+        for typo in typo_list:
+            cleaned_text = cleaned_text.replace(typo[0], typo[1])
 
         # correct typing mistakes
         cleaned_text = re.sub(r"मुमु[^:]*श[^:]*:", "मुमुक्षु:", cleaned_text)

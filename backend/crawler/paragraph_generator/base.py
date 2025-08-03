@@ -17,6 +17,7 @@ class BaseParagraphGenerator:
                             file_metadata : dict) -> List[Tuple[int, List[str]]]:
         rejected_paras = []
         # Pass 1: Cleanup the null lines etc.
+        log_handle.info(f"scan_config: {json_dumps(file_metadata)}")
         header_regex = file_metadata.get("header_regex", [])
         header_prefix = file_metadata.get("header_prefix", [])
         processed_paras = []
@@ -48,6 +49,7 @@ class BaseParagraphGenerator:
         PUNCTUATION_SUFFIXES = ('।', '?', '!', ':', ')', ']', '}')
         STOP_PREFIXES = ("श्रोता:", "मुमुक्षु:", "प्रश्न:")
         ANSWER_PREFIXES = ("पूज्य गुरुदेवश्री:", "उत्तर:", "समाधान:")
+        DIALOGUE_PREFIXES = STOP_PREFIXES + ANSWER_PREFIXES
 
         combined_phase1 = []
         # A buffer to hold paragraphs that are being combined into a single thought.
@@ -74,7 +76,7 @@ class BaseParagraphGenerator:
 
             # If the current paragraph starts with a stop prefix, it marks the
             # end of the previous buffered paragraph. Finalize the buffer before proceeding.
-            if para_text.startswith(STOP_PREFIXES):
+            if para_text.startswith(DIALOGUE_PREFIXES):
                 if final_para := _finalize_buffer(paragraph_buffer):
                     combined_phase1.append(final_para)
 
@@ -84,7 +86,8 @@ class BaseParagraphGenerator:
 
             # If the paragraph we just added ends with punctuation,
             # the buffered chunk is now complete. Finalize it.
-            if para_text.endswith(PUNCTUATION_SUFFIXES):
+            if para_text.endswith(PUNCTUATION_SUFFIXES) \
+                    or para_text.startswith(DIALOGUE_PREFIXES):
                 if final_para := _finalize_buffer(paragraph_buffer):
                     combined_phase1.append(final_para)
 
