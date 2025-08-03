@@ -4,6 +4,8 @@ import os
 import json
 from datetime import datetime
 
+from backend.utils import json_dumps
+
 log_handle = logging.getLogger(__name__)
 
 class IndexState:
@@ -21,7 +23,8 @@ class IndexState:
                 file_path TEXT,
                 last_indexed_timestamp TEXT,
                 file_checksum TEXT,
-                config_hash TEXT
+                config_hash TEXT,
+                index_checksum TEXT
             )
         """)
         c.execute("""
@@ -38,7 +41,7 @@ class IndexState:
         """Loads the indexed state from the SQLite DB."""
         conn = sqlite3.connect(self.state_db_path)
         c = conn.cursor()
-        c.execute("SELECT document_id, file_path, last_indexed_timestamp, file_checksum, config_hash FROM indexed_files_state")
+        c.execute("SELECT document_id, file_path, last_indexed_timestamp, file_checksum, config_hash, index_checksum FROM indexed_files_state")
         rows = c.fetchall()
         conn.close()
         state = {}
@@ -47,7 +50,8 @@ class IndexState:
                 "file_path": row[1],
                 "last_indexed_timestamp": row[2],
                 "file_checksum": row[3],
-                "config_hash": row[4]
+                "config_hash": row[4],
+                "index_checksum": row[5]
             }
         return state
 
@@ -60,7 +64,7 @@ class IndexState:
         conn = sqlite3.connect(self.state_db_path)
         c = conn.cursor()
         sql_query = """
-            SELECT document_id, file_path, last_indexed_timestamp, file_checksum, config_hash
+            SELECT document_id, file_path, last_indexed_timestamp, file_checksum, config_hash, index_checksum
             FROM indexed_files_state WHERE document_id = ?
         """
         c.execute(sql_query, (document_id,))
@@ -71,7 +75,8 @@ class IndexState:
                 "file_path": row[1],
                 "last_indexed_timestamp": row[2],
                 "file_checksum": row[3],
-                "config_hash": row[4]
+                "config_hash": row[4],
+                "index_checksum": row[5]
             }
         return {}
 
@@ -79,20 +84,23 @@ class IndexState:
         """Inserts or updates a document's state in the DB."""
         conn = sqlite3.connect(self.state_db_path)
         c = conn.cursor()
+        log_handle.info(f"Storing state: {json_dumps(state)}")
         c.execute("""
-            INSERT INTO indexed_files_state (document_id, file_path, last_indexed_timestamp, file_checksum, config_hash)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO indexed_files_state (document_id, file_path, last_indexed_timestamp, file_checksum, config_hash, index_checksum)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(document_id) DO UPDATE SET
                 file_path=excluded.file_path,
                 last_indexed_timestamp=excluded.last_indexed_timestamp,
                 file_checksum=excluded.file_checksum,
-                config_hash=excluded.config_hash
+                config_hash=excluded.config_hash,
+                index_checksum=excluded.index_checksum
         """, (
             document_id,
             state.get("file_path"),
             state.get("last_indexed_timestamp"),
             state.get("file_checksum"),
-            state.get("config_hash")
+            state.get("config_hash"),
+            state.get("index_checksum", "")
         ))
         conn.commit()
         conn.close()

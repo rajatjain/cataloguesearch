@@ -97,8 +97,6 @@ mappings:
       type: date
     paragraph_id:
       type: keyword
-    chunk_in_para_index:
-      type: integer
     vector_embedding:
       type: knn_vector
       dimension: 768

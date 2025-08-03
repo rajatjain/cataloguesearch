@@ -2,8 +2,8 @@ import logging
 import os
 from typing import Any, Dict, List
 
-from fastapi import Body, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi import Body, FastAPI, HTTPException, Request, Query
+from fastapi.responses import FileResponse
 from langdetect import detect
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +18,7 @@ from backend.search.index_searcher import IndexSearcher
 from backend.search.result_ranker import ResultRanker
 from backend.utils import json_dumps
 from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
+from backend.utils import JSONResponse
 
 log_handle = logging.getLogger(__name__)
 
@@ -57,6 +58,9 @@ def initialize():
     relative_config_path = "configs/config.yaml"
     config = Config(relative_config_path)
 
+    # initialize opensearch client
+    get_opensearch_client(config)
+
 @app.get("/metadata", response_model=Dict[str, List[str]])
 async def get_metadata_api():
     """
@@ -92,7 +96,6 @@ class SearchRequest(BaseModel):
     page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
     page_number: int = Field(1, ge=1, description="Page number for pagination.")
 
-
 @app.post("/search", response_model=Dict[str, Any])
 async def search(request_data: SearchRequest = Body(...)):
     """
@@ -110,6 +113,7 @@ async def search(request_data: SearchRequest = Body(...)):
 
 
     try:
+
         # If allow_typos is true and proximity_distance is 0 (exact phrase), change to near (10)
         if allow_typos and proximity_distance == 0:
             proximity_distance = 10
@@ -118,60 +122,54 @@ async def search(request_data: SearchRequest = Body(...)):
         detected_language = LanguageDetector.detect_language(keywords)
         log_handle.info(f"Received search request: keywords='{keywords}', "
                         f"allow_typos='{allow_typos}', proximity_distance={proximity_distance}, "
-                        f"categories={categories}, page={page_number}, size={page_size}",
+                        f"categories={categories}, page={page_number}, size={page_size}, "
                         f"detected_language={detected_language}")
-
-        disable_lexical_search = False
-
-        # TODO(rajatjain): Enable vector search when embedding model is ready.
-        disable_vector_search = True
 
         # Perform Lexical Search
         lexical_results = []
+        lexical_total_hits = 0
 
-        if not disable_lexical_search:
-            lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
-                keywords=keywords,
-                proximity_distance=proximity_distance,
-                allow_typos=allow_typos,
-                categories=categories,
-                detected_language=detected_language,
-                page_size=page_size,
-                page_number=page_number
-            )
-            log_handle.info(f"Lexical search returned {len(lexical_results)} "
-                            f"results (total: {lexical_total_hits}).")
+        lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
+            keywords=keywords,
+            proximity_distance=proximity_distance,
+            allow_typos=allow_typos,
+            categories=categories,
+            detected_language=detected_language,
+            page_size=page_size,
+            page_number=page_number
+        )
+        log_handle.info(f"Lexical search returned {len(lexical_results)} "
+                        f"results (total: {lexical_total_hits}).")
 
         vector_results = []
-        if not disable_vector_search:
-            model_name = config.EMBEDDING_MODEL_NAME
-            log_handle.info(f"Using embedding model: {model_name}")
-            query_embedding = get_embedding(model_name, keywords)
-            if not query_embedding:
-                log_handle.warning("Could not generate embedding for query. Vector search skipped.")
-                vector_results = []
-            else:
-                vector_results, vector_total_hits = index_searcher.perform_vector_search(
-                    embedding=query_embedding,
-                    categories=categories,
-                    page_size=page_size,
-                    page_number=page_number,
-                    language=detected_language
-                )
-                log_handle.info(
-                    f"Vector search returned {len(vector_results)} "
-                    f"results (total: {vector_total_hits}).")
-
-        final_results, total_results = ResultRanker.collate_and_rank(
-            lexical_results, vector_results, page_size, page_number
-        )
-        log_handle.info(f"Collation and ranking produced {len(final_results)} final results (total: {total_results}).")
+        vector_total_hits = 0
+        model_name = config.EMBEDDING_MODEL_NAME
+        log_handle.info(f"Using embedding model: {model_name}")
+        query_embedding = get_embedding(model_name, keywords)
+        if not query_embedding:
+            log_handle.warning("Could not generate embedding for query. Vector search skipped.")
+            vector_results = []
+        else:
+            # For vector search, never show all results. Only the top 20 is always ok.
+            vector_results, vector_total_hits = index_searcher.perform_vector_search(
+                keywords=keywords,
+                embedding=query_embedding,
+                categories=categories,
+                page_size=20,
+                page_number=1,
+                language=detected_language
+            )
+            log_handle.info(
+                f"Vector search returned {len(vector_results)} "
+                f"results (total: {vector_total_hits}).")
 
         response = {
-            "total_results": total_results,
+            "total_results": lexical_total_hits,
             "page_size": page_size,
             "page_number": page_number,
-            "results": final_results,
+            "results": lexical_results,
+            "vector_results": vector_results,
+            "total_vector_results": len(vector_results)  # Limit this to 10 always
         }
 
         log_handle.info(f"Search response: {json_dumps(response)}")
@@ -180,6 +178,53 @@ async def search(request_data: SearchRequest = Body(...)):
     except Exception as e:
         log_handle.exception(f"An error occurred during search request processing: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
+@app.get("/similar-documents/{doc_id}", response_model=Dict[str, Any])
+async def get_similar_documents(doc_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
+    """
+    Finds and returns documents that are semantically similar to the given document ID.
+    """
+    try:
+        config = Config()
+        index_searcher = IndexSearcher(config)
+
+        log_handle.info(f"Received request for similar documents to doc_id: {doc_id}")
+
+        similar_docs, total_similar = index_searcher.find_similar_by_id(
+            doc_id=doc_id,
+            language=language,
+            size=10  # Fetch top 10 similar documents
+        )
+
+        response = {
+            "total_results": total_similar,
+            "results": similar_docs
+        }
+
+        log_handle.info(f"Found {total_similar} similar documents for doc_id: {doc_id}")
+        return JSONResponse(content=response, status_code=200)
+
+    except Exception as e:
+        log_handle.exception(f"An error occurred while finding similar documents: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
+@app.get("/context/{chunk_id}", response_model=Dict[str, Any])
+async def get_context(chunk_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
+    """
+    Fetches the context (previous, current, next paragraph) for a given chunk_id.
+    """
+    try:
+        config = Config()
+        index_searcher = IndexSearcher(config)
+        log_handle.info(f"Received request for context for chunk_id: {chunk_id}")
+        context_data = index_searcher.get_paragraph_context(chunk_id=chunk_id, language=language)
+        if not context_data.get("current"):
+            raise HTTPException(status_code=404, detail="Context not found for the given ID.")
+        return JSONResponse(content=context_data, status_code=200)
+    except Exception as e:
+        log_handle.exception(f"An error occurred while fetching context: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
 
 initialize()
 

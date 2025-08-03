@@ -2,7 +2,6 @@
 crawler:
   base_pdf_path: "{HOME}/cataloguesearch/pdf"
   base_text_path: "{HOME}/cataloguesearch/text"
-  tmp_images_path: "{HOME}/cataloguesearch/tmp_images"
   sqlite_db_path: "{HOME}/cataloguesearch/db/cataloguesearch.db"
 
 index:
@@ -20,11 +19,8 @@ opensearch:
   port: 9200
   username: admin
   password: Admin@Password123!
-  index_name: document_chunks_prod
+  index_name: cataloguesearch_prod
 
-embedding_model:
-  name: ai4bharat/indic-bert
-
-llm_model:
-  name: gemini-2.0-flash
-  api_key: "{LLM_API_KEY}" # This will be loaded as an environment variable
+vector_embeddings:
+  embedding_model: BAAI/bge-m3
+  reranking_model: BAAI/bge-reranker-v2-m3

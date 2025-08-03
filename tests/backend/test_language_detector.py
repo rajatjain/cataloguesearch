@@ -1,6 +1,6 @@
 from backend.common.language_detector import LanguageDetector
 from backend.common.opensearch import get_opensearch_client
-from backend.index.embedding_module import IndexingEmbeddingModule
+from backend.crawler.index_generator import IndexGenerator
 from tests.backend.base import *
 import logging
 
@@ -45,7 +45,7 @@ def test_language_detection_test_data_files():
     assert len(bangalore_hindi_files) > 0
     assert len(bangalore_gujarati_files) > 0
 
-    indexing_module = IndexingEmbeddingModule(Config(), get_opensearch_client(Config()))
+    indexing_module = IndexGenerator(Config(), get_opensearch_client(Config()))
     mp = {"hi": bangalore_hindi_files, "gu": bangalore_gujarati_files}
     for lang in mp.keys():
         files = mp[lang]

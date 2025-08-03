@@ -1,7 +1,11 @@
 import logging
-from opensearchpy import OpenSearch, RequestsHttpConnection
+import traceback
+
+from opensearchpy import OpenSearch, RequestsHttpConnection, NotFoundError
 import os
 from typing import List, Dict, Any, Tuple
+
+from sentence_transformers import CrossEncoder
 
 from backend.common.opensearch import get_opensearch_config, get_opensearch_client
 from backend.utils import json_dumps
@@ -33,6 +37,12 @@ class IndexSearcher:
         self._vector_field = "vector_embedding"
         self._bookmark_field = "bookmarks"
         self._metadata_prefix = "metadata"
+        try:
+            self._reranker = CrossEncoder(self._config.RERANKING_MODEL_NAME)
+            log_handle.info(f"Cross encoder model '{self._config.RERANKING_MODEL_NAME} loaded.")
+        except Exception as e:
+            traceback.print_exc()
+            self._reranker = None
 
         log_handle.info(f"Initialized IndexSearcher")
 
@@ -209,7 +219,8 @@ class IndexSearcher:
                     "must": [main_query]
                 }
             },
-            "highlight": highlight_config
+            "highlight": highlight_config,
+            "track_total_hits": 1000
         }
 
         # Add category filters
@@ -224,14 +235,14 @@ class IndexSearcher:
 
     def _build_vector_query(
             self, embedding: List[float],
-            categories: Dict[str, List[str]]) -> Dict[str, Any]:
+            categories: Dict[str, List[str]], size: int) -> Dict[str, Any]:
         query_body = {
-            "size": 10,
+            "size": size,
             "query": {
                 "knn": {
                     self._vector_field: {
                         "vector": embedding,
-                        "k": 10
+                        "k": size
                     }
                 }
             }
@@ -259,7 +270,7 @@ class IndexSearcher:
         for hit in hits:
             source = hit.get('_source', {})
             document_id = hit.get('_id')
-            score = hit.get('_score')
+            score = hit.get("rerank_score", hit.get("_score"))
             content_snippet = ""
 
             if is_lexical:
@@ -268,7 +279,7 @@ class IndexSearcher:
                 field = self._text_fields.get(language)
 
                 # Prioritise the highlighted content if available
-                highlighted_fragment = hit.get('highlight', {}).get(field, '')
+                highlighted_fragment = hit.get('highlight', {}).get(field, []) 
                 if highlighted_fragment:
                     content_snippet = "...".join(highlighted_fragment)
             elif not is_lexical:
@@ -285,6 +296,7 @@ class IndexSearcher:
                 "document_id": document_id,
                 "original_filename": source.get('original_filename'),
                 "page_number": source.get('page_number'),
+                "paragraph_id": source.get('paragraph_id'),
                 "content_snippet": content_snippet,
                 "score": score,
                 "bookmarks": source.get(self._bookmark_field, {}),
@@ -311,30 +323,192 @@ class IndexSearcher:
             total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
             log_handle.info(f"Lexical search executed. Total hits: {total_hits}.")
             log_handle.info(
-                f"Lexical search response: {json_dumps(response, truncate_fields=['content_snippet'])}")
+                f"Lexical search response: {json_dumps(response, truncate_fields=['content_snippet', 'vector_embedding'])}")
             return self._extract_results(hits, is_lexical=True, language=detected_language), total_hits
         except Exception as e:
             log_handle.error(f"Error during lexical search: {e}", exc_info=True)
             return [], 0
 
     def perform_vector_search(
-            self, embedding: List[float], categories: Dict[str, List[str]],
-            page_size: int, page_number: int, language) -> Tuple[List[Dict[str, Any]], int]:
-        query_body = self._build_vector_query(embedding, categories)
-        from_ = (page_number - 1) * page_size
+            self, keywords: str, embedding: List[float], categories: Dict[str, List[str]],
+            page_size: int, page_number: int, language: str, rerank: bool = True, rerank_top_k: int = 50) \
+            -> Tuple[List[Dict[str, Any]], int]:
+        initial_fetch_size = rerank_top_k if rerank else page_size
+        from_ = 0 if rerank else (page_number - 1) * page_size
+
+        query_body = self._build_vector_query(embedding, categories, initial_fetch_size)
         log_handle.debug(f"Vector query: {query_body}")
         try:
             response = self._opensearch_client.search(
                 index=self._index_name,
                 body=query_body,
-                size=page_size,
+                size=initial_fetch_size,
                 from_=from_
             )
             hits = response.get('hits', {}).get('hits', [])
-            log_handle.verbose(f"Vector search response: {json_dumps(response, truncate_fields=['vector_embedding'])}")
             total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
             log_handle.info(f"Vector search executed. Total hits: {total_hits}.")
-            return self._extract_results(hits, is_lexical=False, language=language), total_hits
+
+            # Rerank, if required
+            if not rerank or not self._reranker or not hits:
+                log_handle.info(f"Vector search executed (no reranking). Total hits: {total_hits}")
+                return self._extract_results(hits, is_lexical=False, language=language), total_hits
+
+            text_field = self._text_fields.get(language, "hi")
+            log_handle.info(f"Performing reranking on {len(hits)} documents for query: '{keywords}'")
+
+            # Create pairs of [query, document_text] for the reranker
+            sentence_pairs = [
+                [keywords, hit["_source"].get(text_field, "")] for hit in hits
+            ]
+
+            # Use batching to significantly speed up the prediction process.
+            # A batch size of 32 is a good starting point.
+            # This allows the model to process 32 documents in parallel.
+            rerank_scores = self._reranker.predict(
+                sentence_pairs,
+                batch_size=32,
+                show_progress_bar=True  # Useful for seeing progress in logs
+            )
+
+            for hit, score in zip(hits, rerank_scores):
+                hit["rerank_score"] = score
+
+            # Sort results based on the new reranked score
+            reranked_hits = sorted(hits, key=lambda x: x["rerank_score"], reverse=True)
+
+            # Paginate the final, sorted results
+            start_index = (page_number - 1) * page_size
+            end_index = start_index + page_size
+            paginated_hits = reranked_hits[start_index:end_index]
+
+            return self._extract_results(paginated_hits, is_lexical=False, language=language), total_hits
         except Exception as e:
             log_handle.error(f"Error during vector search: {e}", exc_info=True)
             return [], 0
+
+    def find_similar_by_id(self, doc_id: str, language: str, size: int = 10) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        Finds documents similar to the one with the given doc_id.
+        """
+        try:
+            # 1. Fetch the source document to get its vector
+            source_doc = self._opensearch_client.get(index=self._index_name, id=doc_id)
+            source_vector = source_doc['_source'].get(self._vector_field)
+
+            if not source_vector:
+                log_handle.warning(f"Document {doc_id} does not have a vector embedding. Cannot find similar documents.")
+                return [], 0
+
+            # 2. Build a k-NN query to find similar vectors, excluding the source document itself
+            query_body = {
+                "size": size,
+                "query": {
+                    "bool": {
+                        "must": [
+                            {
+                                "knn": {
+                                    self._vector_field: {
+                                        "vector": source_vector,
+                                        "k": size + 1  # Fetch one extra to account for the source doc
+                                    }
+                                }
+                            }
+                        ],
+                        "must_not": [
+                            {
+                                "ids": {
+                                    "values": [doc_id]
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+
+            # 3. Execute the search
+            log_handle.info(f"Finding similar documents for doc_id: {doc_id}")
+            response = self._opensearch_client.search(
+                index=self._index_name,
+                body=query_body
+            )
+            hits = response.get('hits', {}).get('hits', [])
+            total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
+
+            # The total will be for the whole index, so we cap it at the number of results returned.
+            effective_total = len(hits)
+
+            log_handle.info(f"Found {effective_total} similar documents for doc_id: {doc_id}")
+            return self._extract_results(hits, is_lexical=False, language=language), effective_total
+
+        except NotFoundError:
+            log_handle.error(f"Document with id '{doc_id}' not found.")
+            return [], 0
+        except Exception as e:
+            log_handle.error(f"Error finding similar documents for doc_id {doc_id}: {e}", exc_info=True)
+            return [], 0
+
+    def get_paragraph_context(self, chunk_id: str, language: str) -> Dict[str, Any]:
+        """
+        Fetches the context for a given paragraph (previous, current, next)
+        using a simplified and more robust two-step query process.
+        """
+        try:
+            # Step 1: Directly fetch the current document by its unique chunk_id.
+            # This is a fast lookup and avoids fragile string parsing.
+            current_doc_response = self._opensearch_client.get(index=self._index_name, id=chunk_id)
+
+            source = current_doc_response.get('_source', {})
+            document_id = source.get('document_id')
+            current_para_id = source.get('paragraph_id')
+
+            if document_id is None or current_para_id is None:
+                raise ValueError(f"Source document for chunk_id {chunk_id} is missing 'document_id' or 'paragraph_id'")
+
+            current_para_id = int(current_para_id)
+
+            # Initialize the context with the current document we already have.
+            context = {
+                "previous": None,
+                "current": self._extract_results([current_doc_response], is_lexical=False, language=language)[0],
+                "next": None
+            }
+
+            # Step 2: Build a single query to fetch only the previous and next paragraphs.
+            para_ids_to_fetch = [current_para_id - 1, current_para_id + 1]
+            query_body = {
+                "size": 2,
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {"term": {"document_id": document_id}},
+                            {"terms": {"paragraph_id": para_ids_to_fetch}}
+                        ]
+                    }
+                }
+            }
+
+            response = self._opensearch_client.search(index=self._index_name, body=query_body)
+            neighbor_hits = self._extract_results(response.get('hits', {}).get('hits', []), is_lexical=False, language=language)
+            log_handle.info(f"response: {json_dumps(response, truncate_fields=['vector_embedding'])}")
+            log_handle.info(f"neighbor_hits: {json_dumps(neighbor_hits, truncate_fields=['vector_embedding'])}")
+            # Step 3: Populate the context with the neighbors.
+            for doc in neighbor_hits:
+                para_id = int(doc.get('paragraph_id', 0))
+                if para_id == current_para_id - 1:
+                    context['previous'] = doc
+                elif para_id == current_para_id + 1:
+                    context['next'] = doc
+
+            log_handle.info(f"Context: {json_dumps(context, truncate_fields=['vector_embedding'])}")
+            return context
+
+        except NotFoundError:
+            log_handle.error(f"Document with chunk_id '{chunk_id}' not found.")
+            return {}
+        except (ValueError, TypeError) as e:
+            log_handle.error(f"Could not process context for chunk_id '{chunk_id}': {e}")
+            return {}
+        except Exception as e:
+            log_handle.error(f"An unexpected error occurred getting paragraph context for {chunk_id}: {e}", exc_info=True)
+            return {}

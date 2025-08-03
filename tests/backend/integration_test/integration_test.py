@@ -1,19 +1,12 @@
-import logging
-import os
 import tempfile
-import uuid
-import shutil
-import logging
 import time
 import fitz
 
-from backend.config import Config
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
-from backend.index.embedding_module import IndexingEmbeddingModule
+from backend.crawler.index_generator import IndexGenerator
 from backend.common.opensearch import get_opensearch_client, get_metadata
-from backend.processor.pdf_processor import PDFProcessor
-from backend.utils import json_dump, json_dumps
+from backend.crawler.pdf_processor import PDFProcessor
 from tests.backend.base import *
 from tests.backend import common
 from tests.backend.common import are_dicts_same
@@ -35,7 +28,7 @@ def test_full_integration(initialise):
 
     discovery = Discovery(
         config,
-        IndexingEmbeddingModule(config, opensearch_client),
+        IndexGenerator(config, opensearch_client),
         PDFProcessor(config),
         index_state
     )

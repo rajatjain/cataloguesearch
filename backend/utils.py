@@ -3,6 +3,49 @@ import os
 import copy
 from pathlib import Path
 import yaml
+import concurrent.futures
+import time
+from tqdm import tqdm
+from typing import Callable, List, Any
+import numpy as np
+from starlette.responses import JSONResponse as StarletteJSONResponse
+
+class CustomJSONEncoder(json.JSONEncoder):
+    """
+    Custom JSON encoder to handle special types like NumPy's float32,
+    which are not serializable by default.
+    """
+
+    def default(self, o):
+        # Handle numpy float types
+        if isinstance(o, (np.float_, np.float16, np.float32, np.float64)):
+            return float(o)
+        # Handle numpy integer types
+        if isinstance(o, (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32, np.int64,
+                          np.uint8, np.uint16, np.uint32, np.uint64)):
+            return int(o)
+        # Handle numpy arrays
+        if isinstance(o, np.ndarray):
+            return o.tolist()
+        # Let the base class default method raise the TypeError for other types
+        return super().default(o)
+
+class JSONResponse(StarletteJSONResponse):
+    """
+    A custom JSONResponse class that uses an encoder capable of handling
+    NumPy data types (like float32) which are common in ML/data science outputs.
+    """
+
+    def render(self, content: Any) -> bytes:
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=None,
+            separators=(",", ":"),
+            cls=CustomJSONEncoder,  # Use our custom encoder
+        ).encode("utf-8")
+
 
 def _recursive_truncate(obj, fields_to_truncate):
     """
@@ -37,9 +80,11 @@ def json_dump(obj, fp, **kwargs):
         # Process a copy to avoid side effects
         obj_copy = copy.deepcopy(obj)
         processed_obj = _recursive_truncate(obj_copy, truncate_fields)
-        return json.dump(processed_obj, fp, ensure_ascii=False, indent=2, **kwargs)
+        return json.dump(processed_obj, fp, ensure_ascii=False, indent=2,
+                         cls=CustomJSONEncoder, **kwargs)
     else:
-        return json.dump(obj, fp, ensure_ascii=False, indent=2, **kwargs)
+        return json.dump(obj, fp, ensure_ascii=False, indent=2,
+                         cls=CustomJSONEncoder, **kwargs)
 
 def json_dumps(obj, **kwargs):
     """
@@ -54,6 +99,8 @@ def json_dumps(obj, **kwargs):
         # Process a copy to avoid side effects
         obj_copy = copy.deepcopy(obj)
         processed_obj = _recursive_truncate(obj_copy, truncate_fields)
-        return json.dumps(processed_obj, ensure_ascii=False, indent=2, **kwargs)
+        return json.dumps(processed_obj, ensure_ascii=False, indent=2,
+                          cls=CustomJSONEncoder, **kwargs)
     else:
-        return json.dumps(obj, ensure_ascii=False, indent=2, **kwargs)
+        return json.dumps(obj, ensure_ascii=False, indent=2,
+                          cls=CustomJSONEncoder, **kwargs)

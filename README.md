@@ -1,117 +1,180 @@
-# CatalogueSearch for Multi Lingual PDF Documents
+# CatalogueSearch — Multi-Lingual PDF Document Processor and Search Engine
 
 ## Table of Contents
 
-- [Project Description](#project-description)
-- [Project Structure](#project-structure)
-  - [PDF Processor](#pdf-processor)
-  - [Discovery](#discovery)
-  - [Indexing Module](#indexing-module)
-- [Installation (macOS)](#installation-macos)
-  - [Python Dependencies](#python-dependencies)
-  - [Docker](#docker)
-  - [ImageMagick](#imagemagick)
-  - [Google Vision Libraries](#google-vision-libraries)
-- [OpenSearch](#opensearch)
-- [Running Tests](#running-tests)
-- [License](#license)
+- [Introduction](#introduction)
+- [High Level Architecture and Components](#high-level-architecture-and-components)
+- [Installation Instructions on macOS](#installation-instructions-on-macos)
+- [Technologies Used](#technologies-used)
+- [LICENSE](#license)
 
-## Project Description
+## Introduction
 
-CatalogueSearch is designed for scanning & parsing PDF files written in hindi or gujarati and then indexing them so they can be used for text search (lexical search as well as vector search).
+CatalogueSearch is an advanced document processing and search system specifically designed for multilingual PDF documents, with specialized support for Hindi and Gujarati texts. The system provides intelligent paragraph generation, semantic text processing, and powerful search capabilities combining both lexical and vector-based search methods.
 
-## Project Structure
+The system uses OCR technology, natural language processing, and vector embeddings to create searchable document indexes from complex multilingual PDF content, and exposes them through an intuitive UI.
 
-### PDF Processor
+## High Level Architecture and Components
 
-Handles ingestion and processing of PDF documents. Converts and preprocesses documents for further analysis, including text extraction and image handling.
+### Crawler
+Responsible for document discovery and crawling operations. This module monitors directories, discovers out new PDF files, extracts text through OCR, chunks them into individual documents through sophisticated and language specific paragraph generation, and creates lexical and vector indexes to make the documents searchable. In addition, it also gathers document specific metadata to allow the users to search through categories.
 
-### Discovery
+The Crawler follows standard ETL (Extract-Tranform-Load) techniques.
 
-Responsible for discovering new documents or data sources. This module can crawl, monitor, or receive files from various endpoints, ensuring the system stays updated with the latest content.
+Detailed architecture [ARCHITECTURE.md](ARCHITECTURE.md)
 
-### Indexer
+### Search Engine and API Server
+Provides dual-mode search capabilities:
+- **Lexical Search**: Traditional keyword-based search using OpenSearch
+- **Vector Search**: Semantic search using sentence transformers and vector embeddings
+- **Hybrid Search**: Combines both approaches for optimal search results
 
-Indexes processed data to enable efficient and rapid search. Supports updating, querying, and maintaining the search index for all ingested documents.
+The Search Engine uses OpenSearch as the backend, and uses **Vector Search and Rerankers** for better search results.
 
-## Installation
 
-Follow these instructions to set up the project. These are specifically for macOS laptop, but similar instructions will work for linux.
+## Installation Instructions on macOS
 
-### Python Dependencies
+### Prerequisites
+Python 3.11+.
 
-1. This project is tested with Python 3.11. But it should work with Python 3.9+.
-2. Install dependencies:
+### Docker Installation
+Docker is required for OpenSearch and testing components.
+
+1. Install Docker Desktop for Mac from [Docker's official website](https://www.docker.com/products/docker-desktop/)
+2. Start Docker Desktop and ensure it's running
+
+### Tesseract OCR Installation
+Tesseract is required for optical character recognition with multilingual support.
+
+1. Install Tesseract using Homebrew:
+    ```bash
+    brew install tesseract
+    ```
+
+2. Install language data for Hindi and Gujarati:
+    ```bash
+    brew install tesseract-lang
+    ```
+
+3. Verify installation and check available languages:
+    ```bash
+    tesseract --list-langs
+    ```
+    You should see `hin` (Hindi) and `guj` (Gujarati) in the list.
+
+### Poppler Installation
+Poppler is required for PDF to image conversion.
+
+```bash
+brew install poppler
+```
+
+### Indic NLP Resources Setup
+Download and set up the Indic NLP resources for advanced language processing.
+
+1. Clone the Indic NLP resources repository:
+    ```bash
+    git clone https://github.com/anoopkunchukuttan/indic_nlp_resources.git
+    ```
+
+2. Set the environment variable to point to the resources:
+    ```bash
+    export INDIC_RESOURCES_PATH="/path/to/indic_nlp_resources"
+    ```
+
+3. Add this to your shell profile (`.bashrc`, `.zshrc`, etc.) for persistence:
+    ```bash
+    echo 'export INDIC_RESOURCES_PATH="/path/to/indic_nlp_resources"' >> ~/.zshrc
+    ```
+
+### Python Environment Setup
+
+**NOTE**: Python's dependencies should be installed after setting up the above.
+
+1. Create and activate a virtual environment:
     ```bash
     python3 -m venv venv
     source venv/bin/activate
+    ```
+
+2. Install Python dependencies:
+    ```bash
     pip install -r requirements.txt
     ```
 
-### Docker
 
-Some components and tests require Docker.
+### Google Vision API Setup
+For advanced OCR capabilities:
 
-1. [Install Docker Desktop for Mac](https://www.docker.com/products/docker-desktop/).
-2. Start Docker Desktop and ensure it is running.
-
-### ImageMagick
-
-ImageMagick is required for PDF/image conversion.
-
-```bash
-brew install imagemagick
-```
-
-### Google Vision Libraries
-
-Google Vision is used for advanced OCR.
-
-1. Install the Google Cloud SDK:  
-   [Google Cloud SDK Installation](https://cloud.google.com/sdk/docs/install)
-2. Install the Vision client library:
-    ```bash
-    pip install google-cloud-vision
-    ```
-3. Set up authentication by exporting your Google credentials:
+1. Install Google Cloud SDK following the [official installation guide](https://cloud.google.com/sdk/docs/install)
+2. Set up authentication:
     ```bash
     export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/service-account-file.json"
     ```
 
-## OpenSearch
-
-CatalogueSearch uses OpenSearch for indexing and searching documents. You can use the `opensearch_controller.py` script to manage the OpenSearch Docker containers required for development and testing.
-
-### Starting OpenSearch Containers
-
-To start the OpenSearch and supporting containers:
+### OpenSearch Setup
+Start the required OpenSearch containers:
 
 ```bash
-python opensearch_controller.py --start
+python scripts/opensearch_controller.py --start
 ```
 
-This script will launch the necessary OpenSearch services using Docker. Make sure Docker Desktop is running before you execute this command.
+To stop the containers:
+```bash
+python scripts/opensearch_controller.py --stop
+```
 
-### Stopping OpenSearch Containers
-
-To stop and remove the OpenSearch containers:
+### Frontend Setup
+Navigate to the frontend directory and install Node.js dependencies:
 
 ```bash
-python opensearch_controller.py --stop
+cd frontend
+npm install
+npm start
 ```
 
-You may need to run these commands from the root directory of the project, depending on how your Python environment and Docker are configured.
-
-## Running Tests
-
-Pytest is used for testing.
+### Running Tests
+Execute the test suite:
 
 ```bash
 pytest
 ```
 
-> **Note:** Some tests require a Docker container to be running. Make sure Docker is running and the required containers are up before executing the tests.
+**Note**: Ensure Docker containers are running before executing tests that require OpenSearch.
 
-## License
+## Technologies Used
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+- **OpenSearch** - Search engine and document indexing
+- **Tesseract OCR** - Optical character recognition
+- **Indic NLP Library** - Specialized processing for Indic languages
+- **Sentence Transformers** - Vector embeddings generation
+- **Python 3.11+** - Core runtime environment
+- **Docker** - Containerization and deployment
+
+## LICENSE
+
+This project is licensed under the MIT License.
+
+```
+MIT License
+
+Copyright (c) 2025 Rajat Jain
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

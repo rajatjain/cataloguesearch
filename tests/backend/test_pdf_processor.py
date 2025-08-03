@@ -1,10 +1,5 @@
-import logging
-import shutil
-
-import pytest
-import os
 import tempfile
-from backend.processor.pdf_processor import PDFProcessor
+from backend.crawler.pdf_processor import PDFProcessor
 from tests.backend.base import *
 from backend.config import Config
 # Setup logging once for all tests

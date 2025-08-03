@@ -9,17 +9,18 @@ import os
 import signal
 import sys
 import time
+import traceback
+
 import psutil
 from datetime import datetime
 from threading import Event
 
-from backend.common import opensearch
 from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
-from backend.index.embedding_module import IndexingEmbeddingModule
-from backend.processor.pdf_processor import PDFProcessor
+from backend.crawler.index_generator import IndexGenerator
+from backend.crawler.pdf_processor import PDFProcessor
 from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
 
 PIDFILE = '/tmp/discovery-daemon.pid'
@@ -116,11 +117,15 @@ class DiscoveryDaemon:
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
 
+        if not os.path.exists(os.path.dirname(config.SQLITE_DB_PATH)):
+            os.makedirs(os.path.basename(config.SQLITE_DB_PATH))
+
         # Initialize discovery components
         self.index_state = IndexState(config.SQLITE_DB_PATH)
         self.pdf_processor = PDFProcessor(config)
-        self.indexing_module = IndexingEmbeddingModule(config)
-        self.discovery = Discovery(config, self.indexing_module, self.pdf_processor, self.index_state)
+        self.indexing_module = IndexGenerator(config)
+        self.discovery = Discovery(
+            config, self.indexing_module, self.pdf_processor, self.index_state)
 
         logging.info("Discovery daemon initialized")
 
@@ -172,27 +177,33 @@ class DiscoveryDaemon:
             logging.info("Discovery daemon stopped")
 
 
-def run_discovery_once(config: Config):
+def run_discovery_once(config: Config, crawl=False, index=False):
     """Run discovery once"""
     try:
+        start = datetime.now()
         logging.info("Starting one-time discovery...")
 
         # Initialize components
         index_state = IndexState(config.SQLITE_DB_PATH)
         pdf_processor = PDFProcessor(config)
-        indexing_module = IndexingEmbeddingModule(config, get_opensearch_client(config))
+        indexing_module = IndexGenerator(config, get_opensearch_client(config))
         discovery = Discovery(config, indexing_module, pdf_processor, index_state)
 
         # Run discovery
-        discovery.crawl()
+        discovery.crawl(crawl, index)
 
         # Update metadata cache after discovery
         logging.info("Updating metadata cache...")
         metadata = get_metadata(config)
         index_state.update_metadata_cache(metadata)
         logging.info("Metadata cache updated successfully")
-
+        end = datetime.now()
+        total_secs = int((end - start).total_seconds())
+        hh, rem = divmod(total_secs, 3600)
+        mm, ss = divmod(rem, 60)
+        log_handle.info(f"Discovery completed in {hh:02}:{mm:02}:{ss:02}")
     except Exception as e:
+        traceback.print_exc()
         logging.error(f"Discovery failed: {e}")
         sys.exit(1)
 
@@ -210,6 +221,10 @@ def main():
     parser.add_argument('--daemon', action='store_true', help='Run as daemon (every 6 hours)')
     parser.add_argument('--delete-index', action='store_true',
                         help='Delete OpenSearch index before starting discovery')
+    parser.add_argument("--crawl", action='store_true',
+                        help="Crawl the PDF dir for new files")
+    parser.add_argument("--index", action='store_true',
+                        help="Create the index for files not yet indexed.")
 
     args = parser.parse_args()
 
@@ -236,7 +251,7 @@ def main():
             daemon = DiscoveryDaemon(config)
             daemon.start()
         else:
-            run_discovery_once(config)
+            run_discovery_once(config, args.crawl, args.index)
 
 
 if __name__ == '__main__':
