@@ -172,12 +172,77 @@ const ResultCard = ({ result, onFindSimilar, onExpand, isFirst }) => {
 
 const Pagination = ({ currentPage, totalPages, onPageChange }) => {
     if (totalPages <= 1) return null;
-    const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+
+    // This function builds the smart page list (e.g., [1, 2, '...', 22, 23, 24, '...', 49, 50])
+    const getPaginationRange = () => {
+        // If there are 7 or fewer pages, show all of them without any ellipses.
+        if (totalPages <= 7) {
+            return Array.from({ length: totalPages }, (_, i) => i + 1);
+        }
+
+        // Use a Set to automatically handle duplicate page numbers
+        const pages = new Set();
+
+        // Always show the first 2 pages
+        pages.add(1);
+        pages.add(2);
+
+        // Add pages around the current page
+        if (currentPage > 1) pages.add(currentPage - 1);
+        pages.add(currentPage);
+        if (currentPage < totalPages) pages.add(currentPage + 1);
+
+        // Always show the last 2 pages
+        pages.add(totalPages - 1);
+        pages.add(totalPages);
+
+        // Convert set to a sorted array and insert ellipses where there are gaps
+        const result = [];
+        let lastPage = 0;
+        const sortedPages = Array.from(pages).sort((a, b) => a - b);
+
+        for (const page of sortedPages) {
+            if (page > lastPage + 1) {
+                result.push('...');
+            }
+            result.push(page);
+            lastPage = page;
+        }
+
+        return result;
+    };
+
+    const pageRange = getPaginationRange();
+
     return (
         <nav className="flex justify-center items-center gap-1 mt-4">
-            <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="px-2 py-1 text-sm bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50">&laquo;</button>
-            {pages.map(page => <button key={page} onClick={() => onPageChange(page)} className={`px-2.5 py-1 text-sm rounded-md border ${currentPage === page ? 'bg-sky-600 text-white border-sky-600 font-bold' : 'bg-white border-slate-300 hover:bg-slate-50'}`}>{page}</button>)}
-            <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="px-2 py-1 text-sm bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50">&raquo;</button>
+            {/* Previous Page Button */}
+            <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="px-2 py-1 text-sm bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                &laquo;
+            </button>
+
+            {/* Page Number Buttons and Ellipses */}
+            {pageRange.map((page, index) => {
+                if (typeof page === 'string') {
+                    // Render an ellipsis
+                    return <span key={`ellipsis-${index}`} className="px-2.5 py-1 text-sm text-slate-500 flex items-center">...</span>;
+                }
+                // Render a page number button
+                return (
+                    <button
+                        key={page}
+                        onClick={() => onPageChange(page)}
+                        className={`px-2.5 py-1 text-sm rounded-md border ${currentPage === page ? 'bg-sky-600 text-white border-sky-600 font-bold' : 'bg-white border-slate-300 hover:bg-slate-50'}`}
+                    >
+                        {page}
+                    </button>
+                );
+            })}
+
+            {/* Next Page Button */}
+            <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="px-2 py-1 text-sm bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                &raquo;
+            </button>
         </nav>
     );
 };
