@@ -115,54 +115,6 @@ class BaseParagraphGenerator:
                 i += 1
         return combined_paragraphs
 
-    def _add_embeddings_parallel(self, all_chunks: list[dict]) -> list[dict]:
-        """
-        Add vector embeddings to chunks using parallel processing.
-
-        Args:
-            all_chunks (list[dict]): List of chunk dictionaries
-
-        Returns:
-            list[dict]: Chunks with vector_embedding field added
-        """
-        def process_chunk(chunk):
-            try:
-                text_content = chunk["text_content"]
-                embedding_text = chunk["embedding_text"]
-                embedding = get_embedding(self._config.EMBEDDING_MODEL_NAME, embedding_text)
-                chunk["vector_embedding"] = embedding
-                # remove chunk['embedding_text'] to save space
-                del chunk["embedding_text"]
-                return chunk
-            except Exception as e:
-                log_handle.error(f"Error generating embedding for chunk {chunk.get('chunk_id', 'unknown')}: {e}")
-                # Return chunk without embedding on error
-                return chunk
-
-        # Use ThreadPoolExecutor for parallel processing
-        max_workers = min(len(all_chunks), 8)  # Limit to 8 threads
-        processed_chunks = []
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all tasks
-            future_to_chunk = {executor.submit(process_chunk, chunk): chunk for chunk in all_chunks}
-
-            # Collect results as they complete
-            for future in as_completed(future_to_chunk):
-                try:
-                    result = future.result()
-                    processed_chunks.append(result)
-                except Exception as e:
-                    chunk = future_to_chunk[future]
-                    log_handle.error(f"Error processing chunk {chunk.get('chunk_id', 'unknown')}: {e}")
-                    # Add chunk without embedding on error
-                    processed_chunks.append(chunk)
-
-        log_handle.info(f"Generated embeddings for {len(processed_chunks)} chunks")
-        # Sort chunks by page_number
-        processed_chunks.sort(key=lambda chunk: chunk["page_number"])
-        return processed_chunks
-
     def _normalize_text(self, text: str):
         raise NotImplementedError("Implement inside subclass")
 

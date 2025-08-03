@@ -96,16 +96,6 @@ class SearchRequest(BaseModel):
     page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
     page_number: int = Field(1, ge=1, description="Page number for pagination.")
 
-class VectorSearchRequest(BaseModel):
-    """
-    Pydantic model for the vector search request payload.
-    """
-    query: str = Field(..., example="Bangalore city history")
-    categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
-    page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
-    page_number: int = Field(1, ge=1, description="Page number for pagination.")
-
-
 @app.post("/search", response_model=Dict[str, Any])
 async def search(request_data: SearchRequest = Body(...)):
     """
@@ -135,48 +125,43 @@ async def search(request_data: SearchRequest = Body(...)):
                         f"categories={categories}, page={page_number}, size={page_size}, "
                         f"detected_language={detected_language}")
 
-        disable_lexical_search = False
-        disable_vector_search = False
-
         # Perform Lexical Search
         lexical_results = []
         lexical_total_hits = 0
 
-        if not disable_lexical_search:
-            lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
-                keywords=keywords,
-                proximity_distance=proximity_distance,
-                allow_typos=allow_typos,
-                categories=categories,
-                detected_language=detected_language,
-                page_size=page_size,
-                page_number=page_number
-            )
-            log_handle.info(f"Lexical search returned {len(lexical_results)} "
-                            f"results (total: {lexical_total_hits}).")
+        lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
+            keywords=keywords,
+            proximity_distance=proximity_distance,
+            allow_typos=allow_typos,
+            categories=categories,
+            detected_language=detected_language,
+            page_size=page_size,
+            page_number=page_number
+        )
+        log_handle.info(f"Lexical search returned {len(lexical_results)} "
+                        f"results (total: {lexical_total_hits}).")
 
         vector_results = []
         vector_total_hits = 0
-        if not disable_vector_search:
-            model_name = config.EMBEDDING_MODEL_NAME
-            log_handle.info(f"Using embedding model: {model_name}")
-            query_embedding = get_embedding(model_name, keywords)
-            if not query_embedding:
-                log_handle.warning("Could not generate embedding for query. Vector search skipped.")
-                vector_results = []
-            else:
-                # For vector search, never show all results. Only the top 20 is always ok.
-                vector_results, vector_total_hits = index_searcher.perform_vector_search(
-                    keywords=keywords,
-                    embedding=query_embedding,
-                    categories=categories,
-                    page_size=20,
-                    page_number=1,
-                    language=detected_language
-                )
-                log_handle.info(
-                    f"Vector search returned {len(vector_results)} "
-                    f"results (total: {vector_total_hits}).")
+        model_name = config.EMBEDDING_MODEL_NAME
+        log_handle.info(f"Using embedding model: {model_name}")
+        query_embedding = get_embedding(model_name, keywords)
+        if not query_embedding:
+            log_handle.warning("Could not generate embedding for query. Vector search skipped.")
+            vector_results = []
+        else:
+            # For vector search, never show all results. Only the top 20 is always ok.
+            vector_results, vector_total_hits = index_searcher.perform_vector_search(
+                keywords=keywords,
+                embedding=query_embedding,
+                categories=categories,
+                page_size=20,
+                page_number=1,
+                language=detected_language
+            )
+            log_handle.info(
+                f"Vector search returned {len(vector_results)} "
+                f"results (total: {vector_total_hits}).")
 
         response = {
             "total_results": lexical_total_hits,

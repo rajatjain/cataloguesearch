@@ -104,16 +104,3 @@ def json_dumps(obj, **kwargs):
     else:
         return json.dumps(obj, ensure_ascii=False, indent=2,
                           cls=CustomJSONEncoder, **kwargs)
-
-
-def map_concurrently(func: Callable, items: List[Any], max_workers: int = 10) -> List[Any]:
-    results = [None] * len(items)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_index = {executor.submit(func, item): i for i, item in enumerate(items)}
-        for future in tqdm(concurrent.futures.as_completed(future_to_index), total=len(items), desc="Processing via Class Method"):
-            index = future_to_index[future]
-            try:
-                results[index] = future.result()
-            except Exception as e:
-                print(f"Item at index {index} generated an exception: {e}")
-    return results
