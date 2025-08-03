@@ -1,4 +1,4 @@
-# CatalogueSearch — Multi-Lingual PDF Document Processor and Search Engine
+# CatalogueSearch — Multi-Lingual PDF Processor and Search Engine
 
 ## Table of Contents
 
