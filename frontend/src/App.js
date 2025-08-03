@@ -241,7 +241,7 @@ const ExpandModal = ({ data, onClose, isLoading }) => {
     }, []);
     const Paragraph = ({ para, isCurrent }) => {
         if (!para) return <div className="p-3 rounded-md bg-slate-50 border border-dashed border-slate-300 text-center text-sm text-slate-400">Context not available.</div>;
-        return <div className={`p-3 rounded-md ${isCurrent ? "bg-sky-100 border border-sky-300 ring-2 ring-sky-200" : "bg-slate-50 border border-slate-200"}`}><p className="text-slate-800 leading-relaxed text-base font-sans">{para.content_snippet}</p></div>;
+        return <div className={`p-3 rounded-md ${isCurrent ? "bg-sky-100 border border-sky-300 ring-2 ring-sky-200" : "bg-slate-50 border border-slate-200"}`}><p className="text-slate-800 leading-relaxed text-base font-sans whitespace-pre-wrap">{para.content_snippet}</p></div>;
     };
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4" onClick={onClose}>

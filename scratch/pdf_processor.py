@@ -100,38 +100,22 @@ def process_pdf():
     scan_config = {
         "default": {
             "header_regex": [
-                "^.*समयसार\\s+सिद्धि,?.*भाग.*",
                 "^.{0,5}गाथा.{0,30}$",
                 "^.{0,5}कलश.{0,30}$",
                 "^.{0,5}श्लोक.{0,30}$",
                 "^प्रवचन\\s+नं\\.?.*$",
                 "^प्रवच्चन\\s+नं\\.?.*$",
                 "^[०-९\\s]*$",
-                "^.{0,5}प्रवचन\\s+सुधा.*भाग.*$",
-                "^.{0,5}प्रवच्चन\\s+सुधा.*भाग.*$"
             ]
         },
-        "Samaysaar_Siddhi_Part-01H": {
-            "header_prefix": [
-                "^[०-९\\s]*समयसार\\s+सिद्धि,?.*भाग-[०-९]\\s*[-।]?,?\\s*"
-            ],
+        "Karan_Karya_Niyam_Part_1_H": {
             "start_page": 19,
-            "end_page": 698
-        },
-        "Samaysaar_Siddhi_Part-02H": {
-            "header_prefix": [
-                "^[०-९\\s]*समयसार\\s+सिद्धि,?.*भाग-[०-९]\\s*[-।]?,?\\s*\\(.*\\)"
-            ],
-            "page_list": [
-                { "start": 20, "end":  509 },
-                {"start": 528, "end": 987}
-
-            ]
+            "end_page": 617
         },
         "language": "hi"
     }
 
-    pdf_file = "/Users/r0j08wt/cataloguesearch/pdf/Pravachans/hindi/Dravyanuyog/Samaysaar/19th_time/Samaysaar_Siddhi_Part-01H.pdf"
+    pdf_file = "/Users/r0j08wt/cataloguesearch/pdf/Pravachans/hindi/Dravyanuyog/Niyamsaar/1979_Series/Karan_Karya_Niyam_Part_1_H.pdf"
     index_state = IndexState(tempfile.mktemp())
     processor = PDFProcessor(Config())
     single = SingleFileProcessor(
