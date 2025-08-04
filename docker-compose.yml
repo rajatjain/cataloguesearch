@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    container_name: cataloguesearch-frontend
+    ports:
+      - "80:80"       # Map host port 80 to container port 80 (for HTTP)
+      # - "443:443"   # Uncomment when you add SSL/HTTPS
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    container_name: cataloguesearch-backend
+    # No ports exposed to the host, Nginx will proxy to it
+    depends_on:
+      - opensearch
+    environment:
+      # Pass environment variables to your FastAPI app if needed
+      # e.g., OPENSEARCH_HOST: opensearch
+      CONFIG_FILE: "configs/config.yaml"
+    networks:
+      - app-network
+
+  opensearch:
+    build:
+      context: .
+      dockerfile: docker/opensearch.Dockerfile
+    container_name: cataloguesearch-opensearch
+    environment:
+      # --- Credentials and Configuration for the entrypoint.sh script ---
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME}
+      - GCS_CREDENTIALS_JSON=${GCS_CREDENTIALS_JSON}
+      - INDEX_NAME=cataloguesearch_prod
+      # --- Standard OpenSearch settings ---
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g" # Adjust memory as needed
+      - "discovery.type=single-node"
+      - "plugins.security.disabled=true" # Disable security for simplicity in this setup
+    ports:
+      - "9200:9200"
+      - "9600:9600" # For performance analyzer
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data # Persist OpenSearch data
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  opensearch-data:
+    driver: local
