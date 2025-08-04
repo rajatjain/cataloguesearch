@@ -1,10 +1,8 @@
-Application Deployment and Data Management Guide
+
+
+## Deployment Strategy Overview
 
 This document provides a comprehensive guide to deploying and managing the Catalogue Search application. The entire application stack (Frontend, Backend, OpenSearch) is containerized using Docker and orchestrated with Docker Compose.
-
-================================
-## Deployment Strategy Overview
-================================
 
 The core data management strategy is designed for consistency and reliability:
 
@@ -14,11 +12,7 @@ The core data management strategy is designed for consistency and reliability:
 
 This ensures that the production environment starts with a known, pre-validated dataset.
 
----
-
-=====================
 ## Prerequisites
-=====================
 
 Before you begin, ensure you have the following:
 
@@ -28,11 +22,8 @@ Before you begin, ensure you have the following:
   - A **Service Account** with the `Storage Object Admin` role on that bucket.
   - The **JSON key file** for the Service Account, downloaded to your local machine.
 
----
 
-=============================================
 ## Phase 1: One-Time Setup for Local OpenSearch
-=============================================
 
 You must configure the OpenSearch container you use for local development (the one started by `scripts/opensearch_controller.py`) so it can write snapshots to GCS. **This is a one-time setup.**
 
@@ -77,11 +68,8 @@ You must configure the OpenSearch container you use for local development (the o
 
 Your local OpenSearch instance is now fully configured to save snapshots to the cloud.
 
----
 
-================================================
 ## Phase 2: Data Management Workflow (Repeatable)
-================================================
 
 Whenever you want to update the data that the application uses, follow this two-step process.
 
@@ -106,11 +94,7 @@ chmod +x scripts/snapshot_to_gcs.sh
 ./scripts/snapshot_to_gcs.sh
 ```
 
----
-
-===========================================
 ## Phase 3: Running the Full Application Stack
-===========================================
 
 This process uses Docker Compose to build and run the entire application. It works for both local testing and production deployment on a server.
 
