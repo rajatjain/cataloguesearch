@@ -292,9 +292,12 @@ class IndexSearcher:
             if not isinstance(metadata_categories, list):
                 metadata_categories = [str(metadata_categories)]
 
+            original_filename = source.get('original_filename')
+            filename = os.path.basename(original_filename)
             extracted.append({
                 "document_id": document_id,
                 "original_filename": source.get('original_filename'),
+                "filename": filename,
                 "page_number": source.get('page_number'),
                 "paragraph_id": source.get('paragraph_id'),
                 "content_snippet": content_snippet,

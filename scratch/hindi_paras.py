@@ -10,12 +10,17 @@ log_handle = logging.getLogger(__name__)
 
 _pdf_processor = None
 
+"""
+Current issues:
+Pravachan Sudha Part 1 - Page 31
+
+"""
+
 def parse_pdf():
     global _pdf_processor
     if _pdf_processor is None:
         _pdf_processor = PDFProcessor(Config())
 
-    # TODO(rajatjain): Errors in pages 29, 52-53
     meta = {
         "language": "hi",
         "start_page": 40,

@@ -157,9 +157,11 @@ const ResultCard = ({ result, onFindSimilar, onExpand, isFirst }) => {
     return (
         <div className={cardClasses}>
             <div className="border-b border-slate-200 pb-2 mb-2 text-sm text-slate-500 flex flex-wrap gap-x-3 gap-y-1 items-center">
-                <span className="font-semibold text-slate-600"> {result.original_filename}</span>
+                {result.metadata?.Granth && <span className="font-bold text-slate-700">{result.metadata.Granth}</span>}
+                {result.metadata?.Series && <span>{result.metadata.Series}</span>}
+                <span className="text-slate-600">{result.filename}</span>
                 <span>Page: {result.page_number}</span>
-                {result.bookmarks && <span className="truncate max-w-xs"> {result.bookmarks}</span>}
+                {result.bookmarks && <span className="truncate max-w-xs">Details: {result.bookmarks}</span>}
                 <div className="ml-auto flex items-center gap-3 text-sm">
                     <button onClick={() => onExpand(result.document_id)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center"><ExpandIcon />Expand</button>
                     <button onClick={() => onFindSimilar(result)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center"><SimilarIcon />More Like This</button>
