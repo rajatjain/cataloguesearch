@@ -12,15 +12,22 @@ from fastapi.staticfiles import StaticFiles
 from backend.common.embedding_models import get_embedding_model, get_embedding
 from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
-from backend.crawler.index_state import IndexState
 from backend.common.language_detector import LanguageDetector
 from backend.search.index_searcher import IndexSearcher
 from backend.search.result_ranker import ResultRanker
 from backend.utils import json_dumps
 from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
 from backend.utils import JSONResponse
+import time
 
 log_handle = logging.getLogger(__name__)
+
+# --- In-memory metadata cache ---
+metadata_cache = {
+    "data": None,
+    "timestamp": 0,
+    "ttl": 1800  # 30 minutes cache TTL
+}
 
 # --- FastAPI Application Setup ---
 app = FastAPI(
@@ -65,21 +72,27 @@ def initialize():
 async def get_metadata_api():
     """
     Returns metadata about the indexed documents.
-    First checks index_state cache, falls back to OpenSearch if not present.
+    Uses in-memory cache with 30-minute TTL, computes from OpenSearch if cache is expired.
     """
     try:
+        current_time = time.time()
+        
+        # Check if cache is valid
+        if (metadata_cache["data"] is not None and 
+            current_time - metadata_cache["timestamp"] < metadata_cache["ttl"]):
+            log_handle.info("Retrieving metadata from in-memory cache")
+            return JSONResponse(content=metadata_cache["data"], status_code=200)
+        
+        # Cache is expired or empty, fetch from OpenSearch
+        log_handle.info("Cache expired or empty, fetching metadata from OpenSearch")
         config = Config()
-        index_state = IndexState(config.SQLITE_DB_PATH)
-
-        if index_state.has_metadata_cache():
-            log_handle.info("Retrieving metadata from cache")
-            metadata = index_state.get_metadata_cache()
-        else:
-            log_handle.info("No metadata cache found, fetching from OpenSearch")
-            metadata = get_metadata(config)
-            index_state.update_metadata_cache(metadata)
-
-        log_handle.info(f"Metadata retrieved: {len(metadata)} keys found")
+        metadata = get_metadata(config)
+        
+        # Update cache
+        metadata_cache["data"] = metadata
+        metadata_cache["timestamp"] = current_time
+        
+        log_handle.info(f"Metadata retrieved and cached: {len(metadata)} keys found")
         return JSONResponse(content=metadata, status_code=200)
     except Exception as e:
         log_handle.exception(f"Error retrieving metadata: {e}")

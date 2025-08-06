@@ -165,6 +165,7 @@ def get_metadata(config: Config) -> dict[str, list[str]]:
     """
     Scans the metadata field in OpenSearch, extracts all key-value pairs,
     deduplicates them and returns as dict[str, list[str]].
+    Uses scroll API to retrieve all documents without limit.
 
     Args:
         config: Config object containing OpenSearch settings
@@ -174,44 +175,67 @@ def get_metadata(config: Config) -> dict[str, list[str]]:
     """
     client = get_opensearch_client(config)
 
-    # Query to get all documents and extract metadata field
+    # Query to get all documents and extract metadata field using scroll API
     query_body = {
-        "size": 10000,  # Adjust based on your index size
+        "size": 10000,  # Batch size for scroll
         "_source": ["metadata"],
         "query": {
             "match_all": {}
         }
     }
 
+    # Initialize scroll search
     response = client.search(
         index=config.OPENSEARCH_INDEX_NAME,
-        body=query_body
+        body=query_body,
+        scroll='2m'  # Keep scroll context alive for 2 minutes
     )
 
     # Extract and deduplicate metadata
     metadata_dict = {}
-    hits = response.get('hits', {}).get('hits', [])
+    total_processed = 0
+    
+    while True:
+        hits = response.get('hits', {}).get('hits', [])
+        
+        if not hits:
+            break
+            
+        # Process current batch
+        for hit in hits:
+            source = hit.get('_source', {})
+            document_metadata = source.get('metadata', {})
 
-    for hit in hits:
-        source = hit.get('_source', {})
-        document_metadata = source.get('metadata', {})
+            # Process each key-value pair in the metadata
+            for key, value in document_metadata.items():
+                if key not in metadata_dict:
+                    metadata_dict[key] = set()
 
-        # Process each key-value pair in the metadata
-        for key, value in document_metadata.items():
-            if key not in metadata_dict:
-                metadata_dict[key] = set()
-
-            # Handle different value types
-            if isinstance(value, list):
-                for item in value:
-                    metadata_dict[key].add(str(item))
-            else:
-                metadata_dict[key].add(str(value))
+                # Handle different value types
+                if isinstance(value, list):
+                    for item in value:
+                        metadata_dict[key].add(str(item))
+                else:
+                    metadata_dict[key].add(str(value))
+        
+        total_processed += len(hits)
+        log_handle.debug(f"Processed {total_processed} documents so far...")
+        
+        # Get scroll ID for next batch
+        scroll_id = response.get('_scroll_id')
+        if not scroll_id:
+            break
+            
+        # Get next batch
+        response = client.scroll(
+            scroll_id=scroll_id,
+            scroll='2m'
+        )
 
     # Convert sets to sorted lists for consistent output
     result = {key: sorted(list(values)) for key, values in metadata_dict.items()}
 
-    log_handle.info(f"Metadata retrieved: {len(result)} unique keys found")
+    log_handle.info(f"Metadata retrieved from {total_processed} documents: {len(result)} unique keys found")
     return result
 
 def delete_documents_by_filename(config: Config, original_filename: str):

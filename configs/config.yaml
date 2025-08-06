@@ -15,7 +15,7 @@ index:
   chunk_strategy: "paragraph"
 
 opensearch:
-  host: localhost
+  host: "{OPENSEARCH_HOST}"
   port: 9200
   username: admin
   password: Admin@Password123!

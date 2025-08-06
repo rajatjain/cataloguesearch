@@ -55,6 +55,49 @@ services:
       retries: 5
     restart: ${RESTART_POLICY:-no}
 
+  cataloguesearch-api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    container_name: cataloguesearch-api
+    environment:
+      - OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_PORT=9200
+      - OPENSEARCH_USERNAME=admin
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@123456}
+      - LOGS_DIR=/app/logs
+      - PYTHONPATH=/app
+      - ENVIRONMENT=${ENVIRONMENT:-local}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Config file substitution variables (override local env vars)
+      - HOME=/app/data
+      - BASE_DIR=/app
+      - OPENSEARCH_HOST=opensearch
+      # GCS Configuration
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gcs-key.json
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-opensearch-snapshots}
+      # Indic NLP Resources
+      - INDIC_RESOURCES_PATH=/app/indic_nlp_resources
+    volumes:
+      - cataloguesearch-data:/app/data
+      - cataloguesearch-logs:/app/logs
+      - ./configs/config.yaml:/app/configs/config.yaml:ro
+      - ./configs/opensearch-config.yaml:/app/configs/opensearch-config.yaml:ro
+      - ${GCS_SERVICE_ACCOUNT_KEY_PATH:-./credentials/gcs-key.json}:/app/credentials/gcs-key.json:ro
+    ports:
+      - "8000:8000"
+    networks:
+      - opensearch-net
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/metadata"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: ${RESTART_POLICY:-no}
+
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:3.0.0
     container_name: opensearch-dashboards
@@ -79,6 +122,8 @@ services:
 
 volumes:
   opensearch-data:
+  cataloguesearch-data:
+  cataloguesearch-logs:
 
 networks:
   opensearch-net:
