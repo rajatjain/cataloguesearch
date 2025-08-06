@@ -1,0 +1,84 @@
+services:
+  opensearch:
+    build:
+      context: .
+      dockerfile: docker/opensearch/Dockerfile
+    container_name: opensearch-node
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=${OPENSEARCH_JAVA_OPTS:-Xms1g -Xmx1g}"
+      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@123456}"
+      - plugins.security.ssl.http.enabled=true
+      - plugins.security.ssl.http.pemcert_filepath=certs/node.pem
+      - plugins.security.ssl.http.pemkey_filepath=certs/node-key.pem
+      - plugins.security.ssl.http.pemtrustedcas_filepath=certs/root-ca.pem
+      - plugins.security.ssl.transport.pemcert_filepath=certs/node.pem
+      - plugins.security.ssl.transport.pemkey_filepath=certs/node-key.pem
+      - plugins.security.ssl.transport.pemtrustedcas_filepath=certs/root-ca.pem
+      - plugins.security.ssl.transport.enforce_hostname_verification=false
+      - plugins.security.allow_unsafe_democertificates=true
+      - plugins.security.allow_default_init_securityindex=true
+      - plugins.security.authcz.admin_dn=CN=opensearch,O=opensearch,L=opensearch,ST=opensearch,C=US
+      - plugins.security.nodes_dn=CN=opensearch,O=opensearch,L=opensearch,ST=opensearch,C=US
+      - plugins.security.audit.type=internal_opensearch
+      - plugins.security.enable_snapshot_restore_privilege=true
+      - plugins.security.check_snapshot_restore_write_privileges=true
+      - plugins.security.restapi.roles_enabled=["all_access", "security_rest_api_access"]
+      - network.host=0.0.0.0
+      # GCS Configuration
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-opensearch-snapshots}
+      - GCS_SERVICE_ACCOUNT_KEY_PATH=/usr/share/opensearch/config/gcs-key.json
+      - SNAPSHOT_REPOSITORY_NAME=${SNAPSHOT_REPOSITORY_NAME:-gcs-repository}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+      - ./certs:/usr/share/opensearch/config/certs:ro
+      - ${GCS_SERVICE_ACCOUNT_KEY_PATH:-./credentials/gcs-key.json}:/usr/share/opensearch/config/gcs-key.json:ro
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    networks:
+      - opensearch-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -k -s -u $${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}:$${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin} https://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: ${RESTART_POLICY:-no}
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:3.0.0
+    container_name: opensearch-dashboards
+    ports:
+      - "5601:5601"
+    environment:
+      - 'OPENSEARCH_HOSTS=["https://opensearch:9200"]'
+      - "OPENSEARCH_USERNAME=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}"
+      - "OPENSEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@123456}"
+      - server.ssl.enabled=true
+      - server.ssl.certificate=/usr/share/opensearch-dashboards/config/certs/node.pem
+      - server.ssl.key=/usr/share/opensearch-dashboards/config/certs/node-key.pem
+      - opensearch.ssl.certificateAuthorities=/usr/share/opensearch-dashboards/config/certs/root-ca.pem
+      - opensearch.ssl.verificationMode=none
+    volumes:
+      - ./certs:/usr/share/opensearch-dashboards/config/certs:ro
+    networks:
+      - opensearch-net
+    depends_on:
+      - opensearch
+    restart: ${RESTART_POLICY:-no}
+
+volumes:
+  opensearch-data:
+
+networks:
+  opensearch-net:
