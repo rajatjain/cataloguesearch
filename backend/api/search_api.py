@@ -39,13 +39,13 @@ app.add_middleware(
 )
 
 # --- Static File Serving ---
-frontend_build_path = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "build")
+# frontend_build_path = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "build")
 
-app.mount(
-    "/static",
-    StaticFiles(directory=os.path.join(frontend_build_path, "static")),
-    name="static"
-)
+# app.mount(
+#     "/static",
+#     StaticFiles(directory=os.path.join(frontend_build_path, "static")),
+#     name="static"
+# )
 
 def initialize():
     """Initializes the config and other variables, if required"""

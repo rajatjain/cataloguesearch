@@ -17,6 +17,7 @@ DEFAULTS = {
         "CONTAINER_NAME": "opensearch-cataloguesearch-test",
         "DASHBOARDS_CONTAINER_NAME": "opensearch-dashboards-cataloguesearch-test",
         "DOCKER_NETWORK_NAME": "opensearch-custom-network-test",
+        "DATA_PATH": os.path.expanduser("~/cataloguesearch/opensearch-test"),
         "PORTS": {"9200/tcp": 19200, "9600/tcp": 19600},
         "DASHBOARDS_PORTS": {"5601/tcp": 15601}
     },
@@ -24,6 +25,7 @@ DEFAULTS = {
         "CONTAINER_NAME": "opensearch-cataloguesearch",
         "DASHBOARDS_CONTAINER_NAME": "opensearch-dashboards-cataloguesearch",
         "DOCKER_NETWORK_NAME": "opensearch-custom-network",
+        "DATA_PATH": os.path.expanduser("~/cataloguesearch/opensearch"),
         "PORTS": {"9200/tcp": 9200, "9600/tcp": 9600},
         "DASHBOARDS_PORTS": {"5601/tcp": 5601}
     }
@@ -154,6 +156,12 @@ def start_container(client: docker.DockerClient, config):
         "OPENSEARCH_JAVA_OPTS": f"-Xms{HEAP_SIZE} -Xmx{HEAP_SIZE}",
     }
     opensearch_container = None
+
+    # Create host directory for persistent data and mount it as a volume.
+    data_path = config["DATA_PATH"]
+    print(f"Ensuring host data directory exists for persistence: {data_path}")
+    os.makedirs(data_path, exist_ok=True)
+
     try:
         opensearch_container = client.containers.run(
             image=IMAGE_NAME,
@@ -161,7 +169,8 @@ def start_container(client: docker.DockerClient, config):
             environment=environment,
             ports=config["PORTS"],
             detach=True,
-            network=config["DOCKER_NETWORK_NAME"]
+            network=config["DOCKER_NETWORK_NAME"],
+            volumes=[f'{data_path}:/usr/share/opensearch/data']
         )
     except docker.errors.APIError as e:
         print(f"Failed to start OpenSearch container '{config['CONTAINER_NAME']}': {e}")
@@ -176,20 +185,31 @@ def start_container(client: docker.DockerClient, config):
         print("OpenSearch did not become healthy. Cannot proceed with plugin installation or Dashboards.")
         sys.exit(1)
 
-    print(f"Installing 'analysis-icu' plugin in container '{config['CONTAINER_NAME']}'...")
+    print(f"Installing plugins in container '{config['CONTAINER_NAME']}'...")
     try:
-        exec_result = opensearch_container.exec_run("opensearch-plugin install --batch analysis-icu")
-        print(f"Plugin install stdout:\n{exec_result.output.decode('utf-8')}")
-        if exec_result.exit_code != 0:
-            print(f"Plugin install stderr:\n{exec_result.output.decode('utf-8')}", file=sys.stderr)
-            print(f"Error installing plugin. Exit code: {exec_result.exit_code}", file=sys.stderr)
+        # Install analysis-icu for multilingual support
+        print("--> Installing 'analysis-icu' plugin...")
+        exec_result_icu = opensearch_container.exec_run("opensearch-plugin install --batch analysis-icu")
+        if exec_result_icu.exit_code != 0:
+            print(f"Error installing 'analysis-icu':\n{exec_result_icu.output.decode('utf-8')}", file=sys.stderr)
+            sys.exit(1)
         else:
             print("'analysis-icu' plugin installed successfully.")
-            print("Restarting OpenSearch container for plugin changes to take effect...")
-            opensearch_container.restart()
-            if not wait_for_opensearch(client, config["CONTAINER_NAME"], ADMIN_PASSWORD, list(config["PORTS"].values())[0]):
-                print("OpenSearch did not become healthy after plugin installation and restart. Cannot proceed with Dashboards.")
-                sys.exit(1)
+
+        # Install repository-gcs for GCS snapshots
+        print("--> Installing 'repository-gcs' plugin...")
+        exec_result_gcs = opensearch_container.exec_run("opensearch-plugin install --batch repository-gcs")
+        if exec_result_gcs.exit_code != 0:
+            print(f"Error installing 'repository-gcs':\n{exec_result_gcs.output.decode('utf-8')}", file=sys.stderr)
+            sys.exit(1)
+        else:
+            print("'repository-gcs' plugin installed successfully.")
+
+        print("Restarting OpenSearch container for all plugin changes to take effect...")
+        opensearch_container.restart()
+        if not wait_for_opensearch(client, config["CONTAINER_NAME"], ADMIN_PASSWORD, list(config["PORTS"].values())[0]):
+            print("OpenSearch did not become healthy after plugin installation and restart. Cannot proceed with Dashboards.")
+            sys.exit(1)
     except Exception as e:
         print(f"Error during plugin installation: {e}", file=sys.stderr)
         sys.exit(1)

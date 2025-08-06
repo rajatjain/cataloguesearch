@@ -85,7 +85,7 @@ class Config:
         elif name == "CHUNK_STRATEGY":
             return self._settings.get("index", {}).get("chunk_strategy", "default")
         elif name == "OPENSEARCH_HOST":
-            return self._settings.get("opensearch", {}).get("host", "localhost")
+            return os.getenv("OPENSEARCH_HOST", self._settings.get("opensearch", {}).get("host", "localhost"))
         elif name == "OPENSEARCH_PORT":
             return self._settings.get("opensearch", {}).get("port", 9200)
         elif name == "OPENSEARCH_USERNAME":

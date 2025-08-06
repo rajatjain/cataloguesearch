@@ -48,7 +48,8 @@ class HindiParagraphGenerator(BaseParagraphGenerator):
             ("प्रव्चन", "प्रवचन"),
             ("प्रवच्चन", "प्रवचन"),
             ("प्रवच्चन", "प्रवचन"),
-            ("मुमुक्ष:", "मुमुक्षु:")
+            ("मुमुक्ष:", "मुमुक्षु:"),
+            ("परवचन", "प्रवचन")
         ]
 
         for typo in typo_list:
