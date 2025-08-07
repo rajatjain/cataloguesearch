@@ -24,15 +24,19 @@ fi
 echo -e "${YELLOW}Initializing ML models...${NC}"
 python -c "
 import os
-from sentence_transformers import SentenceTransformer
-from backend.common.embedding_models import get_embedding_model
+from sentence_transformers import SentenceTransformer, CrossEncoder
+from backend.config import Config
+from backend.common.embedding_models import get_embedding_model_factory
 
 print('Loading embedding model...')
-model = get_embedding_model('BAAI/bge-m3')
+config = Config('configs/config.yaml')
+embedding_model = get_embedding_model_factory(config)
+# Trigger model loading
+embedding_model.get_embedding('test')
 print('Embedding model loaded successfully')
 
 print('Loading reranking model...')
-reranker = SentenceTransformer('BAAI/bge-reranker-v2-m3')
+reranker = embedding_model.get_reranking_model()
 print('Reranking model loaded successfully')
 " || echo -e "${YELLOW}Model initialization failed, will retry at runtime${NC}"
 
