@@ -9,8 +9,8 @@ services:
       - node.name=opensearch-node
       - discovery.type=single-node
       - bootstrap.memory_lock=true
-      - "OPENSEARCH_JAVA_OPTS=${OPENSEARCH_JAVA_OPTS:-Xms1g -Xmx1g}"
-      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@123456}"
+      - "OPENSEARCH_JAVA_OPTS=${OPENSEARCH_JAVA_OPTS:-Xms512m -Xmx1g}"
+      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@Password123!}"
       - plugins.security.ssl.http.enabled=true
       - plugins.security.ssl.http.pemcert_filepath=certs/node.pem
       - plugins.security.ssl.http.pemkey_filepath=certs/node-key.pem
@@ -64,7 +64,7 @@ services:
       - OPENSEARCH_HOST=opensearch
       - OPENSEARCH_PORT=9200
       - OPENSEARCH_USERNAME=admin
-      - OPENSEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@123456}
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@Password123!}
       - LOGS_DIR=/app/logs
       - PYTHONPATH=/app
       - ENVIRONMENT=${ENVIRONMENT:-local}
@@ -98,26 +98,22 @@ services:
       retries: 5
     restart: ${RESTART_POLICY:-no}
 
-  opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:3.0.0
-    container_name: opensearch-dashboards
+  cataloguesearch-frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: cataloguesearch-frontend
     ports:
-      - "5601:5601"
-    environment:
-      - 'OPENSEARCH_HOSTS=["https://opensearch:9200"]'
-      - "OPENSEARCH_USERNAME=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}"
-      - "OPENSEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@123456}"
-      - server.ssl.enabled=true
-      - server.ssl.certificate=/usr/share/opensearch-dashboards/config/certs/node.pem
-      - server.ssl.key=/usr/share/opensearch-dashboards/config/certs/node-key.pem
-      - opensearch.ssl.certificateAuthorities=/usr/share/opensearch-dashboards/config/certs/root-ca.pem
-      - opensearch.ssl.verificationMode=none
-    volumes:
-      - ./certs:/usr/share/opensearch-dashboards/config/certs:ro
+      - "3000:80"
     networks:
       - opensearch-net
     depends_on:
-      - opensearch
+      - cataloguesearch-api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: ${RESTART_POLICY:-no}
 
 volumes:

@@ -17,9 +17,9 @@ if [[ "$ENV" != "local" && "$ENV" != "prod" ]]; then
 fi
 
 # Validate action
-if [[ "$ACTION" != "up" && "$ACTION" != "down" && "$ACTION" != "build" && "$ACTION" != "logs" && "$ACTION" != "build-api" && "$ACTION" != "restart-api" ]]; then
-    echo "Error: Action must be 'up', 'down', 'build', 'logs', 'build-api', or 'restart-api'"
-    echo "Usage: $0 [local|prod] [up|down|build|logs|build-api|restart-api]"
+if [[ "$ACTION" != "up" && "$ACTION" != "down" && "$ACTION" != "build" && "$ACTION" != "logs" && "$ACTION" != "build-api" && "$ACTION" != "restart-api" && "$ACTION" != "build-frontend" && "$ACTION" != "restart-frontend" ]]; then
+    echo "Error: Action must be 'up', 'down', 'build', 'logs', 'build-api', 'restart-api', 'build-frontend', or 'restart-frontend'"
+    echo "Usage: $0 [local|prod] [up|down|build|logs|build-api|restart-api|build-frontend|restart-frontend]"
     exit 1
 fi
 
@@ -41,6 +41,7 @@ case $ACTION in
         docker-compose --env-file "$ENV_FILE" up -d
         echo ""
         echo "Services are starting up..."
+        echo "Frontend will be available at: http://localhost:3000"
         echo "API will be available at: http://localhost:8000"
         echo "OpenSearch Dashboards at: https://localhost:5601"
         echo ""
@@ -61,6 +62,16 @@ case $ACTION in
         docker-compose --env-file "$ENV_FILE" build cataloguesearch-api
         docker-compose --env-file "$ENV_FILE" up -d --no-deps cataloguesearch-api
         echo "API service restarted. Available at: http://localhost:8000"
+        ;;
+    "build-frontend")
+        echo "Building only the frontend service..."
+        docker-compose --env-file "$ENV_FILE" build cataloguesearch-frontend
+        ;;
+    "restart-frontend")
+        echo "Rebuilding and restarting only the frontend service..."
+        docker-compose --env-file "$ENV_FILE" build cataloguesearch-frontend
+        docker-compose --env-file "$ENV_FILE" up -d --no-deps cataloguesearch-frontend
+        echo "Frontend service restarted. Available at: http://localhost:3000"
         ;;
     "logs")
         docker-compose --env-file "$ENV_FILE" logs -f
