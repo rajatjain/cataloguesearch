@@ -1,5 +1,7 @@
 import logging
 import traceback
+import hashlib
+import time
 
 from opensearchpy import OpenSearch, RequestsHttpConnection, NotFoundError
 import os
@@ -38,8 +40,12 @@ class IndexSearcher:
         self._bookmark_field = "bookmarks"
         self._metadata_prefix = "metadata"
         try:
-            self._reranker = CrossEncoder(self._config.RERANKING_MODEL_NAME)
-            log_handle.info(f"Cross encoder model '{self._config.RERANKING_MODEL_NAME} loaded.")
+            self._reranker = CrossEncoder(
+                self._config.RERANKING_MODEL_NAME, 
+                device="cpu", # No GPU support as its expensive
+                max_length=512  # Limit input length for faster processing
+            )
+            log_handle.info(f"Cross encoder model '{self._config.RERANKING_MODEL_NAME}'")
         except Exception as e:
             traceback.print_exc()
             self._reranker = None
@@ -361,17 +367,18 @@ class IndexSearcher:
             log_handle.info(f"Performing reranking on {len(hits)} documents for query: '{keywords}'")
 
             # Create pairs of [query, document_text] for the reranker
-            sentence_pairs = [
-                [keywords, hit["_source"].get(text_field, "")] for hit in hits
-            ]
+            sentence_pairs = []
+            for hit in hits:
+                doc_text = hit["_source"].get(text_field, "")
+                # Only apply text truncation - safest optimization
+                truncated_text = doc_text[:1000] if len(doc_text) > 1000 else doc_text
+                sentence_pairs.append([keywords, truncated_text])
 
-            # Use batching to significantly speed up the prediction process.
-            # A batch size of 32 is a good starting point.
-            # This allows the model to process 32 documents in parallel.
+            # Use smaller, safer batch size and remove problematic parameters
             rerank_scores = self._reranker.predict(
                 sentence_pairs,
-                batch_size=32,
-                show_progress_bar=True  # Useful for seeing progress in logs
+                batch_size=16,  # Smaller, safer batch size
+                show_progress_bar=False  # Only disable progress bar
             )
 
             for hit, score in zip(hits, rerank_scores):

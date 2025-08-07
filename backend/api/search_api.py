@@ -108,6 +108,7 @@ class SearchRequest(BaseModel):
     categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
     page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
     page_number: int = Field(1, ge=1, description="Page number for pagination.")
+    enable_reranking : bool = Field(True, description="Enable re-ranking for better relevance.")
 
 @app.post("/search", response_model=Dict[str, Any])
 async def search(request_data: SearchRequest = Body(...)):
@@ -123,6 +124,7 @@ async def search(request_data: SearchRequest = Body(...)):
     categories = request_data.categories
     page_size = request_data.page_size
     page_number = request_data.page_number
+    enable_reranking = request_data.enable_reranking
 
 
     try:
@@ -136,7 +138,7 @@ async def search(request_data: SearchRequest = Body(...)):
         log_handle.info(f"Received search request: keywords='{keywords}', "
                         f"allow_typos='{allow_typos}', proximity_distance={proximity_distance}, "
                         f"categories={categories}, page={page_number}, size={page_size}, "
-                        f"detected_language={detected_language}")
+                        f"detected_language={detected_language}, enable_reranking={enable_reranking}")
 
         # Perform Lexical Search
         lexical_results = []
@@ -170,11 +172,12 @@ async def search(request_data: SearchRequest = Body(...)):
                 categories=categories,
                 page_size=20,
                 page_number=1,
-                language=detected_language
+                language=detected_language,
+                rerank=enable_reranking
             )
             log_handle.info(
                 f"Vector search returned {len(vector_results)} "
-                f"results (total: {vector_total_hits}).")
+                f"results (total: {vector_total_hits}) with reranking={'enabled' if enable_reranking else 'disabled'}.")
 
         response = {
             "total_results": lexical_total_hits,
