@@ -10,8 +10,7 @@ OPENSEARCH_PID=$!
 # Function to check if OpenSearch is ready
 wait_for_opensearch() {
     echo "Waiting for OpenSearch to be ready..."
-    while ! curl -k -s -u "${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}:${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}" \
-        https://localhost:9200/_cluster/health > /dev/null 2>&1; do
+    while ! curl -f -s http://localhost:9200/_cluster/health > /dev/null 2>&1; do
         sleep 5
         echo "Still waiting for OpenSearch..."
     done

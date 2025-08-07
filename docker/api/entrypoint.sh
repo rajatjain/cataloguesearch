@@ -38,7 +38,7 @@ print('Reranking model loaded successfully')
 
 # Wait for OpenSearch to be ready
 echo -e "${YELLOW}Waiting for OpenSearch to be ready...${NC}"
-while ! curl -k -s -u "${OPENSEARCH_USERNAME}:${OPENSEARCH_PASSWORD}" "https://${OPENSEARCH_HOST}:${OPENSEARCH_PORT}/_cluster/health" > /dev/null; do
+while ! curl -f -s "http://${OPENSEARCH_HOST}:${OPENSEARCH_PORT}/_cluster/health" > /dev/null; do
     echo "Waiting for OpenSearch..."
     sleep 5
 done

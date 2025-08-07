@@ -11,22 +11,7 @@ services:
       - bootstrap.memory_lock=true
       - "OPENSEARCH_JAVA_OPTS=${OPENSEARCH_JAVA_OPTS:-Xms512m -Xmx1g}"
       - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@Password123!}"
-      - plugins.security.ssl.http.enabled=true
-      - plugins.security.ssl.http.pemcert_filepath=certs/node.pem
-      - plugins.security.ssl.http.pemkey_filepath=certs/node-key.pem
-      - plugins.security.ssl.http.pemtrustedcas_filepath=certs/root-ca.pem
-      - plugins.security.ssl.transport.pemcert_filepath=certs/node.pem
-      - plugins.security.ssl.transport.pemkey_filepath=certs/node-key.pem
-      - plugins.security.ssl.transport.pemtrustedcas_filepath=certs/root-ca.pem
-      - plugins.security.ssl.transport.enforce_hostname_verification=false
-      - plugins.security.allow_unsafe_democertificates=true
-      - plugins.security.allow_default_init_securityindex=true
-      - plugins.security.authcz.admin_dn=CN=opensearch,O=opensearch,L=opensearch,ST=opensearch,C=US
-      - plugins.security.nodes_dn=CN=opensearch,O=opensearch,L=opensearch,ST=opensearch,C=US
-      - plugins.security.audit.type=internal_opensearch
-      - plugins.security.enable_snapshot_restore_privilege=true
-      - plugins.security.check_snapshot_restore_write_privileges=true
-      - plugins.security.restapi.roles_enabled=["all_access", "security_rest_api_access"]
+      - plugins.security.disabled=true
       - network.host=0.0.0.0
       # GCS Configuration
       - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-opensearch-snapshots}
@@ -41,7 +26,6 @@ services:
         hard: 65536
     volumes:
       - opensearch-data:/usr/share/opensearch/data
-      - ./certs:/usr/share/opensearch/config/certs:ro
       - ${GCS_SERVICE_ACCOUNT_KEY_PATH:-./credentials/gcs-key.json}:/usr/share/opensearch/config/gcs-key.json:ro
     ports:
       - "9200:9200"
@@ -49,7 +33,7 @@ services:
     networks:
       - opensearch-net
     healthcheck:
-      test: ["CMD-SHELL", "curl -k -s -u $${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}:$${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin} https://localhost:9200/_cluster/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -63,8 +47,6 @@ services:
     environment:
       - OPENSEARCH_HOST=opensearch
       - OPENSEARCH_PORT=9200
-      - OPENSEARCH_USERNAME=admin
-      - OPENSEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@Password123!}
       - LOGS_DIR=/app/logs
       - PYTHONPATH=/app
       - ENVIRONMENT=${ENVIRONMENT:-local}

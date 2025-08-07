@@ -123,17 +123,11 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
         # Create the OpenSearch client using the provided configuration
         client = OpenSearch(
             hosts=[{
-                'scheme': 'https',
+                'scheme': 'http',
                 'host': config.OPENSEARCH_HOST,
                 'port': config.OPENSEARCH_PORT
             }],
-            http_auth=(config.OPENSEARCH_USERNAME, config.OPENSEARCH_PASSWORD),
-
-            # SSL settings for local development
-            use_ssl=True,
-            verify_certs=False,
-            ssl_assert_hostname=False,
-            ssl_show_warn=False
+            use_ssl=False
         )
 
         # Ping the server to confirm the connection and credentials are valid

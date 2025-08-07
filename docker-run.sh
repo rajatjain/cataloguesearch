@@ -43,7 +43,6 @@ case $ACTION in
         echo "Services are starting up..."
         echo "Frontend will be available at: http://localhost:3000"
         echo "API will be available at: http://localhost:8000"
-        echo "OpenSearch Dashboards at: https://localhost:5601"
         echo ""
         echo "Check logs with: $0 $ENV logs"
         ;;

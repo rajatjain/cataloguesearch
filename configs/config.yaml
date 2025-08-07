@@ -17,8 +17,6 @@ index:
 opensearch:
   host: "{OPENSEARCH_HOST}"
   port: 9200
-  username: admin
-  password: Admin@Password123!
   index_name: cataloguesearch_prod
 
 vector_embeddings:
