@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Tuple
 from sentence_transformers import CrossEncoder
 
 from backend.common.opensearch import get_opensearch_config, get_opensearch_client
+from backend.common.embedding_models import get_embedding_model_factory
 from backend.utils import json_dumps
 
 log_handle = logging.getLogger(__name__)
@@ -40,12 +41,9 @@ class IndexSearcher:
         self._bookmark_field = "bookmarks"
         self._metadata_prefix = "metadata"
         try:
-            self._reranker = CrossEncoder(
-                self._config.RERANKING_MODEL_NAME, 
-                device="cpu", # No GPU support as its expensive
-                max_length=512  # Limit input length for faster processing
-            )
-            log_handle.info(f"Cross encoder model '{self._config.RERANKING_MODEL_NAME}'")
+            embedding_model = get_embedding_model_factory(self._config)
+            self._reranker = embedding_model.get_reranking_model()
+            log_handle.info(f"Using embedding model type '{self._config.EMBEDDING_MODEL_TYPE}' for reranking")
         except Exception as e:
             traceback.print_exc()
             self._reranker = None
@@ -374,10 +372,10 @@ class IndexSearcher:
                 truncated_text = doc_text[:1000] if len(doc_text) > 1000 else doc_text
                 sentence_pairs.append([keywords, truncated_text])
 
-            # Use smaller, safer batch size and remove problematic parameters
+            # Use very small batch size for e2-medium
             rerank_scores = self._reranker.predict(
                 sentence_pairs,
-                batch_size=16,  # Smaller, safer batch size
+                batch_size=4,  # Very small batch size for low-memory instances
                 show_progress_bar=False  # Only disable progress bar
             )
 

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.common.embedding_models import get_embedding_model, get_embedding
+from backend.common.embedding_models import get_embedding_model_factory
 from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
 from backend.common.language_detector import LanguageDetector
@@ -158,9 +158,9 @@ async def search(request_data: SearchRequest = Body(...)):
 
         vector_results = []
         vector_total_hits = 0
-        model_name = config.EMBEDDING_MODEL_NAME
-        log_handle.info(f"Using embedding model: {model_name}")
-        query_embedding = get_embedding(model_name, keywords)
+        embedding_model = get_embedding_model_factory(config)
+        log_handle.info(f"Using embedding model type: {config.EMBEDDING_MODEL_TYPE}")
+        query_embedding = embedding_model.get_embedding(keywords)
         if not query_embedding:
             log_handle.warning("Could not generate embedding for query. Vector search skipped.")
             vector_results = []

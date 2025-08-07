@@ -5,8 +5,7 @@ import traceback
 import yaml
 from opensearchpy import OpenSearch, ConnectionError
 from backend.config import Config  # Adjust the import path as needed
-from sentence_transformers import SentenceTransformer
-from backend.common.embedding_models import get_embedding_model
+from backend.common.embedding_models import get_embedding_model_factory
 
 # --- Module-level variables ---
 # This variable will hold our single, cached client instance.
@@ -41,8 +40,10 @@ def get_opensearch_config(config: Config) -> dict:
         log_handle.info(f"Loaded OpenSearch config from {opensearch_config_path}")
         log_handle.info(f"Open Search settings is {_opensearch_settings}")
 
+    # Get embedding dimension from factory pattern
+    embedding_model = get_embedding_model_factory(config)
     _opensearch_settings['mappings']['properties']['vector_embedding']['dimension'] = \
-        get_embedding_model(config.EMBEDDING_MODEL_NAME).get_sentence_embedding_dimension()
+        embedding_model.get_embedding_dimension()
 
     return _opensearch_settings
 
@@ -143,8 +144,6 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
         if force_clean:
             delete_index(config)
 
-        # Initialize embedding_model
-        get_embedding_model(config.EMBEDDING_MODEL_NAME)
     except Exception as e:
         traceback.print_exc()
         log_handle.critical(f"Failed to initialize OpenSearch client: {e}")

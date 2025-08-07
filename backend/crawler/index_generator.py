@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from tqdm import tqdm
 
 from backend.common import language_detector, embedding_models
+from backend.common.embedding_models import get_embedding_model_factory
 
 from backend.config import Config
 
@@ -130,11 +131,11 @@ class IndexGenerator:
 
     def _add_embeddings_parallel(self, all_chunks: list[dict]) -> list[dict]:
         """Adds vector embeddings to chunks using parallel processing."""
+        embedding_model = get_embedding_model_factory(self._config)
+        
         def process_chunk(chunk):
             try:
-                embedding = embedding_models.get_embedding(
-                    self._embedding_model_name, chunk["embedding_text"]
-                )
+                embedding = embedding_model.get_embedding(chunk["embedding_text"])
                 chunk["vector_embedding"] = embedding
                 del chunk["embedding_text"]  # Save space
                 return chunk
@@ -142,11 +143,11 @@ class IndexGenerator:
                 log_handle.error(f"Error generating embedding for chunk {chunk.get('chunk_id')}: {e}")
                 return chunk
 
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             processed_chunks = list(tqdm(executor.map(process_chunk, all_chunks),
                                          total=len(all_chunks),
                                          desc="Creating embeddings"))
-        log_handle.info(f"Generated embeddings for {len(processed_chunks)} chunks")
+        log_handle.info(f"Generated embeddings for {len(processed_chunks)} chunks using {self._config.EMBEDDING_MODEL_TYPE} model")
         return processed_chunks
 
     def _bulk_index_chunks(self, chunks: list[dict]):
