@@ -61,7 +61,8 @@ def add_bookmark_to_pdf(pdf_path, bookmark_name, page_number):
         print(f"An error occurred during file replacement: {e}")
 
 
-file = "/Users/r0j08wt/Downloads/bangalore_hindi.pdf"
+home = os.getenv("HOME")
+file = "%s/Downloads/bangalore_hindi.pdf" % home
 print(f"file: {file}, checksum: {get_file_checksum(file)}")
 
 add_bookmark_to_pdf(file, "new_bookmark", 1)

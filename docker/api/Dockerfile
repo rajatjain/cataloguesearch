@@ -30,8 +30,10 @@ COPY requirements.txt .
 # Install Python dependencies (this layer will be cached unless requirements.txt changes)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the application code (this invalidates cache when code changes, but deps remain cached)
-COPY . .
+# Copy only the necessary application code (this invalidates cache when code changes, but deps remain cached)
+COPY backend/ ./backend/
+COPY configs/ ./configs/
+COPY utils/ ./utils/
 
 # Copy and set up entrypoint script
 COPY docker/api/entrypoint.sh /entrypoint.sh
