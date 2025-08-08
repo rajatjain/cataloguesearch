@@ -68,7 +68,7 @@ def initialize():
     # initialize opensearch client
     get_opensearch_client(config)
 
-@app.get("/metadata", response_model=Dict[str, List[str]])
+@app.get("/api/metadata", response_model=Dict[str, List[str]])
 async def get_metadata_api():
     """
     Returns metadata about the indexed documents.
@@ -110,7 +110,7 @@ class SearchRequest(BaseModel):
     page_number: int = Field(1, ge=1, description="Page number for pagination.")
     enable_reranking : bool = Field(True, description="Enable re-ranking for better relevance.")
 
-@app.post("/search", response_model=Dict[str, Any])
+@app.post("/api/search", response_model=Dict[str, Any])
 async def search(request_data: SearchRequest = Body(...)):
     """
     Handles search requests to the OpenSearch index.
@@ -195,7 +195,7 @@ async def search(request_data: SearchRequest = Body(...)):
         log_handle.exception(f"An error occurred during search request processing: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
-@app.get("/similar-documents/{doc_id}", response_model=Dict[str, Any])
+@app.get("/api/similar-documents/{doc_id}", response_model=Dict[str, Any])
 async def get_similar_documents(doc_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
     """
     Finds and returns documents that are semantically similar to the given document ID.
@@ -224,7 +224,7 @@ async def get_similar_documents(doc_id: str, language: str = Query("hi", enum=["
         log_handle.exception(f"An error occurred while finding similar documents: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
-@app.get("/context/{chunk_id}", response_model=Dict[str, Any])
+@app.get("/api/context/{chunk_id}", response_model=Dict[str, Any])
 async def get_context(chunk_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
     """
     Fetches the context (previous, current, next paragraph) for a given chunk_id.

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
 // --- API SERVICE ---
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = '/api';
 
 const api = {
     getMetadata: async () => {
