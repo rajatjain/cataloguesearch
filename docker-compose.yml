@@ -4,6 +4,7 @@ services:
     build:
       context: .
       dockerfile: docker/opensearch/Dockerfile
+    platform: linux/amd64
     container_name: opensearch-node
     environment:
       - cluster.name=opensearch-cluster
@@ -45,6 +46,7 @@ services:
     build:
       context: .
       dockerfile: docker/api/Dockerfile
+    platform: linux/amd64
     container_name: cataloguesearch-api
     environment:
       - OPENSEARCH_HOST=opensearch
@@ -87,6 +89,7 @@ services:
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
+    platform: linux/amd64
     container_name: cataloguesearch-frontend
     ports:
       - "3000:80"

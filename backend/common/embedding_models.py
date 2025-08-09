@@ -11,16 +11,14 @@ class BaseEmbeddingModel:
         self.config = config
         self.embedding_model_name = config.EMBEDDING_MODEL_NAME
         self.reranker_model_name = config.RERANKING_MODEL_NAME
-        self._embedding_model = None
-        self._reranker_model = None
+        # Eagerly load models on initialization
+        self._embedding_model = self._load_embedding_model()
+        self._reranker_model = self._load_reranker_model()
     
     def get_class(self, config: Dict[str, Any]) -> 'BaseEmbeddingModel':
         return self.__class__(config)
     
     def get_embedding(self, text: str) -> List[float]:
-        if self._embedding_model is None:
-            self._embedding_model = self._load_embedding_model()
-        
         try:
             embedding = self._embedding_model.encode(text).tolist()
             log_handle.debug(f"Generated embedding for text (first 10 dims): {embedding[:10]}...")
@@ -30,13 +28,9 @@ class BaseEmbeddingModel:
             return [0.0] * self._embedding_model.get_sentence_embedding_dimension()
     
     def get_reranking_model(self) -> CrossEncoder:
-        if self._reranker_model is None:
-            self._reranker_model = self._load_reranker_model()
         return self._reranker_model
     
     def get_embedding_dimension(self) -> int:
-        if self._embedding_model is None:
-            self._embedding_model = self._load_embedding_model()
         return self._embedding_model.get_sentence_embedding_dimension()
     
     def _load_embedding_model(self) -> SentenceTransformer:
@@ -173,4 +167,3 @@ def get_embedding_model_factory(config) -> BaseEmbeddingModel:
         return Quantized8BitEmbeddingModel(config)
     else:
         return BaseEmbeddingModel(config)
-
