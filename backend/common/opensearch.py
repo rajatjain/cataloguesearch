@@ -41,9 +41,9 @@ def get_opensearch_config(config: Config) -> dict:
         log_handle.info(f"Open Search settings is {_opensearch_settings}")
 
     # Get embedding dimension from factory pattern
-    embedding_model = get_embedding_model_factory(config)
-    _opensearch_settings['mappings']['properties']['vector_embedding']['dimension'] = \
-        embedding_model.get_embedding_dimension()
+    # embedding_model = get_embedding_model_factory(config)
+    # _opensearch_settings['mappings']['properties']['vector_embedding']['dimension'] = \
+    #     embedding_model.get_embedding_dimension()
 
     return _opensearch_settings
 
@@ -150,7 +150,7 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
         # Re-raise the exception to let the calling code handle the connection failure.
         raise
 
-    create_index_if_not_exists(config, _client)
+    # create_index_if_not_exists(config, _client)
     return _client
 
 

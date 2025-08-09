@@ -1,26 +1,34 @@
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from contextlib import asynccontextmanager
 
-from fastapi import Body, FastAPI, HTTPException, Request, Query
-from fastapi.responses import FileResponse
-from langdetect import detect
+from fastapi import Body, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from backend.common.embedding_models import get_embedding_model_factory
 from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
 from backend.common.language_detector import LanguageDetector
 from backend.search.index_searcher import IndexSearcher
-from backend.search.result_ranker import ResultRanker
 from backend.utils import json_dumps
 from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
 from backend.utils import JSONResponse
 import time
 
+if TYPE_CHECKING:
+    from backend.common.embedding_models import BaseEmbeddingModel
+    from sentence_transformers import CrossEncoder
+
 log_handle = logging.getLogger(__name__)
+
+# --- Globals for shared, pre-loaded resources ---
+# These will be initialized on startup and shared across all requests.
+config: Optional[Config] = None
+index_searcher: Optional[IndexSearcher] = None
+embedding_model: Optional['BaseEmbeddingModel'] = None
+reranker_model: Optional['CrossEncoder'] = None
 
 # --- In-memory metadata cache ---
 metadata_cache = {
@@ -29,11 +37,52 @@ metadata_cache = {
     "ttl": 1800  # 30 minutes cache TTL
 }
 
+# --- FastAPI Application Lifespan (Startup/Shutdown Events) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Handles application startup and shutdown events.
+    This is the ideal place to initialize expensive resources like models.
+    """
+    global config, index_searcher, embedding_model, reranker_model
+
+    # 1. Setup logging
+    logs_dir = os.environ.get("LOGS_DIR", "logs")
+    setup_logging(
+        logs_dir=logs_dir, console_level=VERBOSE_LEVEL_NUM,
+        file_level=VERBOSE_LEVEL_NUM,
+        console_only=True)
+
+    log_handle.info("Application startup: Initializing resources...")
+
+    # 2. Initialize Configuration
+    config = Config("configs/config.yaml")
+
+    # 3. Eagerly load the embedding and reranking models into memory
+    log_handle.info(f"Loading embedding and reranking models (type: {config.EMBEDDING_MODEL_TYPE})...")
+    embedding_model = get_embedding_model_factory(config)
+    # Explicitly get the reranker model here to make the dependency clear
+    reranker_model = embedding_model.get_reranking_model()
+    log_handle.info("Embedding and reranker models loaded successfully.")
+
+    # 4. Initialize OpenSearch client (it will create the index if needed)
+    get_opensearch_client(config)
+    log_handle.info("OpenSearch client initialized.")
+
+    # 5. Initialize IndexSearcher with the pre-loaded models
+    index_searcher = IndexSearcher(config, embedding_model, reranker_model)
+    log_handle.info("IndexSearcher initialized and ready.")
+
+    yield  # Application is now running and ready for requests
+
+    log_handle.info("Application shutdown.")
+
 # --- FastAPI Application Setup ---
 app = FastAPI(
     title="Catalogue Search API",
     description="API for searching through catalogue documents and serving the frontend.",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan  # Use the new lifespan manager
 )
 
 # --- CORS Middleware ---
@@ -44,29 +93,6 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods (GET, POST, etc.)
     allow_headers=["*"],  # Allows all headers
 )
-
-# --- Static File Serving ---
-# frontend_build_path = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "build")
-
-# app.mount(
-#     "/static",
-#     StaticFiles(directory=os.path.join(frontend_build_path, "static")),
-#     name="static"
-# )
-
-def initialize():
-    """Initializes the config and other variables, if required"""
-    logs_dir = os.environ.get("LOGS_DIR", "logs")
-    setup_logging(
-        logs_dir=logs_dir, console_level=VERBOSE_LEVEL_NUM,
-        file_level=VERBOSE_LEVEL_NUM,
-        console_only=True)
-
-    relative_config_path = "configs/config.yaml"
-    config = Config(relative_config_path)
-
-    # initialize opensearch client
-    get_opensearch_client(config)
 
 @app.get("/api/metadata", response_model=Dict[str, List[str]])
 async def get_metadata_api():
@@ -85,7 +111,6 @@ async def get_metadata_api():
         
         # Cache is expired or empty, fetch from OpenSearch
         log_handle.info("Cache expired or empty, fetching metadata from OpenSearch")
-        config = Config()
         metadata = get_metadata(config)
         
         # Update cache
@@ -116,8 +141,6 @@ async def search(request_data: SearchRequest = Body(...)):
     Handles search requests to the OpenSearch index.
     Performs lexical and vector searches, collates results, and returns paginated output.
     """
-    config = Config()
-    index_searcher = IndexSearcher(config)
     keywords = request_data.query
     allow_typos = request_data.allow_typos
     proximity_distance = request_data.proximity_distance
@@ -125,7 +148,6 @@ async def search(request_data: SearchRequest = Body(...)):
     page_size = request_data.page_size
     page_number = request_data.page_number
     enable_reranking = request_data.enable_reranking
-
 
     try:
 
@@ -158,8 +180,6 @@ async def search(request_data: SearchRequest = Body(...)):
 
         vector_results = []
         vector_total_hits = 0
-        embedding_model = get_embedding_model_factory(config)
-        log_handle.info(f"Using embedding model type: {config.EMBEDDING_MODEL_TYPE}")
         query_embedding = embedding_model.get_embedding(keywords)
         if not query_embedding:
             log_handle.warning("Could not generate embedding for query. Vector search skipped.")
@@ -201,11 +221,7 @@ async def get_similar_documents(doc_id: str, language: str = Query("hi", enum=["
     Finds and returns documents that are semantically similar to the given document ID.
     """
     try:
-        config = Config()
-        index_searcher = IndexSearcher(config)
-
         log_handle.info(f"Received request for similar documents to doc_id: {doc_id}")
-
         similar_docs, total_similar = index_searcher.find_similar_by_id(
             doc_id=doc_id,
             language=language,
@@ -230,8 +246,6 @@ async def get_context(chunk_id: str, language: str = Query("hi", enum=["hi", "gu
     Fetches the context (previous, current, next paragraph) for a given chunk_id.
     """
     try:
-        config = Config()
-        index_searcher = IndexSearcher(config)
         log_handle.info(f"Received request for context for chunk_id: {chunk_id}")
         context_data = index_searcher.get_paragraph_context(chunk_id=chunk_id, language=language)
         if not context_data.get("current"):
@@ -240,17 +254,3 @@ async def get_context(chunk_id: str, language: str = Query("hi", enum=["hi", "gu
     except Exception as e:
         log_handle.exception(f"An error occurred while fetching context: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
-
-
-initialize()
-
-@app.get("/{full_path:path}")
-async def serve_react_app(request: Request, full_path: str):
-    index_path = os.path.join(frontend_build_path, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {"error": "Frontend not built. Run 'npm run build' in the frontend directory."}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)

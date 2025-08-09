@@ -23,4 +23,4 @@ vector_embeddings:
   embedding_model: BAAI/bge-m3
   reranking_model: BAAI/bge-reranker-v2-m3
   # Supported types: base, fp16, quantized_8bit
-  embedding_model_type: quantized_8bit
+  embedding_model_type: fp16

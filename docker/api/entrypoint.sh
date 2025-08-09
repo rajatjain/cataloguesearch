@@ -20,26 +20,6 @@ if [ ! -d "/app/indic_nlp_resources" ]; then
     echo -e "${GREEN}Indic NLP resources downloaded successfully${NC}"
 fi
 
-# Download ML models if not cached
-echo -e "${YELLOW}Initializing ML models...${NC}"
-python -c "
-import os
-from sentence_transformers import SentenceTransformer, CrossEncoder
-from backend.config import Config
-from backend.common.embedding_models import get_embedding_model_factory
-
-print('Loading embedding model...')
-config = Config('configs/config.yaml')
-embedding_model = get_embedding_model_factory(config)
-# Trigger model loading
-embedding_model.get_embedding('test')
-print('Embedding model loaded successfully')
-
-print('Loading reranking model...')
-reranker = embedding_model.get_reranking_model()
-print('Reranking model loaded successfully')
-" || echo -e "${YELLOW}Model initialization failed, will retry at runtime${NC}"
-
 # Wait for OpenSearch to be ready
 echo -e "${YELLOW}Waiting for OpenSearch to be ready...${NC}"
 while ! curl -f -s "http://${OPENSEARCH_HOST}:${OPENSEARCH_PORT}/_cluster/health" > /dev/null; do
@@ -47,17 +27,6 @@ while ! curl -f -s "http://${OPENSEARCH_HOST}:${OPENSEARCH_PORT}/_cluster/health
     sleep 5
 done
 echo -e "${GREEN}OpenSearch is ready!${NC}"
-
-# Initialize OpenSearch client and create index if needed
-echo -e "${YELLOW}Initializing OpenSearch client...${NC}"
-python -c "
-from backend.config import Config
-from backend.common.opensearch import get_opensearch_client
-
-config = Config('configs/config.yaml')
-client = get_opensearch_client(config)
-print('OpenSearch client initialized successfully')
-" || echo -e "${RED}OpenSearch client initialization failed${NC}"
 
 echo -e "${GREEN}Initialization complete. Starting API server...${NC}"
 

@@ -10,18 +10,20 @@ from typing import List, Dict, Any, Tuple
 from sentence_transformers import CrossEncoder
 
 from backend.common.opensearch import get_opensearch_config, get_opensearch_client
-from backend.common.embedding_models import get_embedding_model_factory
+from backend.common.embedding_models import BaseEmbeddingModel
 from backend.utils import json_dumps
 
 log_handle = logging.getLogger(__name__)
 
 class IndexSearcher:
-    def __init__(self, config):
+    def __init__(self, config, embedding_model: BaseEmbeddingModel, reranker_model: CrossEncoder):
         """
         Initializes the IndexSearcher with OpenSearch client and configuration.
 
         Args:
             config: Configuration object containing OpenSearch settings.
+            embedding_model: A pre-loaded embedding model instance.
+            reranker_model: A pre-loaded reranker model instance.
         """
         self._config = config
         self._index_name = config.OPENSEARCH_INDEX_NAME
@@ -39,14 +41,8 @@ class IndexSearcher:
         }
         self._vector_field = "vector_embedding"
         self._bookmark_field = "bookmarks"
-        self._metadata_prefix = "metadata"
-        try:
-            embedding_model = get_embedding_model_factory(self._config)
-            self._reranker = embedding_model.get_reranking_model()
-            log_handle.info(f"Using embedding model type '{self._config.EMBEDDING_MODEL_TYPE}' for reranking")
-        except Exception as e:
-            traceback.print_exc()
-            self._reranker = None
+        self._metadata_prefix = "metadata" 
+        self._reranker = reranker_model
 
         log_handle.info(f"Initialized IndexSearcher")
 
@@ -375,7 +371,7 @@ class IndexSearcher:
             # Use very small batch size for e2-medium
             rerank_scores = self._reranker.predict(
                 sentence_pairs,
-                batch_size=4,  # Very small batch size for low-memory instances
+                batch_size=8,  # Increased batch size for better performance on 8GB RAM
                 show_progress_bar=False  # Only disable progress bar
             )
 

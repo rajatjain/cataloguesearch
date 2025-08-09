@@ -78,10 +78,12 @@ services:
       opensearch:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/metadata"]
+      # Use a lightweight healthcheck endpoint to avoid timeouts during model loading
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 5
+      start_period: 90s # Give the container ample time to load models before starting healthchecks
     restart: ${RESTART_POLICY:-no}
 
   cataloguesearch-frontend:
