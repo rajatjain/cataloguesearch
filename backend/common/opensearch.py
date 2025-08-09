@@ -150,7 +150,7 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
         # Re-raise the exception to let the calling code handle the connection failure.
         raise
 
-    create_index_if_not_exists(config, _client)
+    # create_index_if_not_exists(config, _client)
     return _client
 
 

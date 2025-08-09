@@ -45,15 +45,6 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-# --- Static File Serving ---
-# frontend_build_path = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "build")
-
-# app.mount(
-#     "/static",
-#     StaticFiles(directory=os.path.join(frontend_build_path, "static")),
-#     name="static"
-# )
-
 def initialize():
     """Initializes the config and other variables, if required"""
     logs_dir = os.environ.get("LOGS_DIR", "logs")
@@ -68,7 +59,7 @@ def initialize():
     # initialize opensearch client
     get_opensearch_client(config)
 
-@app.get("/metadata", response_model=Dict[str, List[str]])
+@app.get("/api/metadata", response_model=Dict[str, List[str]])
 async def get_metadata_api():
     """
     Returns metadata about the indexed documents.
@@ -110,7 +101,7 @@ class SearchRequest(BaseModel):
     page_number: int = Field(1, ge=1, description="Page number for pagination.")
     enable_reranking : bool = Field(True, description="Enable re-ranking for better relevance.")
 
-@app.post("/search", response_model=Dict[str, Any])
+@app.post("/api/search", response_model=Dict[str, Any])
 async def search(request_data: SearchRequest = Body(...)):
     """
     Handles search requests to the OpenSearch index.
@@ -125,7 +116,6 @@ async def search(request_data: SearchRequest = Body(...)):
     page_size = request_data.page_size
     page_number = request_data.page_number
     enable_reranking = request_data.enable_reranking
-
 
     try:
 
@@ -195,7 +185,7 @@ async def search(request_data: SearchRequest = Body(...)):
         log_handle.exception(f"An error occurred during search request processing: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
-@app.get("/similar-documents/{doc_id}", response_model=Dict[str, Any])
+@app.get("/api/similar-documents/{doc_id}", response_model=Dict[str, Any])
 async def get_similar_documents(doc_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
     """
     Finds and returns documents that are semantically similar to the given document ID.
@@ -243,14 +233,3 @@ async def get_context(chunk_id: str, language: str = Query("hi", enum=["hi", "gu
 
 
 initialize()
-
-@app.get("/{full_path:path}")
-async def serve_react_app(request: Request, full_path: str):
-    index_path = os.path.join(frontend_build_path, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {"error": "Frontend not built. Run 'npm run build' in the frontend directory."}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)

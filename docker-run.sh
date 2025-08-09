@@ -72,14 +72,17 @@ case $ACTION in
         docker-compose --env-file "$ENV_FILE" up -d --no-deps cataloguesearch-frontend
         echo "Frontend service restarted. Available at: http://localhost:3000"
         ;;
-    "push")
-        echo "Pushing images to Docker Hub (jain9rajat/cataloguesearch)..."
-        echo "This will push the images defined in docker-compose.yml."
-        echo "Ensure you have run the 'build' command first and are logged in with 'docker login'."
-        docker-compose --env-file "$ENV_FILE" push
-        echo "Images pushed successfully."
-        ;;
     "logs")
         docker-compose --env-file "$ENV_FILE" logs -f
+        ;;
+    "push")
+        echo "Building and pushing images to Docker Hub (jain9rajat/cataloguesearch)..."
+        echo "This will build the images and then push them to the repository defined in docker-compose.yml."
+        echo "Please ensure you are logged in with 'docker login'."
+
+        # Always build before pushing to ensure images are created and tagged correctly.
+        docker-compose --env-file "$ENV_FILE" build
+        docker-compose --env-file "$ENV_FILE" push
+        echo "Images pushed successfully."
         ;;
 esac

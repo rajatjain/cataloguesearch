@@ -69,7 +69,7 @@ class BaseEmbeddingModel:
                 log_handle.error(f"Failed to load reranker model '{self.reranker_model_name}': {e}")
                 raise
         else:
-            log_handle.info(f"Using pre-loaded reranker model: {self._reranker_model_name}...")
+            log_handle.info(f"Using pre-loaded reranker model: {self.reranker_model_name}...")
         return _models[model_key]
 
 class FP16EmbeddingModel(BaseEmbeddingModel):
@@ -113,7 +113,7 @@ class FP16EmbeddingModel(BaseEmbeddingModel):
                 log_handle.error(f"Failed to load FP16 reranker model '{self.reranker_model_name}': {e}")
                 raise
         else:
-            log_handle.info(f"Using pre-loaded reranker model: {self._reranker_model_name}...")
+            log_handle.info(f"Using pre-loaded reranker model: {self.reranker_model_name}...")
         return _models[model_key]
 
 class Quantized8BitEmbeddingModel(BaseEmbeddingModel):
@@ -155,7 +155,7 @@ class Quantized8BitEmbeddingModel(BaseEmbeddingModel):
                 log_handle.error(f"Failed to load reranker model '{self.reranker_model_name}': {e}")
                 raise
         else:
-            log_handle.info(f"Using pre-loaded reranker model: {self._reranker_model_name}...")
+            log_handle.info(f"Using pre-loaded reranker model: {self.reranker_model_name}...")
         return _models[model_key]
 
 def get_embedding_model_factory(config) -> BaseEmbeddingModel:

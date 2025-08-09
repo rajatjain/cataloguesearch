@@ -138,8 +138,8 @@ class PDFProcessor:
         extracted_data.sort(key=lambda x: x[0])
 
         # Write it in tmp_folder
-        tmp_folder = "/Users/r0j08wt/tmp/cataloguesearch_files/%s" % (
-            os.path.splitext(os.path.basename(pdf_file))[0])
+        tmp_folder = "%s/tmp/cataloguesearch_files/%s" % (
+            os.path.splitext(os.getenv("HOME"), os.path.basename(pdf_file))[0])
         shutil.rmtree(tmp_folder, ignore_errors=True)
         os.makedirs(tmp_folder)
         for page_num, paragraphs in extracted_data:

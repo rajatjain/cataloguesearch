@@ -32,9 +32,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy Indic NLP resources from the local directory into the image
 COPY indic_nlp_resources /app/indic_nlp_resources
-
-# Copy the application code (this invalidates cache when code changes, but deps remain cached)
-COPY . .
+COPY backend/ ./backend/
+COPY configs/ ./configs/
+COPY utils/ ./utils/
 
 # Copy and set up entrypoint script
 COPY docker/api/entrypoint.sh /entrypoint.sh
@@ -56,7 +56,7 @@ EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/metadata || exit 1
+    CMD curl -f http://localhost:8000/api/metadata || exit 1
 
 # Use entrypoint script
 ENTRYPOINT ["/entrypoint.sh"]
