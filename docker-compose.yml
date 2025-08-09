@@ -1,5 +1,6 @@
 services:
   opensearch:
+    image: jain9rajat/cataloguesearch:opensearch
     build:
       context: .
       dockerfile: docker/opensearch/Dockerfile
@@ -40,6 +41,7 @@ services:
     restart: ${RESTART_POLICY:-no}
 
   cataloguesearch-api:
+    image: jain9rajat/cataloguesearch:api
     build:
       context: .
       dockerfile: docker/api/Dockerfile
@@ -81,6 +83,7 @@ services:
     restart: ${RESTART_POLICY:-no}
 
   cataloguesearch-frontend:
+    image: jain9rajat/cataloguesearch:frontend
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile

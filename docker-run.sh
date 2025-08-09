@@ -17,9 +17,9 @@ if [[ "$ENV" != "local" && "$ENV" != "prod" ]]; then
 fi
 
 # Validate action
-if [[ "$ACTION" != "up" && "$ACTION" != "down" && "$ACTION" != "build" && "$ACTION" != "logs" && "$ACTION" != "build-api" && "$ACTION" != "restart-api" && "$ACTION" != "build-frontend" && "$ACTION" != "restart-frontend" ]]; then
-    echo "Error: Action must be 'up', 'down', 'build', 'logs', 'build-api', 'restart-api', 'build-frontend', or 'restart-frontend'"
-    echo "Usage: $0 [local|prod] [up|down|build|logs|build-api|restart-api|build-frontend|restart-frontend]"
+if [[ "$ACTION" != "up" && "$ACTION" != "down" && "$ACTION" != "build" && "$ACTION" != "logs" && "$ACTION" != "build-api" && "$ACTION" != "restart-api" && "$ACTION" != "build-frontend" && "$ACTION" != "restart-frontend" && "$ACTION" != "push" ]]; then
+    echo "Error: Action must be 'up', 'down', 'build', 'logs', 'build-api', 'restart-api', 'build-frontend', 'restart-frontend', or 'push'"
+    echo "Usage: $0 [local|prod] [up|down|build|logs|build-api|restart-api|build-frontend|restart-frontend|push]"
     exit 1
 fi
 
@@ -71,6 +71,13 @@ case $ACTION in
         docker-compose --env-file "$ENV_FILE" build cataloguesearch-frontend
         docker-compose --env-file "$ENV_FILE" up -d --no-deps cataloguesearch-frontend
         echo "Frontend service restarted. Available at: http://localhost:3000"
+        ;;
+    "push")
+        echo "Pushing images to Docker Hub (jain9rajat/cataloguesearch)..."
+        echo "This will push the images defined in docker-compose.yml."
+        echo "Ensure you have run the 'build' command first and are logged in with 'docker login'."
+        docker-compose --env-file "$ENV_FILE" push
+        echo "Images pushed successfully."
         ;;
     "logs")
         docker-compose --env-file "$ENV_FILE" logs -f
