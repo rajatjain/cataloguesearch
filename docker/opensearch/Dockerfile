@@ -2,7 +2,8 @@ FROM opensearchproject/opensearch:3.0.0
 
 # Install required plugins
 RUN /usr/share/opensearch/bin/opensearch-plugin install --batch analysis-icu && \
-    /usr/share/opensearch/bin/opensearch-plugin install --batch repository-gcs
+    /usr/share/opensearch/bin/opensearch-plugin install --batch repository-gcs \
+    /usr/share/opensearch/bin/opensearch-plugin install --batch repository-s3
 
 # Install jq for JSON parsing
 USER root

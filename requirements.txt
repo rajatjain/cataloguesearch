@@ -2,6 +2,10 @@
 PyMuPDF==1.24.5 # For PDF parsing and text extraction
 pytesseract==0.3.10 # Python wrapper for Tesseract OCR
 opensearch-py==2.5.0 # OpenSearch Python client
+# Install PyTorch CPU first to avoid CUDA version
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.0.0,<3.0.0
+torchvision>=0.15.0
 sentence-transformers==2.7.0 # For generating vector embeddings
 pyyaml==6.0.1 # For YAML file parsing
 pdf2image==1.17.0

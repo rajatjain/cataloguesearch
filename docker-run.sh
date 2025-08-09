@@ -17,9 +17,9 @@ if [[ "$ENV" != "local" && "$ENV" != "prod" ]]; then
 fi
 
 # Validate action
-if [[ "$ACTION" != "up" && "$ACTION" != "down" && "$ACTION" != "build" && "$ACTION" != "logs" && "$ACTION" != "build-api" && "$ACTION" != "restart-api" && "$ACTION" != "build-frontend" && "$ACTION" != "restart-frontend" ]]; then
-    echo "Error: Action must be 'up', 'down', 'build', 'logs', 'build-api', 'restart-api', 'build-frontend', or 'restart-frontend'"
-    echo "Usage: $0 [local|prod] [up|down|build|logs|build-api|restart-api|build-frontend|restart-frontend]"
+if [[ "$ACTION" != "up" && "$ACTION" != "down" && "$ACTION" != "build" && "$ACTION" != "logs" && "$ACTION" != "build-api" && "$ACTION" != "restart-api" && "$ACTION" != "build-frontend" && "$ACTION" != "restart-frontend" && "$ACTION" != "push" ]]; then
+    echo "Error: Action must be 'up', 'down', 'build', 'logs', 'build-api', 'restart-api', 'build-frontend', 'restart-frontend', or 'push'"
+    echo "Usage: $0 [local|prod] [up|down|build|logs|build-api|restart-api|build-frontend|restart-frontend|push]"
     exit 1
 fi
 
@@ -74,5 +74,31 @@ case $ACTION in
         ;;
     "logs")
         docker-compose --env-file "$ENV_FILE" logs -f
+        ;;
+    "push")
+        echo "Building and pushing images to Docker Hub..."
+        echo ""
+        
+        # First build images using docker-compose
+        echo "Step 1: Building images locally..."
+        docker-compose --env-file "$ENV_FILE" build
+        echo ""
+        
+        # Tag images for Docker Hub
+        echo "Step 2: Tagging images for Docker Hub..."
+        docker tag cataloguesearch-opensearch jain9rajat/cataloguesearch:opensearch
+        docker tag cataloguesearch-cataloguesearch-api jain9rajat/cataloguesearch:api
+        docker tag cataloguesearch-cataloguesearch-frontend jain9rajat/cataloguesearch:frontend
+        echo ""
+        
+        # Push to Docker Hub
+        echo "Step 3: Pushing images to Docker Hub..."
+        echo "Please make sure you're logged in to Docker Hub (run 'docker login' if needed)"
+        echo ""
+        docker push jain9rajat/cataloguesearch:opensearch
+        docker push jain9rajat/cataloguesearch:api
+        docker push jain9rajat/cataloguesearch:frontend
+        echo ""
+        echo "All images pushed successfully to jain9rajat/cataloguesearch!"
         ;;
 esac

@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/opensearch/Dockerfile
-    platform: linux/arm64
+    platform: linux/amd64
     container_name: opensearch-node
     environment:
       - cluster.name=opensearch-cluster
@@ -14,6 +14,7 @@ services:
       - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@Password123!}"
       - plugins.security.disabled=true
       - network.host=0.0.0.0
+      - path.repo=/tmp/snapshots
       # GCS Configuration
       - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-opensearch-snapshots}
       - GCS_SERVICE_ACCOUNT_KEY_PATH=/usr/share/opensearch/config/gcs-key.json
@@ -27,6 +28,7 @@ services:
         hard: 65536
     volumes:
       - opensearch-data:/usr/share/opensearch/data
+      - ./snapshots:/tmp/snapshots
       - ${GCS_SERVICE_ACCOUNT_KEY_PATH:-./credentials/gcs-key.json}:/usr/share/opensearch/config/gcs-key.json:ro
     ports:
       - "9200:9200"
@@ -44,7 +46,7 @@ services:
     build:
       context: .
       dockerfile: docker/api/Dockerfile
-    platform: linux/arm64
+    platform: linux/amd64
     container_name: cataloguesearch-api
     environment:
       - OPENSEARCH_HOST=opensearch
@@ -86,7 +88,7 @@ services:
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
-    platform: linux/arm64
+    platform: linux/amd64
     container_name: cataloguesearch-frontend
     ports:
       - "3000:80"
