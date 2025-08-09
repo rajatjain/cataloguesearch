@@ -30,6 +30,9 @@ COPY requirements.txt .
 # Install Python dependencies (this layer will be cached unless requirements.txt changes)
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy Indic NLP resources from the local directory into the image
+COPY indic_nlp_resources /app/indic_nlp_resources
+
 # Copy the application code (this invalidates cache when code changes, but deps remain cached)
 COPY . .
 

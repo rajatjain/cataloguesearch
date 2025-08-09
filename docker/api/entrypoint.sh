@@ -12,14 +12,6 @@ echo -e "${GREEN}Starting CatalogueSearch API initialization...${NC}"
 # Create necessary directories
 mkdir -p /app/data/pdf /app/data/text /app/data/db /app/logs
 
-# Download Indic NLP resources if not present
-if [ ! -d "/app/indic_nlp_resources" ]; then
-    echo -e "${YELLOW}Downloading Indic NLP resources...${NC}"
-    cd /app
-    git clone https://github.com/anoopkunchukuttan/indic_nlp_resources.git
-    echo -e "${GREEN}Indic NLP resources downloaded successfully${NC}"
-fi
-
 # Download ML models if not cached
 echo -e "${YELLOW}Initializing ML models...${NC}"
 python -c "

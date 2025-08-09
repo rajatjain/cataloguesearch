@@ -126,3 +126,6 @@ ehthumbs_vista.db
 *credentials*json
 
 certs
+snapshots
+snapshots*tar*gz
+indic_nlp_*
