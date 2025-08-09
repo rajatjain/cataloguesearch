@@ -51,7 +51,7 @@ def initialize():
     setup_logging(
         logs_dir=logs_dir, console_level=VERBOSE_LEVEL_NUM,
         file_level=VERBOSE_LEVEL_NUM,
-        console_only=True)
+        console_only=False)
 
     relative_config_path = "configs/config.yaml"
     config = Config(relative_config_path)

@@ -128,7 +128,8 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
                 'host': config.OPENSEARCH_HOST,
                 'port': config.OPENSEARCH_PORT
             }],
-            use_ssl=False
+            use_ssl=False,
+            timeout=60
         )
 
         # Ping the server to confirm the connection and credentials are valid
