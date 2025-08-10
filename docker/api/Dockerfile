@@ -37,8 +37,9 @@ RUN apt-get update && apt-get install -y \
 # Copy only the Python packages and essential binaries from the builder stage
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 # Only copy essential Python binaries, not build tools
-COPY --from=builder /usr/local/bin/python3 /usr/local/bin/python3
-COPY --from=builder /usr/local/bin/pip3 /usr/local/bin/pip3
+  COPY --from=builder /usr/local/bin/python* /usr/local/bin/
+  COPY --from=builder /usr/local/bin/pip* /usr/local/bin/
+  COPY --from=builder /usr/local/bin/uvicorn* /usr/local/bin/
 
 # Copy Indic NLP resources from the local directory into the image
 COPY indic_nlp_resources /app/indic_nlp_resources

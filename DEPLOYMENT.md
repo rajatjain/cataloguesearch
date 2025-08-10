@@ -1,105 +1,120 @@
-# OpenSearch 3.0.0 Docker Setup
+# CatalogueSearch Deployment Guide
 
-This repository contains a unified Docker setup for OpenSearch 3.0.0 that works on both laptop and production (GCP ec2-medium) environments.
+This document outlines the process for deploying the CatalogueSearch application, from running it locally for development to deploying it on a production VM.
 
-## Features
+## Key Components
 
-- **OpenSearch 3.0.0** with single-node configuration
-- **HTTPS enabled** on port 9200
-- **Installed plugins:**
-  - analysis-icu (International Components for Unicode)
-  - repository-gcs (Google Cloud Storage for snapshots)
-- **Automatic GCS snapshot restoration** on startup
-- **OpenSearch Dashboards** on port 5601
-- **Unified configuration** for both laptop and production
+The deployment architecture consists of four main services working together:
 
-## Directory Structure
+*   **OpenSearch**: A powerful, open-source search and analytics engine that stores and indexes all the document chunks. It enables fast and complex queries, including both traditional text search and modern vector-based semantic search.
 
-```
-.
-├── docker/
-│   └── opensearch/
-│       ├── Dockerfile          # Custom OpenSearch image with plugins
-│       ├── entrypoint.sh       # Custom entrypoint script
-│       └── restore-snapshot.sh # GCS snapshot restoration script
-├── docker-compose.yml          # Main compose file
-├── .env.laptop                 # Laptop environment variables
-├── .env.prod                   # Production environment variables
-├── setup.sh                    # Setup and deployment script
-├── certs/                      # SSL certificates (generated)
-└── credentials/                # GCS service account keys (you provide)
-```
+*   **API (cataloguesearch-api)**: The FastAPI-based backend service that handles all business logic, from search queries to metadata retrieval. It communicates with OpenSearch to fetch data and serves it to the frontend application.
 
-## Prerequisites
+*   **Frontend (cataloguesearch-frontend)**: The user-facing web interface that provides the search bar, result display, and all interactive elements. It allows users to easily search for and explore the indexed catalogue documents.
 
-1. **Docker & Docker Compose** installed
-2. **GCS Service Account** with permissions to read/write snapshots
-3. **OpenSSL** (for certificate generation)
+*   **ML Models**: These are the machine learning models responsible for understanding language, creating vector embeddings, and re-ranking search results. We use the ONNX (Open Neural Network Exchange) format because it is optimized for fast inference on CPUs, significantly improving performance and reducing resource usage compared to standard PyTorch ML models.
 
-## Quick Start
+---
 
-### 1. Clone and Setup
+## 1. Local Development
+
+This section describes how to build and run the entire application stack on your local machine for development and testing.
+
+### Building the Docker Images
+
+The `docker-run.sh` script simplifies building the images. The API image will be built with the ONNX models included for immediate use.
 
 ```bash
-# Clone the repository
-git clone <your-repo>
-cd <your-repo>
+# Build all service images (api, frontend, opensearch)
+./docker-run.sh local build
 
-# Make setup script executable
-chmod +x setup.sh
-
-# Run setup
-./setup.sh
+# Or, to build only a specific service (e.g., the API)
+./docker-run.sh local build-api
 ```
 
-### 2. Add GCS Credentials
+### Starting Local Containers
 
-Place your GCS service account JSON keys in the `credentials/` directory:
-
-- `credentials/gcs-key-dev.json` - For laptop profile
-- `credentials/gcs-key-prod.json` - For production profile
-
-### 3. Run OpenSearch
-
-#### Option A: Using the setup script
+To start all services, use the `up` command. This will also build any images that don't already exist.
 
 ```bash
-./setup.sh
-# Select option 1 for laptop or option 2 for production
+# Start all services in the background
+./docker-run.sh local up
 ```
 
-#### Option B: Manual Docker Compose
+Once running, you can access the services:
+-   **Frontend**: `http://localhost:3000`
+-   **API**: `http://localhost:8000`
+-   **OpenSearch**: `http://localhost:9200`
+
+To view logs or stop the services:
 
 ```bash
-# For laptop profile
-docker-compose --env-file .env.laptop up -d --build
+# View logs for all running containers
+./docker-run.sh local logs
 
-# For production profile
-docker-compose --env-file .env.prod up -d --build
+# Stop and remove all containers
+./docker-run.sh local down
 ```
-
-## Access Points
-
-- **OpenSearch API:** https://localhost:9200
-- **OpenSearch Dashboards:** https://localhost:5601
-
-**Default Credentials:**
-- Username: `admin`
-- Password: `Admin@123456`
 
 ## Configuration
 
 ### Environment Variables
 
 #### Laptop Profile (.env.laptop)
-- Memory: 512MB
-- GCS Bucket: opensearch-snapshots-dev
-- Restart Policy: no
+Prepare the file `.env.local` and keep it in the home directory. Its contents should be. 
+
+**NOTE: MAKE SURE THAT THESE FILES ARE NOT CHECKED INTO GIT.**
+
+```
+➜  cat .env.local
+# Laptop Environment Configuration
+
+# Memory settings for local
+OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+
+# Security
+OPENSEARCH_INITIAL_ADMIN_PASSWORD=Admin@Password123!
+
+# Container restart policy
+RESTART_POLICY=no
+
+# Environment identifier
+ENVIRONMENT=local
+
+# API Configuration
+LOG_LEVEL=VERBOSE
+API_HOST=0.0.0.0
+API_PORT=8000
+
+# For CLI usage against Docker OpenSearch
+OPENSEARCH_HOST=localhost
+```
 
 #### Production Profile (.env.prod)
-- Memory: 2GB
-- GCS Bucket: opensearch-snapshots-prod
-- Restart Policy: unless-stopped
+```
+➜  cat .env.prod
+# Production Environment Configuration (GCP ec2-medium)
+
+# Memory settings for production
+OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx2g
+
+# Security
+OPENSEARCH_INITIAL_ADMIN_PASSWORD=Admin@Password123!
+
+# Container restart policy
+RESTART_POLICY=unless-stopped
+
+# Environment identifier
+ENVIRONMENT=prod
+
+# API Configuration
+LOG_LEVEL=VERBOSE
+API_HOST=0.0.0.0
+API_PORT=8000
+
+# For CLI usage (not applicable in prod, but kept for consistency)
+OPENSEARCH_HOST=opensearch%
+```
 
 ## GCS Snapshot Management
 
@@ -113,15 +128,15 @@ docker-compose --env-file .env.prod up -d --build
 
 ```bash
 # Create a snapshot
-curl -k -u admin:Admin@123456 -X PUT \
+curl -k -X PUT \
   "https://localhost:9200/_snapshot/gcs-repository/snapshot_$(date +%Y%m%d_%H%M%S)?wait_for_completion=true"
 
 # List snapshots
-curl -k -u admin:Admin@123456 \
+curl -k \
   "https://localhost:9200/_snapshot/gcs-repository/_all?pretty"
 
 # Restore a specific snapshot
-curl -k -u admin:Admin@123456 -X POST \
+curl -k -X POST \
   "https://localhost:9200/_snapshot/gcs-repository/snapshot_name/_restore"
 ```
 
@@ -146,8 +161,8 @@ docker-compose down
 # All services
 docker-compose logs -f
 
-# OpenSearch only
-docker-compose logs -f opensearch
+# API Server only
+docker-compose logs -f cataloguesearch-api
 
 # Check snapshot restoration logs
 docker logs opensearch-node
@@ -158,56 +173,98 @@ docker logs opensearch-node
 docker-compose build --no-cache
 ```
 
-## Production Deployment on GCP
+## Production Deployment
 
-1. **SSH into your GCP instance:**
+### Prerequisites
+- Cloud instance (GCP, AWS, Azure, etc.) with SSH access
+- Port 80 open for web access
+- At least 4GB RAM and 20GB disk space
+
+### Step 1: Prepare the VM
 ```bash
-gcloud compute ssh [INSTANCE_NAME] --zone=[ZONE]
+# Ensure you have these files ready for transfer
+scripts/install-docker.sh
+docker-compose.prod.yml
+snapshots/  # If you have OpenSearch snapshots to restore
 ```
 
-2. **Install Docker:**
+### Step 2: Copy Files to Cloud Instance
 ```bash
-sudo apt-get update
-sudo apt-get install -y docker.io docker-compose
-sudo usermod -aG docker $USER
+# Copy installation script and production config to your cloud instance
+gcloud compute scp scripts/install-docker.sh user@your-instance-ip:. --zone=<zone>
+gcloud compute scp docker-compose.prod.yml user@your-instance-ip:. --zone=<zone>
+gcloud compute scp -r snapshots/ user@your-instance-ip:.  # Optional: if you have snapshots
+```
+
+### Step 3: SSH and Install Docker
+```bash
+# SSH into your cloud instance
+gcloud compute ssh root@your-instance-ip
+
+# Make install script executable and run it
+chmod +x install-docker.sh
+sudo ./install-docker.sh
+
+# Log out and log back in (or run newgrp docker) for group changes to take effect
 newgrp docker
 ```
 
-3. **Set system parameters:**
+### Step 4: Set System Parameters
 ```bash
+# Required for OpenSearch
 sudo sysctl -w vm.max_map_count=262144
 echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
 ```
 
-4. **Clone and setup:**
+### Step 5: Start Services
 ```bash
-git clone <your-repo>
-cd <your-repo>
-./setup.sh
-# Select option 2 for production
+# Start all services using the production configuration
+docker-compose -f docker-compose.prod.yml up -d
+
+# Check that all services are running
+docker-compose -f docker-compose.prod.yml ps
+
+# View logs if needed
+docker-compose -f docker-compose.prod.yml logs -f
 ```
 
-5. **Configure firewall (if needed):**
+### Step 6: Verify Deployment
 ```bash
-gcloud compute firewall-rules create opensearch-allow \
-  --allow tcp:9200,tcp:5601 \
-  --source-ranges=[YOUR_IP_RANGE] \
-  --target-tags=opensearch
+# Check that the frontend is accessible
+curl -I http://localhost
+
+# Check that the API is responding
+curl http://localhost/api/metadata
+
+# Check OpenSearch health
+curl http://localhost:9200/_cluster/health
+```
+
+### Step 7: Restore Snapshots (Optional)
+If you have OpenSearch snapshots to restore:
+```bash
+# Copy snapshot files into the OpenSearch container
+docker cp snapshots/ opensearch-node:/tmp/snapshots/
+
+# Create snapshot repository
+curl -X PUT "localhost:9200/_snapshot/my_backup" -H 'Content-Type: application/json' -d'
+{
+  "type": "fs",
+  "settings": {
+    "location": "/tmp/snapshots"
+  }
+}'
+
+# Restore from snapshot
+curl -X POST "localhost:9200/_snapshot/my_backup/snapshot_1/_restore" -H 'Content-Type: application/json' -d'
+{
+  "indices": "cataloguesearch_prod",
+  "ignore_unavailable": true,
+  "include_global_state": false
+}'
 ```
 
 ## Troubleshooting
-
-### Certificate Issues
-If you encounter SSL certificate errors, regenerate certificates:
-```bash
-rm -rf certs/*
-./setup.sh
-```
-
-### GCS Connection Issues
-- Verify service account key is valid
-- Check GCS bucket permissions
-- Ensure bucket name in `.env` file is correct
 
 ### Memory Issues
 If OpenSearch fails to start due to memory:
@@ -218,21 +275,6 @@ sudo sysctl -w vm.max_map_count=262144
 
 ### Check Health
 ```bash
-curl -k -u admin:Admin@123456 \
+curl -k  \
   https://localhost:9200/_cluster/health?pretty
 ```
-
-## Security Notes
-
-- Default setup uses self-signed certificates (suitable for development)
-- For production, replace with proper SSL certificates
-- Change default admin password in production
-- Secure GCS service account keys properly
-- Consider network policies and firewall rules in production
-
-## Support
-
-For issues or questions, check:
-- OpenSearch logs: `docker logs opensearch-node`
-- Dashboards logs: `docker logs opensearch-dashboards`
-- Cluster health: https://localhost:9200/_cluster/health
