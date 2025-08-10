@@ -1,0 +1,30 @@
+# Base requirements shared by both API and crawler components
+
+## Web Framework (API)
+fastapi==0.111.0             # Modern, fast web framework for building APIs
+uvicorn==0.30.1              # ASGI server for running FastAPI
+pydantic==2.8.2              # Data validation and settings management
+
+## OpenSearch & Search
+opensearch-py==2.5.0         # Python client for OpenSearch
+
+## NLP & Embeddings
+sentence-transformers==2.7.0 # For creating sentence and text embeddings
+optimum[onnxruntime]==1.19.1 # For ONNX model optimization and inference
+langdetect==1.0.9            # Language detection library
+indic-nlp-library==0.92      # Core library for Indian language NLP tasks
+
+## Dependencies for NLP Libraries
+morfessor==2.0.6             # Dependency for indic-nlp-library
+numpy==1.26.4                # Fundamental package for scientific computing
+pandas==2.2.2                # Data analysis and manipulation library
+
+## Configuration & Utilities
+pyyaml==6.0.1                # For parsing YAML configuration files
+python-dotenv==1.0.1         # For managing environment variables from .env files
+psutil==5.9.8                # For process and system monitoring
+protobuf~=4.25.3             # Protocol buffers, common dependency for ML libraries
+
+## Testing & Development
+pytest==8.2.2                # A framework for writing and running tests
+docker==7.1.0                # Docker SDK for Python, useful for integration tests

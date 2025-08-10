@@ -15,12 +15,15 @@ index:
   chunk_strategy: "paragraph"
 
 opensearch:
-  host: localhost
+  host: "{OPENSEARCH_HOST}"
   port: 9200
-  username: admin
-  password: Admin@Password123!
   index_name: cataloguesearch_prod
 
 vector_embeddings:
   embedding_model: BAAI/bge-m3
-  reranking_model: BAAI/bge-reranker-v2-m3
+  reranking_model: BAAI/bge-reranker-base
+  # Path to the optimized ONNX model directory inside the container.
+  # If this path exists, the application will use the faster ONNX model.
+  reranker_onnx_path: "{BASE_DIR}/models/bge-reranker-base-onnx"
+  # Supported types: base, fp16, quantized_8bit
+  embedding_model_type: fp16

@@ -9,18 +9,25 @@ from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.common.embedding_models import get_embedding_model, get_embedding
+from backend.common.embedding_models import get_embedding_model_factory
 from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
-from backend.crawler.index_state import IndexState
 from backend.common.language_detector import LanguageDetector
 from backend.search.index_searcher import IndexSearcher
 from backend.search.result_ranker import ResultRanker
 from backend.utils import json_dumps
 from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
 from backend.utils import JSONResponse
+import time
 
 log_handle = logging.getLogger(__name__)
+
+# --- In-memory metadata cache ---
+metadata_cache = {
+    "data": None,
+    "timestamp": 0,
+    "ttl": 1800  # 30 minutes cache TTL
+}
 
 # --- FastAPI Application Setup ---
 app = FastAPI(
@@ -38,22 +45,13 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-# --- Static File Serving ---
-frontend_build_path = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "build")
-
-app.mount(
-    "/static",
-    StaticFiles(directory=os.path.join(frontend_build_path, "static")),
-    name="static"
-)
-
 def initialize():
     """Initializes the config and other variables, if required"""
     logs_dir = os.environ.get("LOGS_DIR", "logs")
     setup_logging(
         logs_dir=logs_dir, console_level=VERBOSE_LEVEL_NUM,
         file_level=VERBOSE_LEVEL_NUM,
-        console_only=True)
+        console_only=False)
 
     relative_config_path = "configs/config.yaml"
     config = Config(relative_config_path)
@@ -61,25 +59,31 @@ def initialize():
     # initialize opensearch client
     get_opensearch_client(config)
 
-@app.get("/metadata", response_model=Dict[str, List[str]])
+@app.get("/api/metadata", response_model=Dict[str, List[str]])
 async def get_metadata_api():
     """
     Returns metadata about the indexed documents.
-    First checks index_state cache, falls back to OpenSearch if not present.
+    Uses in-memory cache with 30-minute TTL, computes from OpenSearch if cache is expired.
     """
     try:
+        current_time = time.time()
+        
+        # Check if cache is valid
+        if (metadata_cache["data"] is not None and 
+            current_time - metadata_cache["timestamp"] < metadata_cache["ttl"]):
+            log_handle.info("Retrieving metadata from in-memory cache")
+            return JSONResponse(content=metadata_cache["data"], status_code=200)
+        
+        # Cache is expired or empty, fetch from OpenSearch
+        log_handle.info("Cache expired or empty, fetching metadata from OpenSearch")
         config = Config()
-        index_state = IndexState(config.SQLITE_DB_PATH)
+        metadata = get_metadata(config)
 
-        if index_state.has_metadata_cache():
-            log_handle.info("Retrieving metadata from cache")
-            metadata = index_state.get_metadata_cache()
-        else:
-            log_handle.info("No metadata cache found, fetching from OpenSearch")
-            metadata = get_metadata(config)
-            index_state.update_metadata_cache(metadata)
+        # Update cache
+        metadata_cache["data"] = metadata
+        metadata_cache["timestamp"] = current_time
 
-        log_handle.info(f"Metadata retrieved: {len(metadata)} keys found")
+        log_handle.info(f"Metadata retrieved and cached: {len(metadata)} keys found")
         return JSONResponse(content=metadata, status_code=200)
     except Exception as e:
         log_handle.exception(f"Error retrieving metadata: {e}")
@@ -95,8 +99,9 @@ class SearchRequest(BaseModel):
     categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
     page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
     page_number: int = Field(1, ge=1, description="Page number for pagination.")
+    enable_reranking : bool = Field(True, description="Enable re-ranking for better relevance.")
 
-@app.post("/search", response_model=Dict[str, Any])
+@app.post("/api/search", response_model=Dict[str, Any])
 async def search(request_data: SearchRequest = Body(...)):
     """
     Handles search requests to the OpenSearch index.
@@ -110,7 +115,7 @@ async def search(request_data: SearchRequest = Body(...)):
     categories = request_data.categories
     page_size = request_data.page_size
     page_number = request_data.page_number
-
+    enable_reranking = request_data.enable_reranking
 
     try:
 
@@ -123,7 +128,7 @@ async def search(request_data: SearchRequest = Body(...)):
         log_handle.info(f"Received search request: keywords='{keywords}', "
                         f"allow_typos='{allow_typos}', proximity_distance={proximity_distance}, "
                         f"categories={categories}, page={page_number}, size={page_size}, "
-                        f"detected_language={detected_language}")
+                        f"detected_language={detected_language}, enable_reranking={enable_reranking}")
 
         # Perform Lexical Search
         lexical_results = []
@@ -143,9 +148,9 @@ async def search(request_data: SearchRequest = Body(...)):
 
         vector_results = []
         vector_total_hits = 0
-        model_name = config.EMBEDDING_MODEL_NAME
-        log_handle.info(f"Using embedding model: {model_name}")
-        query_embedding = get_embedding(model_name, keywords)
+        embedding_model = get_embedding_model_factory(config)
+        log_handle.info(f"Using embedding model type: {config.EMBEDDING_MODEL_TYPE}")
+        query_embedding = embedding_model.get_embedding(keywords)
         if not query_embedding:
             log_handle.warning("Could not generate embedding for query. Vector search skipped.")
             vector_results = []
@@ -157,11 +162,12 @@ async def search(request_data: SearchRequest = Body(...)):
                 categories=categories,
                 page_size=20,
                 page_number=1,
-                language=detected_language
+                language=detected_language,
+                rerank=enable_reranking
             )
             log_handle.info(
                 f"Vector search returned {len(vector_results)} "
-                f"results (total: {vector_total_hits}).")
+                f"results (total: {vector_total_hits}) with reranking={'enabled' if enable_reranking else 'disabled'}.")
 
         response = {
             "total_results": lexical_total_hits,
@@ -179,7 +185,7 @@ async def search(request_data: SearchRequest = Body(...)):
         log_handle.exception(f"An error occurred during search request processing: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
-@app.get("/similar-documents/{doc_id}", response_model=Dict[str, Any])
+@app.get("/api/similar-documents/{doc_id}", response_model=Dict[str, Any])
 async def get_similar_documents(doc_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
     """
     Finds and returns documents that are semantically similar to the given document ID.
@@ -208,7 +214,7 @@ async def get_similar_documents(doc_id: str, language: str = Query("hi", enum=["
         log_handle.exception(f"An error occurred while finding similar documents: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
-@app.get("/context/{chunk_id}", response_model=Dict[str, Any])
+@app.get("/api/context/{chunk_id}", response_model=Dict[str, Any])
 async def get_context(chunk_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
     """
     Fetches the context (previous, current, next paragraph) for a given chunk_id.
@@ -227,14 +233,3 @@ async def get_context(chunk_id: str, language: str = Query("hi", enum=["hi", "gu
 
 
 initialize()
-
-@app.get("/{full_path:path}")
-async def serve_react_app(request: Request, full_path: str):
-    index_path = os.path.join(frontend_build_path, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {"error": "Frontend not built. Run 'npm run build' in the frontend directory."}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)

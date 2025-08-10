@@ -1,0 +1,117 @@
+services:
+  opensearch:
+    image: jain9rajat/cataloguesearch:opensearch
+    build:
+      context: .
+      dockerfile: docker/opensearch/Dockerfile
+    platform: linux/amd64
+    container_name: opensearch-node
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=${OPENSEARCH_JAVA_OPTS:-Xms512m -Xmx1g}"
+      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@Password123!}"
+      - plugins.security.disabled=true
+      - network.host=0.0.0.0
+      - path.repo=/tmp/snapshots
+      # GCS Configuration
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-opensearch-snapshots}
+      - GCS_SERVICE_ACCOUNT_KEY_PATH=/usr/share/opensearch/config/gcs-key.json
+      - SNAPSHOT_REPOSITORY_NAME=${SNAPSHOT_REPOSITORY_NAME:-gcs-repository}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+      - ./snapshots:/tmp/snapshots
+      - ${GCS_SERVICE_ACCOUNT_KEY_PATH:-./credentials/gcs-key.json}:/usr/share/opensearch/config/gcs-key.json:ro
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    networks:
+      - opensearch-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: ${RESTART_POLICY:-no}
+
+  cataloguesearch-api:
+    image: jain9rajat/cataloguesearch:api
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    platform: linux/amd64
+    container_name: cataloguesearch-api
+    environment:
+      - OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_PORT=9200
+      - LOGS_DIR=/app/logs
+      - PYTHONPATH=/app
+      - ENVIRONMENT=${ENVIRONMENT:-local}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Config file substitution variables (override local env vars)
+      - HOME=/app/data
+      - BASE_DIR=/app
+      - OPENSEARCH_HOST=opensearch
+      # GCS Configuration
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gcs-key.json
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-opensearch-snapshots}
+      # Indic NLP Resources
+      - INDIC_RESOURCES_PATH=/app/indic_nlp_resources
+    volumes:
+      - cataloguesearch-data:/app/data
+      - cataloguesearch-logs:/app/logs
+      - ./configs/config.yaml:/app/configs/config.yaml:ro
+      - ./configs/opensearch-config.yaml:/app/configs/opensearch-config.yaml:ro
+      - ${GCS_SERVICE_ACCOUNT_KEY_PATH:-./credentials/gcs-key.json}:/app/credentials/gcs-key.json:ro
+    ports:
+      - "8000:8000"
+    networks:
+      - opensearch-net
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/metadata"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s # Give the container ample time to load models before starting healthchecks
+    restart: ${RESTART_POLICY:-no}
+
+  cataloguesearch-frontend:
+    image: jain9rajat/cataloguesearch:frontend
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    platform: linux/amd64
+    container_name: cataloguesearch-frontend
+    ports:
+      - "3000:80"
+    networks:
+      - opensearch-net
+    depends_on:
+      cataloguesearch-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: ${RESTART_POLICY:-no}
+
+volumes:
+  opensearch-data:
+  cataloguesearch-data:
+  cataloguesearch-logs:
+
+networks:
+  opensearch-net:

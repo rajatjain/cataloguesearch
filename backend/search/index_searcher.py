@@ -1,5 +1,7 @@
 import logging
 import traceback
+import hashlib
+import time
 
 from opensearchpy import OpenSearch, RequestsHttpConnection, NotFoundError
 import os
@@ -8,6 +10,7 @@ from typing import List, Dict, Any, Tuple
 from sentence_transformers import CrossEncoder
 
 from backend.common.opensearch import get_opensearch_config, get_opensearch_client
+from backend.common.embedding_models import get_embedding_model_factory
 from backend.utils import json_dumps
 
 log_handle = logging.getLogger(__name__)
@@ -38,8 +41,9 @@ class IndexSearcher:
         self._bookmark_field = "bookmarks"
         self._metadata_prefix = "metadata"
         try:
-            self._reranker = CrossEncoder(self._config.RERANKING_MODEL_NAME)
-            log_handle.info(f"Cross encoder model '{self._config.RERANKING_MODEL_NAME} loaded.")
+            embedding_model = get_embedding_model_factory(self._config)
+            self._reranker = embedding_model.get_reranking_model()
+            log_handle.info(f"Using embedding model type '{self._config.EMBEDDING_MODEL_TYPE}' for reranking")
         except Exception as e:
             traceback.print_exc()
             self._reranker = None
@@ -334,7 +338,7 @@ class IndexSearcher:
 
     def perform_vector_search(
             self, keywords: str, embedding: List[float], categories: Dict[str, List[str]],
-            page_size: int, page_number: int, language: str, rerank: bool = True, rerank_top_k: int = 50) \
+            page_size: int, page_number: int, language: str, rerank: bool = True, rerank_top_k: int = 20) \
             -> Tuple[List[Dict[str, Any]], int]:
         initial_fetch_size = rerank_top_k if rerank else page_size
         from_ = 0 if rerank else (page_number - 1) * page_size
@@ -361,18 +365,22 @@ class IndexSearcher:
             log_handle.info(f"Performing reranking on {len(hits)} documents for query: '{keywords}'")
 
             # Create pairs of [query, document_text] for the reranker
-            sentence_pairs = [
-                [keywords, hit["_source"].get(text_field, "")] for hit in hits
-            ]
+            sentence_pairs = []
+            for hit in hits:
+                doc_text = hit["_source"].get(text_field, "")
+                # Only apply text truncation - safest optimization
+                truncated_text = doc_text[:1000] if len(doc_text) > 1000 else doc_text
+                sentence_pairs.append([keywords, truncated_text])
 
-            # Use batching to significantly speed up the prediction process.
-            # A batch size of 32 is a good starting point.
-            # This allows the model to process 32 documents in parallel.
+            log_handle.warning("--- Starting expensive reranker.predict() call... ---")
+            rerank_start_time = time.time()
+            # Use very small batch size for e2-medium
             rerank_scores = self._reranker.predict(
                 sentence_pairs,
-                batch_size=32,
-                show_progress_bar=True  # Useful for seeing progress in logs
+                batch_size=2,  # Very small batch size for low-memory instances
             )
+            rerank_duration = time.time() - rerank_start_time
+            log_handle.warning(f"--- Reranker.predict() finished. Took {rerank_duration:.2f} seconds. ---")
 
             for hit, score in zip(hits, rerank_scores):
                 hit["rerank_score"] = score

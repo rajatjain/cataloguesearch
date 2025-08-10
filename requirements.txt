@@ -1,39 +1,13 @@
-# Core Libraries
-PyMuPDF==1.24.5 # For PDF parsing and text extraction
-pytesseract==0.3.10 # Python wrapper for Tesseract OCR
-opensearch-py==2.5.0 # OpenSearch Python client
-sentence-transformers==2.7.0 # For generating vector embeddings
-pyyaml==6.0.1 # For YAML file parsing
-pdf2image==1.17.0
+# Complete requirements file - includes all dependencies for full development environment
 
-# OCR Engine (Tesseract) dependency
-Pillow==10.4.0 # Required by pytesseract
-google-cloud-vision==3.10.2
+# Include API requirements (which includes base)
+-r requirements-api.txt
 
-# Testing Libraries
-pytest==8.2.2 # Testing framework
+# Include crawler requirements (which includes base + PDF/OCR libraries)
+-r requirements-crawler.txt
 
-# Utilities
-python-dotenv==1.0.1 # For managing environment variables (optional, but good practice)
-psutil==5.9.8 # For process management in CLI daemon
-
-protobuf~=6.31.1
-
-# Docker
-docker==7.1.0 # Docker SDK for Python, useful for container management in tests
-
-# Search
-langdetect==1.0.9 # Or a compatible version
-fastapi==0.111.0
-uvicorn==0.30.1
-pydantic==2.8.2
-
-# Indic NLP Library
-# Core library for Indic NLP tasks
-indic-nlp-library==0.92
-
-# Dependencies for the indic-nlp-library
-morfessor==2.0.6
-numpy>=1.16.5
-pandas
-# The library also requires indic_nlp_resources, which should be downloaded separately.
+# This approach avoids duplication while ensuring all dependencies are available
+# For production deployments:
+# - Use requirements-api.txt for API containers (lightweight)
+# - Use requirements-crawler.txt for document processing containers
+# - Use this file for local development with full capabilities

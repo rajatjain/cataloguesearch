@@ -86,6 +86,7 @@ dist/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.prod
 
 # TypeScript cache
 *.tsbuildinfo
@@ -121,3 +122,12 @@ ehthumbs_vista.db
 
 # Visual
 
+# Keys
+*credentials*json
+
+certs
+snapshots
+snapshots*tar*gz
+indic_nlp_*
+
+models

@@ -52,6 +52,9 @@ class Config:
         If config_file_path is None or file not found, uses default values.
         """
         BASE_DIR = Config._get_project_root()
+        # Fallback to environment variable if project root detection fails
+        if BASE_DIR is None:
+            BASE_DIR = os.environ.get("BASE_DIR", "/app")
         config_file_path = os.path.join(BASE_DIR, config_file_path)
 
         os.environ["BASE_DIR"] = BASE_DIR
@@ -66,6 +69,18 @@ class Config:
         # Replace placeholders
         self._settings = Config._replace_env_placeholders(self._settings)
         print(f"Loaded config: {self._settings}")
+
+    @staticmethod
+    def is_docker_environment():
+        """
+        Checks if the code is running inside a Docker environment by checking
+        for the /.dockerenv file or a specific environment variable.
+        """
+        # Check for the presence of the .dockerenv file at the root
+        has_dockerenv = os.path.exists('/.dockerenv')
+        # Check for the custom environment variable set in docker-compose
+        has_env_var = os.getenv("ENVIRONMENT") in ["local", "prod"]
+        return has_dockerenv or has_env_var
 
 
     def __getattr__(self, name):
@@ -85,7 +100,7 @@ class Config:
         elif name == "CHUNK_STRATEGY":
             return self._settings.get("index", {}).get("chunk_strategy", "default")
         elif name == "OPENSEARCH_HOST":
-            return self._settings.get("opensearch", {}).get("host", "localhost")
+            return os.getenv("OPENSEARCH_HOST", self._settings.get("opensearch", {}).get("host", "localhost"))
         elif name == "OPENSEARCH_PORT":
             return self._settings.get("opensearch", {}).get("port", 9200)
         elif name == "OPENSEARCH_USERNAME":
@@ -98,6 +113,10 @@ class Config:
             return self._settings.get("vector_embeddings", {}).get("embedding_model", "BAAI/bge-m3")
         elif name == "RERANKING_MODEL_NAME":
             return self._settings.get("vector_embeddings", {}).get("reranking_model", "BAAI/bge-reranker-v2-m3")
+        elif name == "EMBEDDING_MODEL_TYPE":
+            return self._settings.get("vector_embeddings", {}).get("embedding_model_type", "base")
+        elif name == "RERANKER_ONNX_PATH":
+            return self._settings.get("vector_embeddings", {}).get("reranker_onnx_path", None)
         else:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 

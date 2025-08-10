@@ -44,8 +44,9 @@ def parse_pdf():
             "^.{0,5}\\s*गाथा-\\s*[०-९]+(?:(?:\\s+से)?\\s+[०-९]+)*\\s*",
         ]
     }
-    pdf_file = "/Users/r0j08wt/cataloguesearch/Karan_Karya_Niyam_Part_2_H.pdf"
-    output_dir = "/Users/r0j08wt/cataloguesearch/Karan_Karya_Niyam_Part_2_H"
+    home = os.getenv("HOME")
+    pdf_file = "%s/cataloguesearch/Karan_Karya_Niyam_Part_2_H.pdf" % home
+    output_dir = "%s/cataloguesearch/Karan_Karya_Niyam_Part_2_H" % home
     shutil.rmtree(output_dir, ignore_errors=True)
     os.makedirs(output_dir, exist_ok=True)
     _pdf_processor.process_pdf(pdf_file, output_dir, meta)

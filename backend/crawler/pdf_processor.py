@@ -137,6 +137,22 @@ class PDFProcessor:
         # Sort results by page number to guarantee order
         extracted_data.sort(key=lambda x: x[0])
 
+        # Write it in tmp_folder
+        tmp_folder = "%s/tmp/cataloguesearch_files/%s" % (
+            os.getenv("HOME"), os.path.splitext(os.path.basename(pdf_file))[0])
+        shutil.rmtree(tmp_folder, ignore_errors=True)
+        os.makedirs(tmp_folder)
+        for page_num, paragraphs in extracted_data:
+            fname = f"{tmp_folder}/page_{page_num:04d}.txt"
+            for i, para in enumerate(paragraphs):
+                paragraphs[i] = self._paragraph_gen._normalize_text(para)
+            content = "\n----\n".join(paragraphs)
+            try:
+                with open(fname, 'w', encoding='utf-8') as fh:
+                    fh.write(content)
+            except:
+                traceback.print_exc()
+
         return extracted_data
 
     def fetch_bookmarks(self, pdf_file: str) -> dict[int, str]:
