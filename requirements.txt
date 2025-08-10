@@ -1,39 +1,34 @@
-# Core Libraries
-PyMuPDF==1.24.5 # For PDF parsing and text extraction
-pytesseract==0.3.10 # Python wrapper for Tesseract OCR
-opensearch-py==2.5.0 # OpenSearch Python client
-sentence-transformers==2.7.0 # For generating vector embeddings
-pyyaml==6.0.1 # For YAML file parsing
-pdf2image==1.17.0
+## Core Application & Data Processing
+PyMuPDF==1.24.5              # For PDF parsing and text extraction
+pdf2image==1.17.0            # Converts PDF files to images for OCR
+Pillow==10.4.0               # Image processing library, a dependency for many others
+pytesseract==0.3.10          # Python wrapper for Google's Tesseract-OCR Engine
+google-cloud-vision==3.10.2  # Google Cloud Vision API client for advanced OCR/image analysis
+opensearch-py==2.5.0         # Python client for OpenSearch
 
-# OCR Engine (Tesseract) dependency
-Pillow==10.4.0 # Required by pytesseract
-google-cloud-vision==3.10.2
+## Web Framework (API)
+fastapi==0.111.0             # Modern, fast web framework for building APIs
+uvicorn==0.30.1              # ASGI server for running FastAPI
+pydantic==2.8.2              # Data validation and settings management
 
-# Testing Libraries
-pytest==8.2.2 # Testing framework
+## NLP & Embeddings
+sentence-transformers==2.7.0 # For creating sentence and text embeddings
+optimum[onnxruntime]==1.19.1 # For ONNX model optimization and inference
+langdetect==1.0.9            # Language detection library
+indic-nlp-library==0.92      # Core library for Indian language NLP tasks
+# Note: indic-nlp-library requires downloading 'indic_nlp_resources' data separately.
 
-# Utilities
-python-dotenv==1.0.1 # For managing environment variables (optional, but good practice)
-psutil==5.9.8 # For process management in CLI daemon
+## Dependencies for NLP Libraries
+morfessor==2.0.6             # Dependency for indic-nlp-library
+numpy==1.26.4                # Fundamental package for scientific computing
+pandas==2.2.2                # Data analysis and manipulation library
 
-protobuf~=6.31.1
+## Utilities
+pyyaml==6.0.1                # For parsing YAML configuration files
+python-dotenv==1.0.1         # For managing environment variables from .env files
+psutil==5.9.8                # For process and system monitoring
+protobuf~=4.25.3             # Protocol buffers, a common dependency for cloud and ML libraries
 
-# Docker
-docker==7.1.0 # Docker SDK for Python, useful for container management in tests
-
-# Search
-langdetect==1.0.9 # Or a compatible version
-fastapi==0.111.0
-uvicorn==0.30.1
-pydantic==2.8.2
-
-# Indic NLP Library
-# Core library for Indic NLP tasks
-indic-nlp-library==0.92
-
-# Dependencies for the indic-nlp-library
-morfessor==2.0.6
-numpy>=1.16.5
-pandas
-# The library also requires indic_nlp_resources, which should be downloaded separately.
+## Testing & Development
+pytest==8.2.2                # A framework for writing and running tests
+docker==7.1.0                # Docker SDK for Python, useful for integration tests

@@ -1,6 +1,9 @@
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from typing import List, Dict, Any, Union
 import logging
+import os
+
+from backend.common.reranker import ONNXReranker
 
 log_handle = logging.getLogger(__name__)
 
@@ -11,6 +14,7 @@ class BaseEmbeddingModel:
         self.config = config
         self.embedding_model_name = config.EMBEDDING_MODEL_NAME
         self.reranker_model_name = config.RERANKING_MODEL_NAME
+        self.reranker_onnx_path = config.RERANKER_ONNX_PATH
         # Eagerly load models on initialization
         self._embedding_model = self._load_embedding_model()
         self._reranker_model = self._load_reranker_model()
@@ -27,7 +31,7 @@ class BaseEmbeddingModel:
             log_handle.error(f"Error generating embedding for text: '{text[:50]}...'. Error: {e}")
             return [0.0] * self._embedding_model.get_sentence_embedding_dimension()
     
-    def get_reranking_model(self) -> CrossEncoder:
+    def get_reranking_model(self) -> ONNXReranker:
         return self._reranker_model
     
     def get_embedding_dimension(self) -> int:
@@ -54,23 +58,30 @@ class BaseEmbeddingModel:
             log_handle.info(f"Using pre-loaded embedding model: {self.embedding_model_name}")
         return _models[model_key]
     
-    def _load_reranker_model(self) -> CrossEncoder:
+    def _load_reranker_model(self) -> ONNXReranker:
+        """
+        Loads the ONNX reranker model. This is the only supported reranker.
+        If the model path is not configured or the model is not found, this will raise a critical error.
+        """
         global _models
-        model_key = f"{self.reranker_model_name}_crossencoder_{self.__class__.__name__}"
+        model_key = f"onnx_{self.reranker_onnx_path}"
+
+        if model_key in _models:
+            log_handle.info(f"Using pre-loaded ONNX reranker from: {self.reranker_onnx_path}")
+            return _models[model_key]
+
+        # The ONNX model is now a hard requirement. Fail fast if it's not configured or found.
+        if not self.reranker_onnx_path or not os.path.exists(self.reranker_onnx_path):
+            log_handle.critical(f"ONNX reranker path not configured or not found: '{self.reranker_onnx_path}'. This is a fatal error.")
+            raise FileNotFoundError(f"Required ONNX reranker model not found at path: {self.reranker_onnx_path}")
         
-        if model_key not in _models:
-            try:
-                log_handle.info(f"Loading reranker model: {self.reranker_model_name}...")
-                # Use CrossEncoder for reranking with CPU-only optimization
-                model = CrossEncoder(self.reranker_model_name, device='cpu', max_length=512)
-                _models[model_key] = model
-                log_handle.info(f"Reranker model '{self.reranker_model_name}' loaded successfully.")
-            except Exception as e:
-                log_handle.error(f"Failed to load reranker model '{self.reranker_model_name}': {e}")
-                raise
-        else:
-            log_handle.info(f"Using pre-loaded reranker model: {self.reranker_model_name}...")
-        return _models[model_key]
+        try:
+            model = ONNXReranker(self.reranker_onnx_path)
+            _models[model_key] = model
+            return model
+        except Exception as e:
+            log_handle.critical(f"Fatal error loading ONNX reranker from '{self.reranker_onnx_path}': {e}", exc_info=True)
+            raise
 
 class FP16EmbeddingModel(BaseEmbeddingModel):
     def _load_embedding_model(self) -> SentenceTransformer:
@@ -97,24 +108,6 @@ class FP16EmbeddingModel(BaseEmbeddingModel):
         else:
             log_handle.info(f"Using pre-loaded embedding model: {self.embedding_model_name}")
         return _models[model_key]
-    
-    def _load_reranker_model(self) -> CrossEncoder:
-        global _models
-        model_key = f"{self.reranker_model_name}_crossencoder_{self.__class__.__name__}"
-        
-        if model_key not in _models:
-            try:
-                log_handle.info(f"Loading FP16 reranker model: {self.reranker_model_name}...")
-                # Use CrossEncoder with CPU and smaller memory settings
-                model = CrossEncoder(self.reranker_model_name, device='cpu', max_length=256)
-                _models[model_key] = model
-                log_handle.info(f"FP16 reranker model '{self.reranker_model_name}' loaded successfully.")
-            except Exception as e:
-                log_handle.error(f"Failed to load FP16 reranker model '{self.reranker_model_name}': {e}")
-                raise
-        else:
-            log_handle.info(f"Using pre-loaded reranker model: {self.reranker_model_name}...")
-        return _models[model_key]
 
 class Quantized8BitEmbeddingModel(BaseEmbeddingModel):
     def _load_embedding_model(self) -> SentenceTransformer:
@@ -138,24 +131,6 @@ class Quantized8BitEmbeddingModel(BaseEmbeddingModel):
                 raise
         else:
             log_handle.info(f"Using pre-loaded embedding model: {self.embedding_model_name}")
-        return _models[model_key]
-    
-    def _load_reranker_model(self) -> CrossEncoder:
-        global _models
-        model_key = f"{self.reranker_model_name}_crossencoder_{self.__class__.__name__}"
-        
-        if model_key not in _models:
-            try:
-                log_handle.info(f"Loading CPU-optimized reranker model: {self.reranker_model_name}...")
-                # For e2-medium, use CPU-only CrossEncoder with smaller memory settings
-                model = CrossEncoder(self.reranker_model_name, device='cpu', max_length=256)
-                _models[model_key] = model
-                log_handle.info(f"CPU-optimized reranker model '{self.reranker_model_name}' loaded successfully.")
-            except Exception as e:
-                log_handle.error(f"Failed to load reranker model '{self.reranker_model_name}': {e}")
-                raise
-        else:
-            log_handle.info(f"Using pre-loaded reranker model: {self.reranker_model_name}...")
         return _models[model_key]
 
 def get_embedding_model_factory(config) -> BaseEmbeddingModel:

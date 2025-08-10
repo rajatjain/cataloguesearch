@@ -52,6 +52,9 @@ class Config:
         If config_file_path is None or file not found, uses default values.
         """
         BASE_DIR = Config._get_project_root()
+        # Fallback to environment variable if project root detection fails
+        if BASE_DIR is None:
+            BASE_DIR = os.environ.get("BASE_DIR", "/app")
         config_file_path = os.path.join(BASE_DIR, config_file_path)
 
         os.environ["BASE_DIR"] = BASE_DIR
@@ -100,6 +103,8 @@ class Config:
             return self._settings.get("vector_embeddings", {}).get("reranking_model", "BAAI/bge-reranker-v2-m3")
         elif name == "EMBEDDING_MODEL_TYPE":
             return self._settings.get("vector_embeddings", {}).get("embedding_model_type", "base")
+        elif name == "RERANKER_ONNX_PATH":
+            return self._settings.get("vector_embeddings", {}).get("reranker_onnx_path", None)
         else:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 

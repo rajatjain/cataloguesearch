@@ -378,7 +378,6 @@ class IndexSearcher:
             rerank_scores = self._reranker.predict(
                 sentence_pairs,
                 batch_size=2,  # Very small batch size for low-memory instances
-                show_progress_bar=False  # Only disable progress bar
             )
             rerank_duration = time.time() - rerank_start_time
             log_handle.warning(f"--- Reranker.predict() finished. Took {rerank_duration:.2f} seconds. ---")

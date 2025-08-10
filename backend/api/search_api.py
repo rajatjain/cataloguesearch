@@ -214,7 +214,7 @@ async def get_similar_documents(doc_id: str, language: str = Query("hi", enum=["
         log_handle.exception(f"An error occurred while finding similar documents: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
-@app.get("/context/{chunk_id}", response_model=Dict[str, Any])
+@app.get("/api/context/{chunk_id}", response_model=Dict[str, Any])
 async def get_context(chunk_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
     """
     Fetches the context (previous, current, next paragraph) for a given chunk_id.
