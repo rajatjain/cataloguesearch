@@ -130,25 +130,27 @@ class IndexGenerator:
         return chunks
 
     def _add_embeddings_parallel(self, all_chunks: list[dict]) -> list[dict]:
-        """Adds vector embeddings to chunks using parallel processing."""
-        embedding_model = get_embedding_model_factory(self._config)
-        
-        def process_chunk(chunk):
-            try:
-                embedding = embedding_model.get_embedding(chunk["embedding_text"])
-                chunk["vector_embedding"] = embedding
-                del chunk["embedding_text"]  # Save space
-                return chunk
-            except Exception as e:
-                log_handle.error(f"Error generating embedding for chunk {chunk.get('chunk_id')}: {e}")
-                return chunk
+        """Adds vector embeddings to chunks using efficient batch processing."""
+        if not all_chunks:
+            return []
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            processed_chunks = list(tqdm(executor.map(process_chunk, all_chunks),
-                                         total=len(all_chunks),
-                                         desc="Creating embeddings"))
-        log_handle.info(f"Generated embeddings for {len(processed_chunks)} chunks using {self._config.EMBEDDING_MODEL_TYPE} model")
-        return processed_chunks
+        embedding_model = get_embedding_model_factory(self._config)
+
+        # Extract the text to be embedded from all chunks
+        texts_to_embed = [chunk["embedding_text"] for chunk in all_chunks]
+
+        log_handle.info(f"Generating embeddings for {len(texts_to_embed)} chunks in batches...")
+
+        # Generate all embeddings in a single, optimized batch call
+        embeddings = embedding_model.get_embeddings_batch(texts_to_embed, batch_size=8)
+
+        # Assign the generated embeddings back to their corresponding chunks
+        for i, chunk in enumerate(all_chunks):
+            chunk["vector_embedding"] = embeddings[i]
+            del chunk["embedding_text"]  # Save space
+
+        log_handle.info(f"Generated embeddings for {len(all_chunks)} chunks using {self._config.EMBEDDING_MODEL_TYPE} model.")
+        return all_chunks
 
     def _bulk_index_chunks(self, chunks: list[dict]):
         """Indexes a list of chunks into OpenSearch using the bulk API."""

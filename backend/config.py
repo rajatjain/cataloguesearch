@@ -70,6 +70,18 @@ class Config:
         self._settings = Config._replace_env_placeholders(self._settings)
         print(f"Loaded config: {self._settings}")
 
+    @staticmethod
+    def is_docker_environment():
+        """
+        Checks if the code is running inside a Docker environment by checking
+        for the /.dockerenv file or a specific environment variable.
+        """
+        # Check for the presence of the .dockerenv file at the root
+        has_dockerenv = os.path.exists('/.dockerenv')
+        # Check for the custom environment variable set in docker-compose
+        has_env_var = os.getenv("ENVIRONMENT") in ["local", "prod"]
+        return has_dockerenv or has_env_var
+
 
     def __getattr__(self, name):
         """

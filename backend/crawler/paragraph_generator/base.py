@@ -3,7 +3,6 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Tuple
 
-from backend.common.embedding_models import get_embedding
 from backend.config import Config
 from backend.utils import json_dumps
 
@@ -143,4 +142,3 @@ class BaseParagraphGenerator:
                 return True, None
 
         return False, para
-

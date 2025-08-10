@@ -312,7 +312,7 @@ const ResultsList = ({ results, totalResults, pageSize, currentPage, onPageChang
     const totalPages = Math.ceil(totalResults / pageSize);
     return (
         <div className="bg-white p-3 md:p-4 rounded-b-md">
-            {searchType === 'speed' && (
+            {searchType === 'speed' && resultType === 'vector' && (
                 <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg mb-4">
                     <p className="text-sm text-blue-800">
                         For more accurate relevance, select the "Better Relevance" option under "Filters" and try again (note that this is in beta).

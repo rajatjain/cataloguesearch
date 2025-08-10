@@ -24,6 +24,6 @@ vector_embeddings:
   reranking_model: BAAI/bge-reranker-base
   # Path to the optimized ONNX model directory inside the container.
   # If this path exists, the application will use the faster ONNX model.
-  reranker_onnx_path: "/app/models/bge-reranker-base-onnx"
+  reranker_onnx_path: "{BASE_DIR}/models/bge-reranker-base-onnx"
   # Supported types: base, fp16, quantized_8bit
   embedding_model_type: fp16
