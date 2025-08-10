@@ -1,31 +1,20 @@
 import logging
 import os
+import time
 from typing import Any, Dict, List
 
-from fastapi import Body, FastAPI, HTTPException, Request, Query
-from fastapi.responses import FileResponse
+from fastapi import Body, FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from backend.common.embedding_models import get_embedding_model_factory
 from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
 from backend.search.index_searcher import IndexSearcher
-from backend.search.result_ranker import ResultRanker
-from backend.utils import json_dumps
+from backend.utils import json_dumps, JSONResponse, log_memory_usage
 from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
-from backend.utils import JSONResponse
-import time
 
 log_handle = logging.getLogger(__name__)
-
-# --- In-memory metadata cache ---
-metadata_cache = {
-    "data": None,
-    "timestamp": 0,
-    "ttl": 1800  # 30 minutes cache TTL
-}
 
 # --- FastAPI Application Setup ---
 app = FastAPI(
@@ -37,49 +26,95 @@ app = FastAPI(
 # --- CORS Middleware ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-def initialize():
-    """Initializes the config and other variables, if required"""
+@app.on_event("startup")
+async def initialize():
+    """
+    Initializes the config and other expensive objects once at startup.
+    Stores them in the application state.
+    """
+    # Setup logging
     logs_dir = os.environ.get("LOGS_DIR", "logs")
     setup_logging(
         logs_dir=logs_dir, console_level=VERBOSE_LEVEL_NUM,
         file_level=VERBOSE_LEVEL_NUM,
         console_only=False)
+    log_handle.info("Logging setup complete.")
 
+    log_memory_usage()
+
+    # Load configuration
     relative_config_path = "configs/config.yaml"
     config = Config(relative_config_path)
+    app.state.config = config
+    log_handle.info("Configuration loaded.")
 
-    # initialize opensearch client
+    log_memory_usage()
+
+    # Initialize OpenSearch client (the client itself is managed by opensearch.py module)
     get_opensearch_client(config)
+    log_handle.info("OpenSearch client initialized.")
+
+    log_memory_usage()
+
+    # Load embedding model
+    app.state.embedding_model = get_embedding_model_factory(config)
+    log_handle.info(f"Embedding model {config.EMBEDDING_MODEL_NAME} with type {config.EMBEDDING_MODEL_TYPE} loaded.")
+
+    log_memory_usage()
+
+    # Initialize IndexSearcher (which may load the reranker)
+    app.state.index_searcher = IndexSearcher(config)
+    log_handle.info("IndexSearcher initialized.")
+
+    log_memory_usage()
+
+    # Initialize and populate metadata cache
+    app.state.metadata_cache = {
+        "data": None,
+        "timestamp": 0,
+        "ttl": 1800  # 30 minutes cache TTL
+    }
+    try:
+        log_handle.info("Populating metadata cache at startup...")
+        metadata = get_metadata(config)
+        app.state.metadata_cache["data"] = metadata
+        app.state.metadata_cache["timestamp"] = time.time()
+        log_handle.info(f"Metadata cache populated with {len(metadata)} keys.")
+    except Exception as e:
+        log_handle.exception(f"Failed to populate metadata cache at startup: {e}")
+
+    # Log memory usage after initialization
+    log_memory_usage()
 
 @app.get("/api/metadata", response_model=Dict[str, List[str]])
-async def get_metadata_api():
+async def get_metadata_api(request: Request):
     """
     Returns metadata about the indexed documents.
     Uses in-memory cache with 30-minute TTL, computes from OpenSearch if cache is expired.
     """
     try:
         current_time = time.time()
+        cache = request.app.state.metadata_cache
         
         # Check if cache is valid
-        if (metadata_cache["data"] is not None and 
-            current_time - metadata_cache["timestamp"] < metadata_cache["ttl"]):
+        if (cache["data"] is not None and 
+            current_time - cache["timestamp"] < cache["ttl"]):
             log_handle.info("Retrieving metadata from in-memory cache")
-            return JSONResponse(content=metadata_cache["data"], status_code=200)
+            return JSONResponse(content=cache["data"], status_code=200)
         
         # Cache is expired or empty, fetch from OpenSearch
         log_handle.info("Cache expired or empty, fetching metadata from OpenSearch")
-        config = Config()
-        metadata = get_metadata(config)
+        metadata = get_metadata(request.app.state.config)
 
         # Update cache
-        metadata_cache["data"] = metadata
-        metadata_cache["timestamp"] = current_time
+        cache["data"] = metadata
+        cache["timestamp"] = current_time
 
         log_handle.info(f"Metadata retrieved and cached: {len(metadata)} keys found")
         return JSONResponse(content=metadata, status_code=200)
@@ -98,16 +133,17 @@ class SearchRequest(BaseModel):
     categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
     page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
     page_number: int = Field(1, ge=1, description="Page number for pagination.")
-    enable_reranking : bool = Field(True, description="Enable re-ranking for better relevance.")
+    enable_reranking: bool = Field(True, description="Enable re-ranking for better relevance.")
 
 @app.post("/api/search", response_model=Dict[str, Any])
-async def search(request_data: SearchRequest = Body(...)):
+async def search(request: Request, request_data: SearchRequest = Body(...)):
     """
     Handles search requests to the OpenSearch index.
     Performs lexical and vector searches, collates results, and returns paginated output.
     """
-    config = Config()
-    index_searcher = IndexSearcher(config)
+    index_searcher = request.app.state.index_searcher
+    embedding_model = request.app.state.embedding_model
+    
     keywords = request_data.query
     allow_typos = request_data.allow_typos
     proximity_distance = request_data.proximity_distance
@@ -118,8 +154,6 @@ async def search(request_data: SearchRequest = Body(...)):
     language = request_data.language
 
     try:
-
-        # If allow_typos is true and proximity_distance is 0 (exact phrase), change to near (10)
         if allow_typos and proximity_distance == 0:
             proximity_distance = 10
             log_handle.info(f"Changed proximity_distance from 0 to 10 because allow_typos=True")
@@ -128,10 +162,6 @@ async def search(request_data: SearchRequest = Body(...)):
                         f"allow_typos='{allow_typos}', proximity_distance={proximity_distance}, "
                         f"categories={categories}, page={page_number}, size={page_size}, "
                         f"language={language}, enable_reranking={enable_reranking}")
-
-        # Perform Lexical Search
-        lexical_results = []
-        lexical_total_hits = 0
 
         lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
             keywords=keywords,
@@ -142,19 +172,13 @@ async def search(request_data: SearchRequest = Body(...)):
             page_size=page_size,
             page_number=page_number
         )
-        log_handle.info(f"Lexical search returned {len(lexical_results)} "
-                        f"results (total: {lexical_total_hits}).")
+        log_handle.info(f"Lexical search returned {len(lexical_results)} results (total: {lexical_total_hits}).")
 
-        vector_results = []
-        vector_total_hits = 0
-        embedding_model = get_embedding_model_factory(config)
-        log_handle.info(f"Using embedding model type: {config.EMBEDDING_MODEL_TYPE}")
         query_embedding = embedding_model.get_embedding(keywords)
         if not query_embedding:
             log_handle.warning("Could not generate embedding for query. Vector search skipped.")
             vector_results = []
         else:
-            # For vector search, never show all results. Only the top 20 is always ok.
             vector_results, vector_total_hits = index_searcher.perform_vector_search(
                 keywords=keywords,
                 embedding=query_embedding,
@@ -174,7 +198,7 @@ async def search(request_data: SearchRequest = Body(...)):
             "page_number": page_number,
             "results": lexical_results,
             "vector_results": vector_results,
-            "total_vector_results": len(vector_results)  # Limit this to 10 always
+            "total_vector_results": len(vector_results)
         }
 
         log_handle.info(f"Search response: {json_dumps(response)}")
@@ -185,20 +209,18 @@ async def search(request_data: SearchRequest = Body(...)):
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
 @app.get("/api/similar-documents/{doc_id}", response_model=Dict[str, Any])
-async def get_similar_documents(doc_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
+async def get_similar_documents(request: Request, doc_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
     """
     Finds and returns documents that are semantically similar to the given document ID.
     """
     try:
-        config = Config()
-        index_searcher = IndexSearcher(config)
-
+        index_searcher = request.app.state.index_searcher
         log_handle.info(f"Received request for similar documents to doc_id: {doc_id}")
 
         similar_docs, total_similar = index_searcher.find_similar_by_id(
             doc_id=doc_id,
             language=language,
-            size=10  # Fetch top 10 similar documents
+            size=10
         )
 
         response = {
@@ -214,13 +236,12 @@ async def get_similar_documents(doc_id: str, language: str = Query("hi", enum=["
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
 @app.get("/api/context/{chunk_id}", response_model=Dict[str, Any])
-async def get_context(chunk_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
+async def get_context(request: Request, chunk_id: str, language: str = Query("hi", enum=["hi", "gu", "en"])):
     """
     Fetches the context (previous, current, next paragraph) for a given chunk_id.
     """
     try:
-        config = Config()
-        index_searcher = IndexSearcher(config)
+        index_searcher = request.app.state.index_searcher
         log_handle.info(f"Received request for context for chunk_id: {chunk_id}")
         context_data = index_searcher.get_paragraph_context(chunk_id=chunk_id, language=language)
         if not context_data.get("current"):
@@ -229,6 +250,3 @@ async def get_context(chunk_id: str, language: str = Query("hi", enum=["hi", "gu
     except Exception as e:
         log_handle.exception(f"An error occurred while fetching context: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
-
-
-initialize()
