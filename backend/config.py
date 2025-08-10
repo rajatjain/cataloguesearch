@@ -109,6 +109,8 @@ class Config:
             return self._settings.get("opensearch", {}).get("password", "admin")
         elif name == "OPENSEARCH_INDEX_NAME":
             return self._settings.get("opensearch", {}).get("index_name", "document_chunks")
+        elif name == "OPENSEARCH_METADATA_INDEX_NAME":
+            return self._settings.get("opensearch", {}).get("metadata_index_name", "document_metadata")
         elif name == "EMBEDDING_MODEL_NAME":
             return self._settings.get("vector_embeddings", {}).get("embedding_model", "BAAI/bge-m3")
         elif name == "RERANKING_MODEL_NAME":

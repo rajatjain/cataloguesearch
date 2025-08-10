@@ -18,6 +18,7 @@ opensearch:
   host: "{OPENSEARCH_HOST}"
   port: 9200
   index_name: cataloguesearch_prod
+  metadata_index_name: cataloguesearch_prod_metadata
 
 vector_embeddings:
   embedding_model: BAAI/bge-m3

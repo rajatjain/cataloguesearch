@@ -107,3 +107,13 @@ mappings:
         parameters:
           ef_construction: 256
           m: 48
+
+# New index definition for optimized metadata lookups
+metadata_index:
+  settings:
+    number_of_shards: 1
+    number_of_replicas: 0
+  mappings:
+    properties:
+      values: # This field will hold an array of unique string values for a given metadata key
+        type: keyword

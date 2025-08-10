@@ -3,7 +3,7 @@ import os
 import traceback
 
 import yaml
-from opensearchpy import OpenSearch, ConnectionError
+from opensearchpy import OpenSearch, ConnectionError, helpers
 from backend.config import Config  # Adjust the import path as needed
 from backend.common.embedding_models import get_embedding_model_factory
 
@@ -47,56 +47,79 @@ def get_opensearch_config(config: Config) -> dict:
 
     return _opensearch_settings
 
-# TODO(rajatjain): Move this to scripts/ directory to create the indices.
-#                  This will also include changes to include metadata index
-#                  once that is created.
-def create_index_if_not_exists(config, opensearch_client):
-    """
-    Creates the OpenSearch index with a predefined mapping if it doesn't already exist.
-    Includes settings for k-NN and analyzers for Hindi/Gujarati.
-    """
-    opensearch_config = get_opensearch_config(config)
-    index_name = config.OPENSEARCH_INDEX_NAME
-    settings = opensearch_config.get('settings', {})
-    mappings = opensearch_config.get('mappings', {})
+def get_metadata_index_config(config: Config) -> dict:
+    """Loads the OpenSearch configuration for the metadata index."""
+    opensearch_config_path = config.OPENSEARCH_CONFIG_PATH
+    with open(opensearch_config_path, 'r', encoding='utf-8') as f:
+        full_config = yaml.safe_load(f)
 
+    metadata_config = full_config.get('metadata_index', {})
+
+    if not metadata_config:
+        log_handle.warning(f"metadata_index configuration not found in {opensearch_config_path}")
+    return metadata_config
+
+def _create_index_if_not_exists(opensearch_client: OpenSearch, index_name: str, index_body: dict):
+    """Helper to create a single index if it doesn't exist."""
+    if not index_body:
+        log_handle.error(f"Index configuration for '{index_name}' is empty. Skipping creation.")
+        return
     try:
         if not opensearch_client.indices.exists(index_name):
+            log_handle.info(f"Index '{index_name}' does not exist. Creating...")
             response = opensearch_client.indices.create(
-                index=index_name, body = {
-                    "settings": settings,
-                    "mappings": mappings,
-                })
+                index=index_name, body=index_body
+            )
             log_handle.info(f"Index '{index_name}' created: {response}")
     except Exception as e:
         log_handle.critical(f"Error creating index '{index_name}': {e}")
         raise
 
+def create_indices_if_not_exists(config: Config, opensearch_client: OpenSearch):
+    """
+    Creates all required OpenSearch indices (main and metadata) if they don't exist.
+    """
+    # 1. Create main document index
+    main_index_config = get_opensearch_config(config)
+    main_index_name = config.OPENSEARCH_INDEX_NAME
+    _create_index_if_not_exists(opensearch_client, main_index_name, main_index_config)
+
+    # 2. Create metadata index
+    metadata_index_config = get_metadata_index_config(config)
+    metadata_index_name = config.OPENSEARCH_METADATA_INDEX_NAME
+    _create_index_if_not_exists(opensearch_client, metadata_index_name, metadata_index_config)
+
 def delete_index(config: Config):
     """
-    Deletes the specified OpenSearch index if it exists.
+    Deletes the specified OpenSearch indices if they exist.
 
     Args:
         config: Config object containing OpenSearch settings
     """
     global _client
-    if not config or not config.OPENSEARCH_INDEX_NAME:
-        log_handle.error("Invalid config or missing index name")
-        raise ValueError("Config and index name are required")
+    if not config:
+        log_handle.error("Invalid config provided")
+        raise ValueError("Config is required")
 
     client = _client
-    index_name = config.OPENSEARCH_INDEX_NAME
+    indices_to_delete = [
+        config.OPENSEARCH_INDEX_NAME,
+        config.OPENSEARCH_METADATA_INDEX_NAME
+    ]
 
-    try:
-        if client.indices.exists(index=index_name):
-            response = client.indices.delete(index=index_name)
-            log_handle.info(f"Index '{index_name}' deleted successfully: {response}")
-        else:
-            log_handle.warning(f"Index '{index_name}' does not exist, nothing to delete")
-    except Exception as e:
-        log_handle.error(f"Error deleting index '{index_name}': {e}")
-        raise
-
+    for index_name in indices_to_delete:
+        if not index_name:
+            continue
+        try:
+            if client.indices.exists(index=index_name):
+                response = client.indices.delete(index=index_name)
+                log_handle.info(f"Index '{index_name}' deleted successfully: {response}")
+            else:
+                log_handle.warning(f"Index '{index_name}' does not exist, nothing to delete")
+        except Exception as e:
+            log_handle.error(f"Error deleting index '{index_name}': {e}", exc_info=True)
+            # Continue to try deleting other indices even if one fails
+            continue
 
 def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
     """
@@ -118,7 +141,7 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
     if _client:
         if force_clean:
             delete_index(config)
-        create_index_if_not_exists(config, _client)
+        create_indices_if_not_exists(config, _client)
         return _client
 
     log_handle.info("OpenSearch client not initialized. Creating a new instance...")
@@ -147,57 +170,98 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
         if force_clean:
             delete_index(config)
 
+        # Ensure indices exist on first client creation
+        create_indices_if_not_exists(config, _client)
+
     except Exception as e:
         traceback.print_exc()
         log_handle.critical(f"Failed to initialize OpenSearch client: {e}")
         # Re-raise the exception to let the calling code handle the connection failure.
         raise
 
-    # create_index_if_not_exists(config, _client)
     return _client
 
 
 def get_metadata(config: Config) -> dict[str, list[str]]:
     """
-    Scans the metadata field in OpenSearch, extracts all key-value pairs,
-    deduplicates them and returns as dict[str, list[str]].
-    Uses scroll API to retrieve all documents without limit.
+    Retrieves all metadata from the dedicated metadata index.
+    This is much more efficient than scanning the main document index.
 
     Args:
         config: Config object containing OpenSearch settings
 
     Returns:
-        dict[str, list[str]]: Dictionary with metadata keys and their unique values
+        dict[str, list[str]]: Dictionary with metadata keys and their unique, sorted values.
     """
     client = get_opensearch_client(config)
+    metadata_index = config.OPENSEARCH_METADATA_INDEX_NAME
 
-    # Query to get all documents and extract metadata field using scroll API
+    if not client.indices.exists(metadata_index):
+        log_handle.warning(f"Metadata index '{metadata_index}' does not exist. Returning empty metadata.")
+        return {}
+
+    # Query to get all documents from the metadata index.
     query_body = {
-        "size": 10000,  # Batch size for scroll
-        "_source": ["metadata"],
+        "size": 1000,  # Assume there won't be more than 1000 unique metadata keys
+        "query": {"match_all": {}}
+    }
+
+    try:
+        response = client.search(
+            index=metadata_index,
+            body=query_body
+        )
+
+        result = {}
+        for hit in response.get('hits', {}).get('hits', []):
+            # The document ID is the metadata key (e.g., "author")
+            key = hit.get('_id')
+            # The values are stored in the 'values' field of the source
+            values = hit.get('_source', {}).get('values', [])
+
+            if key and values:
+                # The values should already be sorted from the indexing process
+                result[key] = values
+
+        log_handle.info(f"Metadata retrieved from '{metadata_index}': {len(result)} unique keys found")
+        return result
+    except Exception as e:
+        log_handle.error(f"Error retrieving metadata from index '{metadata_index}': {e}", exc_info=True)
+        return {}
+
+def delete_documents_by_filename(config: Config, original_filename: str):
+    """
+    Deletes all documents from the OpenSearch index that match the given original_filename.
+
+    Args:
+        config: Config object containing OpenSearch settings.
+        original_filename: The name of the file to delete documents for.
+    """
+    client = get_opensearch_client(config)
+    index_name = config.OPENSEARCH_INDEX_NAME
+
+    query_body = {
         "query": {
-            "match_all": {}
+            "term": {
+                # Use .keyword for an exact, non-analyzed match on the filename
+                "original_filename": original_filename
+            }
         }
     }
 
-    # Initialize scroll search
-    response = client.search(
-        index=config.OPENSEARCH_INDEX_NAME,
-        body=query_body,
-        scroll='2m'  # Keep scroll context alive for 2 minutes
-    )
-
-    # Extract and deduplicate metadata
-    metadata_dict = {}
-    total_processed = 0
-    
-    while True:
-        hits = response.get('hits', {}).get('hits', [])
-        
-        if not hits:
-            break
-            
-        # Process current batch
+    try:
+        log_handle.info(f"Attempting to delete documents with original_filename: {original_filename}")
+        response = client.delete_by_query(
+            index=index_name,
+            body=query_body,
+            wait_for_completion=True,  # Make the operation synchronous
+            refresh=True  # Refresh the index to make changes visible immediately
+        )
+        deleted_count = response.get('deleted', 0)
+        log_handle.info(f"Successfully deleted {deleted_count} documents for '{original_filename}'.")
+    except Exception as e:
+        log_handle.error(f"Error deleting documents for '{original_filename}': {e}", exc_info=True)
+        raise
         for hit in hits:
             source = hit.get('_source', {})
             document_metadata = source.get('metadata', {})

@@ -1,7 +1,6 @@
 import logging
 import os.path
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 from opensearchpy import OpenSearch, helpers
 from datetime import datetime, timezone
 
@@ -25,6 +24,7 @@ class IndexGenerator:
         self._config = config
         self._opensearch_config_path = config.OPENSEARCH_CONFIG_PATH
         self._index_name = config.OPENSEARCH_INDEX_NAME
+        self._metadata_index_name = config.OPENSEARCH_METADATA_INDEX_NAME
         self._opensearch_settings = {}
         self._embedding_model_name = config.EMBEDDING_MODEL_NAME
         self._opensearch_client = opensearch_client
@@ -66,7 +66,11 @@ class IndexGenerator:
         # 4. Index chunks into OpenSearch using the bulk helper for efficiency
         self._bulk_index_chunks(chunks_with_embeddings)
 
-        log_handle.info(f"Finished full indexing for document {document_id}: total_chunks: {len(chunks)}.")
+        # 5. Update the metadata index with the new metadata
+        self._update_metadata_index(metadata)
+
+        log_handle.info(
+            f"Finished full indexing for document {document_id}: total_chunks: {len(chunks)}.")
 
     def _reindex_metadata_only(self, document_id, metadata, bookmarks, timestamp):
         """Handles the logic for updating metadata of existing documents."""
@@ -95,6 +99,10 @@ class IndexGenerator:
 
             if update_actions:
                 helpers.bulk(self._opensearch_client, update_actions)
+
+            # Also update the dedicated metadata index
+            self._update_metadata_index(metadata)
+
             log_handle.info(f"Metadata re-indexed for document {document_id}.")
         except Exception as e:
             log_handle.error(f"Error during metadata-only re-indexing for {document_id}: {e}")
@@ -169,6 +177,52 @@ class IndexGenerator:
                 log_handle.error(f"Failed to index {failed} chunks. Check OpenSearch logs for details.")
         except Exception as e:
             log_handle.error(f"An exception occurred during bulk indexing: {e}")
+
+    def _update_metadata_index(self, metadata: dict):
+        """
+        Updates the dedicated metadata index with new values from a document.
+        Uses a scripted upsert for efficiency and atomicity.
+        """
+        if not metadata:
+            return
+
+        log_handle.info(f"Updating metadata index for keys: {list(metadata.keys())}")
+
+        actions = []
+        for key, value in metadata.items():
+            if not value:
+                continue
+
+            # Ensure new_values is a list of strings
+            new_values = [str(v) for v in value] if isinstance(value, list) else [str(value)]
+
+            action = {
+                "_op_type": "update",
+                "_index": self._metadata_index_name,
+                "_id": key,
+                "script": {
+                    "source": """
+                        boolean changed = false;
+                        for (item in params.newValues) {
+                            if (!ctx._source.values.contains(item)) {
+                                ctx._source.values.add(item);
+                                changed = true;
+                            }
+                        }
+                        if (changed) {
+                            Collections.sort(ctx._source.values);
+                        }
+                    """,
+                    "lang": "painless",
+                    "params": {"newValues": new_values}
+                },
+                "upsert": {"values": sorted(new_values)}
+            }
+            actions.append(action)
+
+        if actions:
+            helpers.bulk(self._opensearch_client, actions, stats_only=True, raise_on_error=False)
+            log_handle.info(f"Successfully sent {len(actions)} updates to the metadata index.")
 
     def _get_paras(self, page_text_paths: list[str]) -> list[tuple[int, str]]:
         """Reads all paragraph files and returns a flattened list of (page_number, paragraph_text)."""
