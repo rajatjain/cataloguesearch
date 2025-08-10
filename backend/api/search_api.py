@@ -4,7 +4,6 @@ from typing import Any, Dict, List
 
 from fastapi import Body, FastAPI, HTTPException, Request, Query
 from fastapi.responses import FileResponse
-from langdetect import detect
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -12,7 +11,6 @@ from fastapi.staticfiles import StaticFiles
 from backend.common.embedding_models import get_embedding_model_factory
 from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
-from backend.common.language_detector import LanguageDetector
 from backend.search.index_searcher import IndexSearcher
 from backend.search.result_ranker import ResultRanker
 from backend.utils import json_dumps
@@ -94,6 +92,7 @@ class SearchRequest(BaseModel):
     Pydantic model for the search request payload.
     """
     query: str = Field(..., example="Bangalore city history")
+    language: str = Field(..., description="Language of the query.", example="hindi")
     proximity_distance: int = Field(30, ge=0, description="Max word distance for proximity search. Use 0 for exact phrase.")
     allow_typos: bool = Field(False, description="Allow typos in search terms.")
     categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
@@ -116,6 +115,7 @@ async def search(request_data: SearchRequest = Body(...)):
     page_size = request_data.page_size
     page_number = request_data.page_number
     enable_reranking = request_data.enable_reranking
+    language = request_data.language
 
     try:
 
@@ -124,11 +124,10 @@ async def search(request_data: SearchRequest = Body(...)):
             proximity_distance = 10
             log_handle.info(f"Changed proximity_distance from 0 to 10 because allow_typos=True")
 
-        detected_language = LanguageDetector.detect_language(keywords)
         log_handle.info(f"Received search request: keywords='{keywords}', "
                         f"allow_typos='{allow_typos}', proximity_distance={proximity_distance}, "
                         f"categories={categories}, page={page_number}, size={page_size}, "
-                        f"detected_language={detected_language}, enable_reranking={enable_reranking}")
+                        f"language={language}, enable_reranking={enable_reranking}")
 
         # Perform Lexical Search
         lexical_results = []
@@ -139,7 +138,7 @@ async def search(request_data: SearchRequest = Body(...)):
             proximity_distance=proximity_distance,
             allow_typos=allow_typos,
             categories=categories,
-            detected_language=detected_language,
+            detected_language=language,
             page_size=page_size,
             page_number=page_number
         )
@@ -162,7 +161,7 @@ async def search(request_data: SearchRequest = Body(...)):
                 categories=categories,
                 page_size=20,
                 page_number=1,
-                language=detected_language,
+                language=language,
                 rerank=enable_reranking
             )
             log_handle.info(

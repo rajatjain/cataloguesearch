@@ -9,8 +9,8 @@ from backend.common.embedding_models import get_embedding_model_factory
 
 # --- Module-level variables ---
 # This variable will hold our single, cached client instance.
-_client: OpenSearch | None = None
-_opensearch_settings: dict | None = None
+_client = None
+_opensearch_settings = None
 
 log_handle = logging.getLogger(__name__)
 
@@ -102,6 +102,9 @@ def delete_index(config: Config):
         raise ValueError("Config is required")
 
     client = _client
+    if not client:
+        log_handle.warning("No OpenSearch client available for index deletion")
+        return
     indices_to_delete = [
         config.OPENSEARCH_INDEX_NAME,
         config.OPENSEARCH_METADATA_INDEX_NAME
@@ -166,13 +169,6 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
         # Cache the successfully created client in our module-level variable
         _client = client
         log_handle.info("OpenSearch client initialized and cached successfully.")
-
-        if force_clean:
-            delete_index(config)
-
-        # Ensure indices exist on first client creation
-        create_indices_if_not_exists(config, _client)
-
     except Exception as e:
         traceback.print_exc()
         log_handle.critical(f"Failed to initialize OpenSearch client: {e}")
@@ -228,75 +224,6 @@ def get_metadata(config: Config) -> dict[str, list[str]]:
     except Exception as e:
         log_handle.error(f"Error retrieving metadata from index '{metadata_index}': {e}", exc_info=True)
         return {}
-
-def delete_documents_by_filename(config: Config, original_filename: str):
-    """
-    Deletes all documents from the OpenSearch index that match the given original_filename.
-
-    Args:
-        config: Config object containing OpenSearch settings.
-        original_filename: The name of the file to delete documents for.
-    """
-    client = get_opensearch_client(config)
-    index_name = config.OPENSEARCH_INDEX_NAME
-
-    query_body = {
-        "query": {
-            "term": {
-                # Use .keyword for an exact, non-analyzed match on the filename
-                "original_filename": original_filename
-            }
-        }
-    }
-
-    try:
-        log_handle.info(f"Attempting to delete documents with original_filename: {original_filename}")
-        response = client.delete_by_query(
-            index=index_name,
-            body=query_body,
-            wait_for_completion=True,  # Make the operation synchronous
-            refresh=True  # Refresh the index to make changes visible immediately
-        )
-        deleted_count = response.get('deleted', 0)
-        log_handle.info(f"Successfully deleted {deleted_count} documents for '{original_filename}'.")
-    except Exception as e:
-        log_handle.error(f"Error deleting documents for '{original_filename}': {e}", exc_info=True)
-        raise
-        for hit in hits:
-            source = hit.get('_source', {})
-            document_metadata = source.get('metadata', {})
-
-            # Process each key-value pair in the metadata
-            for key, value in document_metadata.items():
-                if key not in metadata_dict:
-                    metadata_dict[key] = set()
-
-                # Handle different value types
-                if isinstance(value, list):
-                    for item in value:
-                        metadata_dict[key].add(str(item))
-                else:
-                    metadata_dict[key].add(str(value))
-        
-        total_processed += len(hits)
-        log_handle.debug(f"Processed {total_processed} documents so far...")
-        
-        # Get scroll ID for next batch
-        scroll_id = response.get('_scroll_id')
-        if not scroll_id:
-            break
-            
-        # Get next batch
-        response = client.scroll(
-            scroll_id=scroll_id,
-            scroll='2m'
-        )
-
-    # Convert sets to sorted lists for consistent output
-    result = {key: sorted(list(values)) for key, values in metadata_dict.items()}
-
-    log_handle.info(f"Metadata retrieved from {total_processed} documents: {len(result)} unique keys found")
-    return result
 
 def delete_documents_by_filename(config: Config, original_filename: str):
     """

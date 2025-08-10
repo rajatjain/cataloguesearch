@@ -8,18 +8,12 @@ this information. This is intended to be run once after the metadata index has
 been created to backfill historical data.
 """
 import logging
-import sys
-import os
-
-# Add the project root to the Python path to allow for module imports
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, project_root)
-
 from opensearchpy import helpers
 from tqdm import tqdm
 
 from backend.common.opensearch import get_opensearch_client
 from backend.config import Config
+from backend.utils import json_dumps
 from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
 
 log_handle = logging.getLogger(__name__)
@@ -71,6 +65,8 @@ def populate_metadata(config: Config):
         log_handle.warning("No metadata found. Nothing to populate.")
         return
 
+    log_handle.info(f"aggregated_metadata: {json_dumps(aggregated_metadata)}")
+
     # --- Step 2: Populate the metadata index using the bulk helper ---
     log_handle.info(f"Populating the '{metadata_index}' index...")
 
@@ -91,9 +87,7 @@ def populate_metadata(config: Config):
     log_handle.info("Metadata index population complete.")
 
 def main():
-    """Main entry point for the script."""
-    logs_dir = os.path.join(os.getenv("HOME", "/tmp"), "cataloguesearch/logs/scripts")
-    setup_logging(logs_dir, console_level=logging.INFO, file_level=VERBOSE_LEVEL_NUM, console_only=False)
+    setup_logging(console_level=logging.INFO, file_level=VERBOSE_LEVEL_NUM, console_only=True)
     config = Config("configs/config.yaml")
     populate_metadata(config)
 

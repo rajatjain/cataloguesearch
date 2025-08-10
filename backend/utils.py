@@ -27,6 +27,9 @@ class CustomJSONEncoder(json.JSONEncoder):
         # Handle numpy arrays
         if isinstance(o, np.ndarray):
             return o.tolist()
+        # Handle sets
+        if isinstance(o, set):
+            return list(o)
         # Let the base class default method raise the TypeError for other types
         return super().default(o)
 
