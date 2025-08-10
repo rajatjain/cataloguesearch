@@ -273,6 +273,85 @@ If OpenSearch fails to start due to memory:
 sudo sysctl -w vm.max_map_count=262144
 ```
 
+### OpenSearch Index Management
+```bash
+# Delete index (if needed for fresh start)
+curl -X DELETE "localhost:9200/cataloguesearch_prod"
+
+# Check snapshot status
+curl -X GET "localhost:9200/_snapshot/my_backup/_all"
+
+# Check restore status
+curl -X GET "localhost:9200/_cat/recovery/cataloguesearch_prod?v"
+
+# Check index document count
+curl -X GET "localhost:9200/cataloguesearch_prod/_count"
+```
+
+### Docker Container Management
+```bash
+# Check running containers
+docker ps
+
+# Check container logs with follow
+docker logs container_name -f
+
+# Execute command in container
+docker exec -it container_name /bin/bash
+
+# Copy files from host to container
+docker cp /local/path/file container_name:/container/path/
+
+# Copy files from container to host
+docker cp container_name:/container/path/file /local/path/
+
+# Check disk usage
+docker system df
+
+# Clean up unused images/containers
+docker system prune -a
+```
+
+### Performance Monitoring
+```bash
+# Real-time container stats (CPU, Memory, Network, Disk I/O)
+docker stats
+
+# Stats for specific container
+docker stats cataloguesearch-api
+
+# One-time stats snapshot
+docker stats --no-stream
+
+# Detailed memory usage inside container
+docker exec -it container_name free -h
+
+# Check disk usage inside container
+docker exec -it container_name df -h
+
+# Check disk usage of specific directory (e.g., model cache)
+docker exec -it cataloguesearch-api du -sh /app/data/.cache/huggingface/
+
+# Check container processes
+docker exec -it container_name ps aux
+
+# Monitor container logs during query execution
+docker logs cataloguesearch-api --tail 100 -f
+
+# Check container resource limits
+docker inspect container_name | grep -i memory
+docker inspect container_name | grep -i cpu
+```
+
+### System Monitoring (on host)
+```bash
+# Monitor disk I/O during query execution
+sudo iotop -a -o -d 1
+
+# Monitor system resources during query
+htop
+```
+
 ### Check Health
 ```bash
 curl -k  \

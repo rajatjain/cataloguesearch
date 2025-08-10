@@ -47,7 +47,9 @@ def get_opensearch_config(config: Config) -> dict:
 
     return _opensearch_settings
 
-
+# TODO(rajatjain): Move this to scripts/ directory to create the indices.
+#                  This will also include changes to include metadata index
+#                  once that is created.
 def create_index_if_not_exists(config, opensearch_client):
     """
     Creates the OpenSearch index with a predefined mapping if it doesn't already exist.

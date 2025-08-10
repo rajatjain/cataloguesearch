@@ -78,11 +78,11 @@ async def get_metadata_api():
         log_handle.info("Cache expired or empty, fetching metadata from OpenSearch")
         config = Config()
         metadata = get_metadata(config)
-        
+
         # Update cache
         metadata_cache["data"] = metadata
         metadata_cache["timestamp"] = current_time
-        
+
         log_handle.info(f"Metadata retrieved and cached: {len(metadata)} keys found")
         return JSONResponse(content=metadata, status_code=200)
     except Exception as e:
