@@ -5,18 +5,8 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install system dependencies for OCR, PDF processing, and compilation
+# Install system dependencies for API only (no OCR/PDF processing)
 RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
-    tesseract-ocr-hin \
-    tesseract-ocr-guj \
-    tesseract-ocr-eng \
-    poppler-utils \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
     curl \
     gcc \
     g++ \
@@ -24,11 +14,13 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first (for better layer caching)
-COPY requirements.txt .
+# Copy API requirements only (for better layer caching)
+COPY requirements-base.txt requirements-api.txt ./
 
-# Install Python dependencies (this layer will be cached unless requirements.txt changes)
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies (this layer will be cached unless requirements change)
+# Force pip to install CPU-only versions of PyTorch and its dependencies
+# by adding the PyTorch CPU-only index. This drastically reduces image size.
+RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-api.txt
 
 # --- Stage 2: Final Image ---
 # This stage creates the final, smaller runtime image by copying
@@ -37,24 +29,16 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install only the RUNTIME system dependencies (no build tools)
+# Install minimal runtime dependencies for API only
 RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
-    tesseract-ocr-hin \
-    tesseract-ocr-guj \
-    tesseract-ocr-eng \
-    poppler-utils \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the installed Python packages from the builder stage
+# Copy only the Python packages and essential binaries from the builder stage
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# Only copy essential Python binaries, not build tools
+COPY --from=builder /usr/local/bin/python3 /usr/local/bin/python3
+COPY --from=builder /usr/local/bin/pip3 /usr/local/bin/pip3
 
 # Copy Indic NLP resources from the local directory into the image
 COPY indic_nlp_resources /app/indic_nlp_resources
@@ -66,8 +50,8 @@ COPY utils/ ./utils/
 COPY docker/api/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Copy the ONNX models into the image from the build context
-COPY models/ /app/models/
+# Note: ONNX models should be mounted at runtime, not baked into the image
+COPY models/bge-reranker-base-onnx /app/models/bge-reranker-base-onnx
 
 # Set environment variables
 ENV PYTHONPATH=/app

@@ -17,9 +17,10 @@ if [[ "$ENV" != "local" && "$ENV" != "prod" ]]; then
 fi
 
 # Validate action
-if [[ "$ACTION" != "up" && "$ACTION" != "down" && "$ACTION" != "build" && "$ACTION" != "logs" && "$ACTION" != "build-api" && "$ACTION" != "restart-api" && "$ACTION" != "build-frontend" && "$ACTION" != "restart-frontend" && "$ACTION" != "push" && "$ACTION" != "push-api" ]]; then
-    echo "Error: Action must be 'up', 'down', 'build', 'logs', 'build-api', 'restart-api', 'build-frontend', 'restart-frontend', 'push', or 'push-api'"
-    echo "Usage: $0 [local|prod] [up|down|build|logs|build-api|restart-api|build-frontend|restart-frontend|push|push-api]"
+VALID_ACTIONS=("up" "down" "build" "logs" "restart" "build-api" "restart-api" "build-frontend" "restart-frontend" "push" "push-api" "push-frontend")
+if ! [[ " ${VALID_ACTIONS[*]} " =~ " ${ACTION} " ]]; then
+    echo "Error: Action must be one of: ${VALID_ACTIONS[*]}"
+    echo "Usage: $0 [local|prod] [action]"
     exit 1
 fi
 
@@ -62,6 +63,12 @@ case $ACTION in
         docker-compose --env-file "$ENV_FILE" up -d --no-deps cataloguesearch-api
         echo "API service restarted. Available at: http://localhost:8000"
         ;;
+    "restart")
+        echo "Rebuilding and restarting all services..."
+        docker-compose --env-file "$ENV_FILE" build
+        docker-compose --env-file "$ENV_FILE" up -d
+        echo "All services restarted."
+        ;;
     "build-frontend")
         echo "Building only the frontend service..."
         docker-compose --env-file "$ENV_FILE" build cataloguesearch-frontend
@@ -93,5 +100,14 @@ case $ACTION in
         docker-compose --env-file "$ENV_FILE" build cataloguesearch-api
         docker-compose --env-file "$ENV_FILE" push cataloguesearch-api
         echo "API image pushed successfully."
+        ;;
+    "push-frontend")
+        echo "Building and pushing only frontend image to Docker Hub (jain9rajat/cataloguesearch:frontend)..."
+        echo "Please ensure you are logged in with 'docker login'."
+
+        # Build and push only the frontend service
+        docker-compose --env-file "$ENV_FILE" build cataloguesearch-frontend
+        docker-compose --env-file "$ENV_FILE" push cataloguesearch-frontend
+        echo "Frontend image pushed successfully."
         ;;
 esac

@@ -1,0 +1,7 @@
+# API-only requirements (lightweight for containerized API service)
+
+# Include base requirements
+-r requirements-base.txt
+
+# No additional API-specific libraries needed beyond base requirements
+# This file exists to explicitly separate API dependencies from crawler dependencies

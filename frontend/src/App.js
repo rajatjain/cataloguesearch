@@ -43,6 +43,7 @@ const Spinner = () => <div className="animate-spin rounded-full h-4 w-4 border-b
 const FilterIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L13 10.414V15a1 1 0 01-.293.707l-2 2A1 1 0 019 17v-6.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" /></svg>;
 const SimilarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>;
 const ExpandIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5" /></svg>;
+const BetaBadge = () => <span className="inline-block bg-orange-100 text-orange-800 text-xs font-semibold px-2 py-0.5 rounded-full ml-2">BETA</span>;
 
 
 // --- UI COMPONENTS ---
@@ -144,7 +145,7 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity, allowTy
                             onChange={(e) => setSearchType(e.target.value)} 
                             className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500" 
                         />
-                        <span className="text-base font-medium">Better Relevance <span className="text-sm text-slate-500">(slower)</span></span>
+                        <span className="text-base font-medium flex items-center">Better Relevance <span className="text-sm text-slate-500">(slower)</span><BetaBadge /></span>
                     </label>
                     <label className="flex items-center gap-2 text-slate-700">
                         <input 
@@ -307,10 +308,17 @@ const SimilarSourceInfoCard = ({ sourceDoc }) => {
     );
 };
 
-const ResultsList = ({ results, totalResults, pageSize, currentPage, onPageChange, resultType, onFindSimilar, onExpand }) => {
+const ResultsList = ({ results, totalResults, pageSize, currentPage, onPageChange, resultType, onFindSimilar, onExpand, searchType }) => {
     const totalPages = Math.ceil(totalResults / pageSize);
     return (
         <div className="bg-white p-3 md:p-4 rounded-b-md">
+            {searchType === 'speed' && (
+                <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg mb-4">
+                    <p className="text-sm text-blue-800">
+                        For more accurate relevance, select the "Better Relevance" option under "Filters" and try again (note that this is in beta).
+                    </p>
+                </div>
+            )}
             <div className="text-sm text-slate-500 mb-3">Showing {results.length} of {totalResults} results.</div>
             <div className="space-y-3">
                 {results.map((result, index) => (
@@ -356,7 +364,7 @@ export default function App() {
     const [language, setLanguage] = useState('hindi');
     const [proximity, setProximity] = useState(20);
     const [allowTypos, setAllowTypos] = useState(false);
-    const [searchType, setSearchType] = useState('relevance');
+    const [searchType, setSearchType] = useState('speed');
     const [showFilters, setShowFilters] = useState(false);
     const [metadata, setMetadata] = useState({});
     const [searchData, setSearchData] = useState(null);
@@ -439,9 +447,9 @@ export default function App() {
                     {!isLoading && (searchData || similarDocumentsData) && (
                         <div className="mt-4">
                             <Tabs activeTab={activeTab} setActiveTab={setActiveTab} searchData={searchData} similarDocumentsData={similarDocumentsData} onClearSimilar={handleClearSimilar} />
-                            {activeTab === 'keyword' && searchData?.results.length > 0 && <ResultsList results={searchData.results} totalResults={searchData.total_results} pageSize={PAGE_SIZE} currentPage={keywordPage} onPageChange={handlePageChange} resultType="keyword" onFindSimilar={handleFindSimilar} onExpand={handleExpand} />}
-                            {activeTab === 'vector' && (searchData?.vector_results.length > 0 ? <ResultsList results={paginatedVectorResults} totalResults={searchData.total_vector_results} pageSize={PAGE_SIZE} currentPage={vectorPage} onPageChange={handlePageChange} resultType="vector" onFindSimilar={handleFindSimilar} onExpand={handleExpand} /> : searchData && <div className="text-center py-8 text-base text-slate-500 bg-white rounded-b-md border-t-0">No results found. Try a different query.</div>)}
-                            {activeTab === 'similar' && <div className="bg-white p-3 md:p-4 rounded-b-md"><SimilarSourceInfoCard sourceDoc={sourceDocForSimilarity} />{similarDocumentsData?.results.length > 0 ? <ResultsList results={paginatedSimilarResults} totalResults={similarDocumentsData.total_results} pageSize={PAGE_SIZE} currentPage={similarDocsPage} onPageChange={handlePageChange} resultType="similar" onFindSimilar={handleFindSimilar} onExpand={handleExpand} /> : <div className="text-center py-8 text-base text-slate-500">No similar documents found.</div>}</div>}
+                            {activeTab === 'keyword' && searchData?.results.length > 0 && <ResultsList results={searchData.results} totalResults={searchData.total_results} pageSize={PAGE_SIZE} currentPage={keywordPage} onPageChange={handlePageChange} resultType="keyword" onFindSimilar={handleFindSimilar} onExpand={handleExpand} searchType={searchType} />}
+                            {activeTab === 'vector' && (searchData?.vector_results.length > 0 ? <ResultsList results={paginatedVectorResults} totalResults={searchData.total_vector_results} pageSize={PAGE_SIZE} currentPage={vectorPage} onPageChange={handlePageChange} resultType="vector" onFindSimilar={handleFindSimilar} onExpand={handleExpand} searchType={searchType} /> : searchData && <div className="text-center py-8 text-base text-slate-500 bg-white rounded-b-md border-t-0">No results found. Try a different query.</div>)}
+                            {activeTab === 'similar' && <div className="bg-white p-3 md:p-4 rounded-b-md"><SimilarSourceInfoCard sourceDoc={sourceDocForSimilarity} />{similarDocumentsData?.results.length > 0 ? <ResultsList results={paginatedSimilarResults} totalResults={similarDocumentsData.total_results} pageSize={PAGE_SIZE} currentPage={similarDocsPage} onPageChange={handlePageChange} resultType="similar" onFindSimilar={handleFindSimilar} onExpand={handleExpand} searchType={searchType} /> : <div className="text-center py-8 text-base text-slate-500">No similar documents found.</div>}</div>}
                         </div>
                     )}
                     {!isLoading && !searchData && <div className="text-center py-8 text-base text-slate-500 bg-white rounded-lg border border-slate-200">Enter a query and click Search to see results.</div>}
