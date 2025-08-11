@@ -100,15 +100,17 @@ class Config:
         elif name == "CHUNK_STRATEGY":
             return self._settings.get("index", {}).get("chunk_strategy", "default")
         elif name == "OPENSEARCH_HOST":
-            return os.getenv("OPENSEARCH_HOST", self._settings.get("opensearch", {}).get("host", "localhost"))
+            return self._settings.get("opensearch", {}).get("host") or "localhost"
         elif name == "OPENSEARCH_PORT":
-            return self._settings.get("opensearch", {}).get("port", 9200)
+            return self._settings.get("opensearch", {}).get("port") or 9200
         elif name == "OPENSEARCH_USERNAME":
             return self._settings.get("opensearch", {}).get("username", "admin")
         elif name == "OPENSEARCH_PASSWORD":
             return self._settings.get("opensearch", {}).get("password", "admin")
         elif name == "OPENSEARCH_INDEX_NAME":
             return self._settings.get("opensearch", {}).get("index_name", "document_chunks")
+        elif name == "OPENSEARCH_METADATA_INDEX_NAME":
+            return self._settings.get("opensearch", {}).get("metadata_index_name", "document_metadata")
         elif name == "EMBEDDING_MODEL_NAME":
             return self._settings.get("vector_embeddings", {}).get("embedding_model", "BAAI/bge-m3")
         elif name == "RERANKING_MODEL_NAME":

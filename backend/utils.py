@@ -9,6 +9,10 @@ from tqdm import tqdm
 from typing import Callable, List, Any
 import numpy as np
 from starlette.responses import JSONResponse as StarletteJSONResponse
+import psutil
+import logging
+
+log_handle = logging.getLogger(__name__)
 
 class CustomJSONEncoder(json.JSONEncoder):
     """
@@ -27,6 +31,9 @@ class CustomJSONEncoder(json.JSONEncoder):
         # Handle numpy arrays
         if isinstance(o, np.ndarray):
             return o.tolist()
+        # Handle sets
+        if isinstance(o, set):
+            return list(o)
         # Let the base class default method raise the TypeError for other types
         return super().default(o)
 
@@ -104,3 +111,12 @@ def json_dumps(obj, **kwargs):
     else:
         return json.dumps(obj, ensure_ascii=False, indent=2,
                           cls=CustomJSONEncoder, **kwargs)
+
+def log_memory_usage():
+    """
+    Logs the current memory usage of the application.
+    """
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    log_handle.info(f"Memory Usage: RSS={mem_info.rss / 1024 ** 2:.2f} MB, "
+                    f"VMS={mem_info.vms / 1024 ** 2:.2f} MB")
