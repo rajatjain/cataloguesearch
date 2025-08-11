@@ -23,30 +23,28 @@ def parse_pdf():
 
     meta = {
         "language": "hi",
-        "start_page": 40,
-        "end_page": 50,
-        "header_regex": [
-            "^.{0,5}गाथा.{0,30}$",
-            "^.{0,5}कलश.{0,30}$",
-            "^प्रवचन\s+नं\.?.*$",
-            "^प्रवच्चन\s+नं\.?.*$",
-            "^[०-९\s]*$",
-            "^प्रवचन-[०-९]+,?\s*(?:(?:श्लोक|गाथा)-[०-९]+(?:(?:\s+से)?\s+[०-९]+)*,?\s*)?.*?दिनांक\s+[०-९]+(?:-[०-९]+){2}\s*",
-            "^प्रवचन-[०-९]+",
-
-            # footer regex
-            "^\\*\\s+",
-            "^[०-९]\\.\\s+",
-        ],
+        "start_page": 13,
+        "end_page": 420,
         "header_prefix": [
-            "^.{0,5}कारण\\s*.?\\s*कार्य\\s*.?\\s*नियम(?:\\s+\\(?भाग\\s*-?\\s*[०-९]+\\s*\\)?)?(?:\\s+[०-९]+)*\\s*",
-            "^.{0,5}\\s*श्लोक-\\s*[०-९]+(?:(?:\\s+से)?\\s+[०-९]+)*\\s*",
-            "^.{0,5}\\s*गाथा-\\s*[०-९]+(?:(?:\\s+से)?\\s+[०-९]+)*\\s*",
+            "^.{0,8}\\s*अष्टपाहुड़.*\\s+.*प्रवचन\\s+\\(?भाग\\s*-?\\s*[०-९]+\\)?\\s+",
+            "^.{0,5}\\s*गाथा-?[०-९]+\\s+[०-९]+"
+        ],
+        "header_regex": [
+            "^.{0,5}$",
+            "^.{0,5}गाथा.{0,30}$",
+            "^.{0,6}अष्टपाहुड़.*\\s+.*प्रवचन.{0,30}$",
+            "^.{0,5}कलश.{0,30}$",
+            "^.{0,5}श्लोक.{0,30}$",
+            "^प्रवचन\\s+नं\\.?.*$",
+            "^प्रवच्चन\\s+नं\\.?.*$",
+            "^[०-९\\s]*$",
+            "^.*पर\\s+प्रवचन.*$",
+            "^.*श्लोक.*प्रवचन.*$"
         ]
     }
     home = os.getenv("HOME")
-    pdf_file = "%s/cataloguesearch/Karan_Karya_Niyam_Part_2_H.pdf" % home
-    output_dir = "%s/cataloguesearch/Karan_Karya_Niyam_Part_2_H" % home
+    pdf_file = "%s/github/rajatjain/cataloguesearch-configs/Pravachans/hindi/Charananuyog/Asht Pahud/1970_Series/Asht_Pahud_Pravachan_Part-1_H.pdf" % home
+    output_dir = "%s/cataloguesearch/Asht_Pahud_Pravachan_Part-1_H" % home
     shutil.rmtree(output_dir, ignore_errors=True)
     os.makedirs(output_dir, exist_ok=True)
     _pdf_processor.process_pdf(pdf_file, output_dir, meta)

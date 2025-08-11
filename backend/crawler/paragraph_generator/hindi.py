@@ -40,6 +40,7 @@ class HindiParagraphGenerator(BaseParagraphGenerator):
         typo_list = [
             ("गुरुदेव श्री", "गुरुदेवश्री"),
             ("श्रोता -", "श्रोता:"),
+            ("प्रश्न -", "प्रश्न:"),
             ("पूज्य गुरुदेवश्री -", "पूज्य गुरुदेवश्री:"),
             ("मुमुक्षु -", "मुमुक्षु:"),
             ("मुम॒क्षु:", "मुमुक्षु:"),
@@ -50,8 +51,11 @@ class HindiParagraphGenerator(BaseParagraphGenerator):
             ("प्रवच्चन", "प्रवचन"),
             ("प्रवच्चन", "प्रवचन"),
             ("मुमुक्ष:", "मुमुक्षु:"),
+            ("मुमुक्षु;", "मुमुक्षु:"),
             ("परवचन", "प्रवचन"),
-            ("सीमंघर", "सीमंधर")
+            ("सीमंघर", "सीमंधर"),
+            ("पाहुड", "पाहुड़"),
+            ("अष्टपाहुड़़़", "अष्टपाहुड़़")
         ]
 
         for typo in typo_list:
@@ -62,7 +66,7 @@ class HindiParagraphGenerator(BaseParagraphGenerator):
 
         # Join multiple lines into a single line with spaces
         # BUT do not join lines that start with "श्रोता:" or "पूज्य गुरुदेवश्री:" or "मुमुक्षु:"
-        cleaned_text = re.sub(r'\n(?!श्रोता:|पूज्य गुरुदेवश्री:|मुमुक्षु:|शंका:)', ' ', cleaned_text)
+        cleaned_text = re.sub(r'\n(?!श्रोता:|पूज्य गुरुदेवश्री:|मुमुक्षु:|शंका:|प्रश्न:|समाधान:)', ' ', cleaned_text)
 
         # Clean up any potential multiple spaces that might have been created
         cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
