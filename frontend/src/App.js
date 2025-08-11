@@ -282,14 +282,47 @@ const Tabs = ({ activeTab, setActiveTab, searchData, similarDocumentsData, onCle
     const keywordCount = searchData?.total_results || 0;
     const vectorCount = searchData?.total_vector_results || 0;
     const similarCount = similarDocumentsData?.total_results || 0;
+    const hasSuggestions = searchData?.suggestions && searchData.suggestions.length > 0;
     const tabStyle = "px-3 py-2 font-semibold text-base rounded-t-md cursor-pointer transition-colors duration-200 flex items-center gap-2 border-b-2";
     const activeTabStyle = "bg-white text-sky-600 border-sky-500";
     const inactiveTabStyle = "bg-transparent text-slate-500 hover:text-slate-700 border-transparent";
     return (
         <div className="flex border-b border-slate-200">
             {searchData?.results?.length > 0 && <button onClick={() => setActiveTab('keyword')} className={`${tabStyle} ${activeTab === 'keyword' ? activeTabStyle : inactiveTabStyle}`}>Keyword Results <span className="text-sm font-normal bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{keywordCount}</span></button>}
-            <button onClick={() => setActiveTab('vector')} className={`${tabStyle} ${activeTab === 'vector' ? activeTabStyle : inactiveTabStyle}`}>Semantic Results <span className="text-sm font-normal bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{vectorCount}</span></button>
+            {!hasSuggestions && <button onClick={() => setActiveTab('vector')} className={`${tabStyle} ${activeTab === 'vector' ? activeTabStyle : inactiveTabStyle}`}>Semantic Results <span className="text-sm font-normal bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{vectorCount}</span></button>}
             {similarDocumentsData && <button onClick={() => setActiveTab('similar')} className={`${tabStyle} ${activeTab === 'similar' ? activeTabStyle : inactiveTabStyle}`}>More Like This <span className="text-sm font-normal bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{similarCount}</span><span onClick={(e) => { e.stopPropagation(); onClearSimilar(); }} className="text-red-400 hover:text-red-600 font-bold text-lg ml-1">&times;</span></button>}
+        </div>
+    );
+};
+
+const SuggestionsCard = ({ suggestions, originalQuery, onSuggestionClick }) => {
+    if (!suggestions || suggestions.length === 0) return null;
+    
+    return (
+        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg mb-4">
+            <div className="text-base text-yellow-800">
+                <p className="mb-3">
+                    No results found for "<span className="font-bold text-red-700">{originalQuery}</span>".
+                </p>
+                <p>
+                    Did you mean: 
+                    <span className="inline-flex flex-wrap items-center gap-2 ml-2">
+                        {suggestions.map((suggestion, index) => (
+                            <button
+                                key={index}
+                                onClick={() => onSuggestionClick(suggestion)}
+                                className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 font-bold cursor-pointer 
+                                         underline decoration-2 underline-offset-2 
+                                         px-2 py-1 rounded transition-colors duration-200
+                                         border border-transparent hover:border-blue-300"
+                            >
+                                {suggestion}
+                            </button>
+                        ))}
+                    </span>
+                    ?
+                </p>
+            </div>
         </div>
     );
 };
@@ -413,6 +446,19 @@ export default function App() {
         if (searchData?.results?.length > 0) { setActiveTab('keyword'); } else { setActiveTab('vector'); }
     };
 
+    const handleSuggestionClick = (suggestion) => {
+        setQuery(suggestion);
+        // Trigger a new search with the suggestion
+        const newQuery = suggestion;
+        setIsLoading(true); setKeywordPage(1); setVectorPage(1); setSimilarDocumentsData(null); setSourceDocForSimilarity(null);
+        const requestPayload = { query: newQuery, allow_typos: allowTypos, categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}), language: language === 'both' ? null : language, proximity_distance: proximity, page_number: 1, page_size: PAGE_SIZE, enable_reranking: searchType === 'relevance' };
+        api.search(requestPayload).then(data => {
+            setSearchData(data);
+            if (data.results && data.results.length > 0) { setActiveTab('keyword'); } else { setActiveTab('vector'); }
+            setIsLoading(false);
+        });
+    };
+
     const handlePageChange = (page) => {
         switch (activeTab) {
             case 'keyword': handleSearch(page); break;
@@ -447,6 +493,7 @@ export default function App() {
                     {isLoading && <div className="text-center py-8"><div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div><p className="mt-3 text-base text-slate-500">Searching...</p></div>}
                     {!isLoading && (searchData || similarDocumentsData) && (
                         <div className="mt-4">
+                            <SuggestionsCard suggestions={searchData?.suggestions} originalQuery={query} onSuggestionClick={handleSuggestionClick} />
                             <Tabs activeTab={activeTab} setActiveTab={setActiveTab} searchData={searchData} similarDocumentsData={similarDocumentsData} onClearSimilar={handleClearSimilar} />
                             {activeTab === 'keyword' && searchData?.results.length > 0 && <ResultsList results={searchData.results} totalResults={searchData.total_results} pageSize={PAGE_SIZE} currentPage={keywordPage} onPageChange={handlePageChange} resultType="keyword" onFindSimilar={handleFindSimilar} onExpand={handleExpand} searchType={searchType} />}
                             {activeTab === 'vector' && (searchData?.vector_results.length > 0 ? <ResultsList results={paginatedVectorResults} totalResults={searchData.total_vector_results} pageSize={PAGE_SIZE} currentPage={vectorPage} onPageChange={handlePageChange} resultType="vector" onFindSimilar={handleFindSimilar} onExpand={handleExpand} searchType={searchType} /> : searchData && <div className="text-center py-8 text-base text-slate-500 bg-white rounded-b-md border-t-0">No results found. Try a different query.</div>)}
