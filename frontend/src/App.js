@@ -94,7 +94,7 @@ const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter 
     );
 };
 
-const SearchOptions = ({ language, setLanguage, proximity, setProximity, allowTypos, setAllowTypos, searchType, setSearchType }) => {
+const SearchOptions = ({ language, setLanguage, proximity, setProximity, searchType, setSearchType }) => {
     const languageOptions = ['hindi', 'gujarati', 'both'];
     const proximityOptions = [
         { label: 'Exact Phrase', value: 0 },
@@ -103,7 +103,7 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity, allowTy
         { label: 'Far (30)', value: 30 }
     ];
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-3 border-t border-slate-200">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-slate-200">
              <div>
                 <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Language</h3>
                 <div className="flex gap-4">
@@ -119,15 +119,14 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity, allowTy
                 <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Proximity</h3>
                 <div className="flex flex-wrap gap-3">
                     {proximityOptions.map(opt => (
-                        <label key={opt.value} className={`flex items-center gap-1.5 text-base ${allowTypos && opt.value === 0 ? 'text-slate-400 cursor-not-allowed' : 'text-slate-700'}`}>
+                        <label key={opt.value} className="flex items-center gap-1.5 text-base text-slate-700">
                             <input
                                 type="radio"
                                 name="proximity"
                                 value={opt.value}
                                 checked={proximity === opt.value}
                                 onChange={() => setProximity(opt.value)}
-                                disabled={allowTypos && opt.value === 0}
-                                className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500 disabled:opacity-50"
+                                className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500"
                             />
                             {opt.label}
                         </label>
@@ -161,13 +160,6 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity, allowTy
                     </label>
                 </div>
              </div>
-             <div>
-                <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Options</h3>
-                <label className="flex items-center gap-2 text-slate-700">
-                    <input type="checkbox" checked={allowTypos} onChange={(e) => { const checked = e.target.checked; setAllowTypos(checked); if (checked && proximity === 0) { setProximity(10); } }} className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-slate-300 rounded" />
-                    <span className="text-base font-medium">Allow Typos</span>
-                </label>
-            </div>
         </div>
     );
 };
@@ -397,7 +389,6 @@ export default function App() {
     const [activeFilters, setActiveFilters] = useState([]);
     const [language, setLanguage] = useState('hindi');
     const [proximity, setProximity] = useState(20);
-    const [allowTypos, setAllowTypos] = useState(false);
     const [searchType, setSearchType] = useState('speed');
     const [showFilters, setShowFilters] = useState(false);
     const [metadata, setMetadata] = useState({});
@@ -420,12 +411,12 @@ export default function App() {
     const handleSearch = useCallback(async (page = 1) => {
         if (!query.trim()) { alert("Please enter a search query."); return; }
         setIsLoading(true); setKeywordPage(page); setVectorPage(1); setSimilarDocumentsData(null); setSourceDocForSimilarity(null);
-        const requestPayload = { query, allow_typos: allowTypos, categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}), language: language === 'both' ? null : language, proximity_distance: proximity, page_number: page, page_size: PAGE_SIZE, enable_reranking: searchType === 'relevance' };
+        const requestPayload = { query, allow_typos: false, categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}), language: language === 'both' ? null : language, proximity_distance: proximity, page_number: page, page_size: PAGE_SIZE, enable_reranking: searchType === 'relevance' };
         const data = await api.search(requestPayload);
         setSearchData(data);
         if (data.results && data.results.length > 0) { setActiveTab('keyword'); } else { setActiveTab('vector'); }
         setIsLoading(false);
-    }, [query, activeFilters, language, proximity, allowTypos, searchType]);
+    }, [query, activeFilters, language, proximity, searchType]);
 
     const handleFindSimilar = async (sourceDoc) => {
         setIsLoading(true); setSourceDocForSimilarity(sourceDoc); setSimilarDocsPage(1);
@@ -451,7 +442,7 @@ export default function App() {
         // Trigger a new search with the suggestion
         const newQuery = suggestion;
         setIsLoading(true); setKeywordPage(1); setVectorPage(1); setSimilarDocumentsData(null); setSourceDocForSimilarity(null);
-        const requestPayload = { query: newQuery, allow_typos: allowTypos, categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}), language: language === 'both' ? null : language, proximity_distance: proximity, page_number: 1, page_size: PAGE_SIZE, enable_reranking: searchType === 'relevance' };
+        const requestPayload = { query: newQuery, allow_typos: false, categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}), language: language === 'both' ? null : language, proximity_distance: proximity, page_number: 1, page_size: PAGE_SIZE, enable_reranking: searchType === 'relevance' };
         api.search(requestPayload).then(data => {
             setSearchData(data);
             if (data.results && data.results.length > 0) { setActiveTab('keyword'); } else { setActiveTab('vector'); }
@@ -488,7 +479,7 @@ export default function App() {
                             <button onClick={() => handleSearch(1)} disabled={isLoading} className="bg-sky-600 text-white font-bold py-3 px-4 rounded-md text-base hover:bg-sky-700 transition duration-300 disabled:bg-slate-300 flex items-center justify-center w-full">{isLoading ? <Spinner /> : 'Search'}</button>
                         </div>
                         <div className="mt-3"><button onClick={() => setShowFilters(!showFilters)} className="flex items-center text-sky-700 font-semibold hover:text-sky-800 text-sm">{showFilters ? <ChevronUpIcon /> : <ChevronDownIcon />}{showFilters ? 'Hide Filters' : 'Show Filters'}<span className="ml-2 bg-slate-200 text-slate-600 text-sm font-bold px-1.5 py-0.5 rounded-full">{activeFilters.length}</span></button></div>
-                        {showFilters && <div className="mt-3 space-y-3"><MetadataFilters metadata={metadata} activeFilters={activeFilters} onAddFilter={addFilter} onRemoveFilter={removeFilter} /><SearchOptions language={language} setLanguage={setLanguage} proximity={proximity} setProximity={setProximity} allowTypos={allowTypos} setAllowTypos={setAllowTypos} searchType={searchType} setSearchType={setSearchType} /></div>}
+                        {showFilters && <div className="mt-3 space-y-3"><MetadataFilters metadata={metadata} activeFilters={activeFilters} onAddFilter={addFilter} onRemoveFilter={removeFilter} /><SearchOptions language={language} setLanguage={setLanguage} proximity={proximity} setProximity={setProximity} searchType={searchType} setSearchType={setSearchType} /></div>}
                     </div>
                     {isLoading && <div className="text-center py-8"><div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div><p className="mt-3 text-base text-slate-500">Searching...</p></div>}
                     {!isLoading && (searchData || similarDocumentsData) && (

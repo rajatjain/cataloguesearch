@@ -83,6 +83,7 @@ class IndexSearcher:
         When proximity_distance is 0, performs exact phrase match.
         allow_typos determines if fuzzy matching is allowed.
         """
+        # TODO(rajatjain): Remove the code for fuzzy matches. Now the code handles typing suggestions.
         query_field = self._text_fields.get(detected_language, 'text_content')
         if not query_field:
             log_handle.warning(f"Detected language '{detected_language}' not supported. Defaulting to English field.")

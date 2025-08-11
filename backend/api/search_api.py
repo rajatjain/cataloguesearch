@@ -119,7 +119,6 @@ class SearchRequest(BaseModel):
     query: str = Field(..., example="Bangalore city history")
     language: str = Field(..., description="Language of the query.", example="hindi")
     proximity_distance: int = Field(30, ge=0, description="Max word distance for proximity search. Use 0 for exact phrase.")
-    allow_typos: bool = Field(False, description="Allow typos in search terms.")
     categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
     page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
     page_number: int = Field(1, ge=1, description="Page number for pagination.")
@@ -135,7 +134,6 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
     embedding_model = request.app.state.embedding_model
     
     keywords = request_data.query
-    allow_typos = request_data.allow_typos
     proximity_distance = request_data.proximity_distance
     categories = request_data.categories
     page_size = request_data.page_size
@@ -144,19 +142,16 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
     language = request_data.language
 
     try:
-        if allow_typos and proximity_distance == 0:
-            proximity_distance = 10
-            log_handle.info(f"Changed proximity_distance from 0 to 10 because allow_typos=True")
 
         log_handle.info(f"Received search request: keywords='{keywords}', "
-                        f"allow_typos='{allow_typos}', proximity_distance={proximity_distance}, "
+                        f"proximity_distance={proximity_distance}, "
                         f"categories={categories}, page={page_number}, size={page_size}, "
                         f"language={language}, enable_reranking={enable_reranking}")
 
         lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
             keywords=keywords,
             proximity_distance=proximity_distance,
-            allow_typos=allow_typos,
+            allow_typos=False,
             categories=categories,
             detected_language=language,
             page_size=page_size,
