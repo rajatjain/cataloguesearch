@@ -144,7 +144,6 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
     if _client:
         if force_clean:
             delete_index(config)
-        create_indices_if_not_exists(config, _client)
         return _client
 
     log_handle.info("OpenSearch client not initialized. Creating a new instance...")

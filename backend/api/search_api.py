@@ -46,33 +46,23 @@ async def initialize():
         console_only=False)
     log_handle.info("Logging setup complete.")
 
-    log_memory_usage()
-
     # Load configuration
     relative_config_path = "configs/config.yaml"
     config = Config(relative_config_path)
     app.state.config = config
     log_handle.info("Configuration loaded.")
 
-    log_memory_usage()
-
     # Initialize OpenSearch client (the client itself is managed by opensearch.py module)
     get_opensearch_client(config)
     log_handle.info("OpenSearch client initialized.")
-
-    log_memory_usage()
 
     # Load embedding model
     app.state.embedding_model = get_embedding_model_factory(config)
     log_handle.info(f"Embedding model {config.EMBEDDING_MODEL_NAME} with type {config.EMBEDDING_MODEL_TYPE} loaded.")
 
-    log_memory_usage()
-
     # Initialize IndexSearcher (which may load the reranker)
     app.state.index_searcher = IndexSearcher(config)
     log_handle.info("IndexSearcher initialized.")
-
-    log_memory_usage()
 
     # Initialize and populate metadata cache
     app.state.metadata_cache = {
