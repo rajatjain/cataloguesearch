@@ -164,6 +164,30 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
         )
         log_handle.info(f"Lexical search returned {len(lexical_results)} results (total: {lexical_total_hits}).")
 
+        # Check if lexical search returned 0 results and query is lexical
+        if lexical_total_hits == 0 and index_searcher.is_lexical_query(keywords):
+            # Get spelling suggestions
+            suggestions = index_searcher.get_spelling_suggestions(
+                index_name=request.app.state.config.OPENSEARCH_INDEX_NAME,
+                text=keywords,
+                min_score=0.6,
+                num_suggestions=3
+            )
+            
+            # Return early with suggestions, skip vector search
+            response = {
+                "total_results": 0,
+                "page_size": page_size,
+                "page_number": page_number,
+                "results": [],
+                "vector_results": [],
+                "total_vector_results": 0,
+                "suggestions": suggestions
+            }
+            
+            log_handle.info(f"No lexical results found for lexical query '{keywords}'. Returning {len(suggestions)} suggestions.")
+            return JSONResponse(content=response, status_code=200)
+
         query_embedding = embedding_model.get_embedding(keywords)
         if not query_embedding:
             log_handle.warning("Could not generate embedding for query. Vector search skipped.")
