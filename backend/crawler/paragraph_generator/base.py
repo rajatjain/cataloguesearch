@@ -123,25 +123,34 @@ class BaseParagraphGenerator:
         return result
 
     def _phase3_combine_dialogue_pairs(self, paragraphs, stop_prefixes, answer_prefixes):
-        """Phase 3: Combine paragraphs when question is followed by answer"""
+        """Phase 3: Combine consecutive dialogue paragraphs into single paragraphs"""
         result = []
         i = 0
+        dialogue_prefixes = stop_prefixes + answer_prefixes
         
         while i < len(paragraphs):
             page_num, para_text = paragraphs[i]
             para_text = para_text.strip()
             
-            # Check if current para starts with stop prefix and next with answer prefix
-            if (para_text.startswith(stop_prefixes) and 
-                i + 1 < len(paragraphs) and
-                paragraphs[i + 1][1].strip().startswith(answer_prefixes)):
+            # Check if current paragraph starts with dialogue prefix
+            if para_text.startswith(dialogue_prefixes):
+                # Start collecting consecutive dialogue paragraphs
+                dialogue_buffer = [para_text]
+                dialogue_page_num = page_num
+                j = i + 1
                 
-                # Combine with next paragraph
-                next_para = paragraphs[i + 1][1].strip()
-                combined_para = para_text + "\n" + next_para
-                result.append((page_num, combined_para))
-                i += 2  # Skip both paragraphs
+                # Continue collecting while next paragraphs start with dialogue prefixes
+                while (j < len(paragraphs) and 
+                       paragraphs[j][1].strip().startswith(dialogue_prefixes)):
+                    dialogue_buffer.append(paragraphs[j][1].strip())
+                    j += 1
+                
+                # Combine all collected dialogue paragraphs
+                combined_dialogue = "\n".join(dialogue_buffer)
+                result.append((dialogue_page_num, combined_dialogue))
+                i = j  # Skip all processed paragraphs
             else:
+                # Non-dialogue paragraph, add as-is
                 result.append((page_num, para_text))
                 i += 1
                 

@@ -565,7 +565,7 @@ class IndexSearcher:
         }
 
         try:
-            print(f"Querying index '{index_name}' for suggestions on: '{text}'")
+            log_handle.info(f"Querying index '{index_name}' for suggestions on: '{text}'")
             response = client.search(
                 index=index_name,
                 body=query_body
