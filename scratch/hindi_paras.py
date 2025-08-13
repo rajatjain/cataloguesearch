@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+from os.path import basename
 
 from backend.crawler.pdf_processor import PDFProcessor
 from backend.config import Config
@@ -23,24 +24,21 @@ def parse_pdf():
 
     meta = {
         "language": "hi",
-        "start_page": 8,
-        "end_page": 516,
+        "start_page": 14,
+        "end_page": 651,
         "header_prefix": [
-            "^.{0,8}\\s*अष्टपाहुड़.*\\s+.*प्रवचन\\s+\\(?भाग\\s*-?\\s*[०-९]+\\)?\\s+",
+            "^पंचास्तिकाय\\s*संग्रह\\s*प्रवचन\\,? \\[?\\(?भाग\\s?-\\s?[०-९]+\\s?\\]?\\)?",
             "^.{0,5}\\s*गाथा-?[०-९]+\\s+[०-९]+",
             "^प्रवचन.*-[०-९][०-९][०-९][०-९]",
-            "^[०-९]+",
-            "^\\[प्रवचनसार\\s+गाथा.*\\]",
-            "^\\[प्रवचनसार\\s+सुधा.*\\]",
-            "^प्रवचनसार\\s+गाथा-?\\s+[०-९]*\\s+[०-९]*"
+            "^[०-९]+(?!\\. )",
         ],
         "header_regex": [
             "^.{0,5}$",
+            "^.{0,5}पंचास्तिकाय\\s?संग्रह\\s*प्रवचन,?\\s*भाग-?[०-९]+",
             "^.{0,5}गाथा.{0,30}$",
-            "^.{0,6}अष्टपाहुड़.*\\s+.*प्रवचन.{0,30}$",
             "^.{0,5}कलश.{0,30}$",
             "^.{0,5}श्लोक.{0,30}$",
-            "^प्रवचन\\s+नं\\.?.*$",
+            "^.{0,30}प्रवचन\\s+नं\\.?.*$",
             "^[०-९\\s]*$",
             "^.*पर\\s+प्रवचन.*$",
             "^.*श्लोक.*प्रवचन.*$",
@@ -51,13 +49,15 @@ def parse_pdf():
             "^.{0,5}श्लोक.{0,30}$",
             "^प्रवचन\\s+नं\\.?.*$",
             "^[०-९\\s]*$",
-            "^[०-९]\\.\\s+"
-            "^.{0,5}प्रवचन\\s+सुधा.*भाग.*$",
+            "^[०-९]\\.\\s+",
+            "^वी\\.?\\s+सं\\.?"
         ]
     }
     home = os.getenv("HOME")
-    pdf_file = "%s/cataloguesearch/pdf/Pravachans/hindi/Dravyanuyog/Pravachansaar/1979 Series/Pravachan_Sudha_Part_5_H.pdf" % home
-    output_dir = "%s/cataloguesearch/Pravachan_Sudha_Part_5_H" % home
+    pdf_file = "%s/cataloguesearch/Panchastikaya/PanchastikaySangrah_Pravachan_Part-03_H.pdf" % home
+    basename = os.path.basename(pdf_file)
+    fname = os.path.splitext(basename)[0]
+    output_dir = "%s/cataloguesearch/%s" % (home, fname)
     shutil.rmtree(output_dir, ignore_errors=True)
     os.makedirs(output_dir, exist_ok=True)
     _pdf_processor.process_pdf(pdf_file, output_dir, meta)

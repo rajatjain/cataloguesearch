@@ -62,6 +62,7 @@ class HindiParagraphGenerator(BaseParagraphGenerator):
             ("सीमंघर", "सीमंधर"),
             ("पाहुड", "पाहुड़"),
             ("ड़़़", "ड़"),
+            ("प्रइ्न", "प्रश्न"),
             ("आहा...हा...", "आहाहा")
         ]
 
