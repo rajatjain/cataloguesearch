@@ -10,7 +10,7 @@ from scratch.prod_setup import prod_setup
 log_handle = logging.getLogger(__name__)
 
 def get_spelling_suggestions(
-        index_name: str, text: str, min_score: float = 0.4, num_suggestions: int = 3):
+        index_name: str, text: str, min_score: float = 0.2, num_suggestions: int = 3):
     """
     Gets spelling suggestions for a given text and returns a list of corrected query strings.
 
@@ -107,5 +107,9 @@ def get_spelling_suggestions(
 if __name__ == '__main__':
     prod_setup()
     config = Config()
-    suggestions = get_spelling_suggestions(config.OPENSEARCH_INDEX_NAME, "मुमुक्ष")
-    log_handle.info(f"Suggestions: {json_dumps(suggestions)}")
+    queries = [
+        "आश्रव", "आस्रव", "निर्जरा"
+    ]
+    for query in queries:
+        suggestions = get_spelling_suggestions(config.OPENSEARCH_INDEX_NAME, query)
+        log_handle.info(f"Suggestions for {query}: {json_dumps(suggestions)}")
