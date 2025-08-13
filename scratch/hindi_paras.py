@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+from os.path import basename
 
 from backend.crawler.pdf_processor import PDFProcessor
 from backend.config import Config
@@ -23,30 +24,40 @@ def parse_pdf():
 
     meta = {
         "language": "hi",
-        "start_page": 40,
-        "end_page": 50,
+        "start_page": 14,
+        "end_page": 651,
+        "header_prefix": [
+            "^पंचास्तिकाय\\s*संग्रह\\s*प्रवचन\\,? \\[?\\(?भाग\\s?-\\s?[०-९]+\\s?\\]?\\)?",
+            "^.{0,5}\\s*गाथा-?[०-९]+\\s+[०-९]+",
+            "^प्रवचन.*-[०-९][०-९][०-९][०-९]",
+            "^[०-९]+(?!\\. )",
+        ],
         "header_regex": [
+            "^.{0,5}$",
+            "^.{0,5}पंचास्तिकाय\\s?संग्रह\\s*प्रवचन,?\\s*भाग-?[०-९]+",
             "^.{0,5}गाथा.{0,30}$",
             "^.{0,5}कलश.{0,30}$",
-            "^प्रवचन\s+नं\.?.*$",
-            "^प्रवच्चन\s+नं\.?.*$",
-            "^[०-९\s]*$",
-            "^प्रवचन-[०-९]+,?\s*(?:(?:श्लोक|गाथा)-[०-९]+(?:(?:\s+से)?\s+[०-९]+)*,?\s*)?.*?दिनांक\s+[०-९]+(?:-[०-९]+){2}\s*",
-            "^प्रवचन-[०-९]+",
-
-            # footer regex
+            "^.{0,5}श्लोक.{0,30}$",
+            "^.{0,30}प्रवचन\\s+नं\\.?.*$",
+            "^[०-९\\s]*$",
+            "^.*पर\\s+प्रवचन.*$",
+            "^.*श्लोक.*प्रवचन.*$",
             "^\\*\\s+",
+            "^[०-९]+",
+            "^.{0,5}गाथा.{0,30}$",
+            "^.{0,5}कलश.{0,30}$",
+            "^.{0,5}श्लोक.{0,30}$",
+            "^प्रवचन\\s+नं\\.?.*$",
+            "^[०-९\\s]*$",
             "^[०-९]\\.\\s+",
-        ],
-        "header_prefix": [
-            "^.{0,5}कारण\\s*.?\\s*कार्य\\s*.?\\s*नियम(?:\\s+\\(?भाग\\s*-?\\s*[०-९]+\\s*\\)?)?(?:\\s+[०-९]+)*\\s*",
-            "^.{0,5}\\s*श्लोक-\\s*[०-९]+(?:(?:\\s+से)?\\s+[०-९]+)*\\s*",
-            "^.{0,5}\\s*गाथा-\\s*[०-९]+(?:(?:\\s+से)?\\s+[०-९]+)*\\s*",
+            "^वी\\.?\\s+सं\\.?"
         ]
     }
     home = os.getenv("HOME")
-    pdf_file = "%s/cataloguesearch/Karan_Karya_Niyam_Part_2_H.pdf" % home
-    output_dir = "%s/cataloguesearch/Karan_Karya_Niyam_Part_2_H" % home
+    pdf_file = "%s/cataloguesearch/Panchastikaya/PanchastikaySangrah_Pravachan_Part-03_H.pdf" % home
+    basename = os.path.basename(pdf_file)
+    fname = os.path.splitext(basename)[0]
+    output_dir = "%s/cataloguesearch/%s" % (home, fname)
     shutil.rmtree(output_dir, ignore_errors=True)
     os.makedirs(output_dir, exist_ok=True)
     _pdf_processor.process_pdf(pdf_file, output_dir, meta)

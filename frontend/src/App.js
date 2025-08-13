@@ -58,9 +58,9 @@ const Header = () => (
     </div>
 );
 
-const SearchBar = ({ query, setQuery }) => (
+const SearchBar = ({ query, setQuery, onSearch }) => (
     <div className="relative">
-        <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Enter your search query..." className="w-full p-3 pl-4 text-lg bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-slate-900 font-sans" />
+        <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onSearch()} placeholder="Enter your search query..." className="w-full p-3 pl-4 text-lg bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-slate-900 font-sans" />
     </div>
 );
 
@@ -475,7 +475,7 @@ export default function App() {
                 <main>
                     <div className="bg-white p-3 md:p-4 rounded-lg shadow-sm border border-slate-200 mb-4">
                         <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
-                            <div className="sm:col-span-3"><SearchBar query={query} setQuery={setQuery} /></div>
+                            <div className="sm:col-span-3"><SearchBar query={query} setQuery={setQuery} onSearch={() => handleSearch(1)} /></div>
                             <button onClick={() => handleSearch(1)} disabled={isLoading} className="bg-sky-600 text-white font-bold py-3 px-4 rounded-md text-base hover:bg-sky-700 transition duration-300 disabled:bg-slate-300 flex items-center justify-center w-full">{isLoading ? <Spinner /> : 'Search'}</button>
                         </div>
                         <div className="mt-3"><button onClick={() => setShowFilters(!showFilters)} className="flex items-center text-sky-700 font-semibold hover:text-sky-800 text-sm">{showFilters ? <ChevronUpIcon /> : <ChevronDownIcon />}{showFilters ? 'Hide Filters' : 'Show Filters'}<span className="ml-2 bg-slate-200 text-slate-600 text-sm font-bold px-1.5 py-0.5 rounded-full">{activeFilters.length}</span></button></div>

@@ -242,31 +242,33 @@ class IndexSearcher:
     def _build_vector_query(
             self, embedding: List[float],
             categories: Dict[str, List[str]], size: int) -> Dict[str, Any]:
-        query_body = {
-            "size": size,
-            "query": {
-                "knn": {
-                    self._vector_field: {
-                        "vector": embedding,
-                        "k": size
-                    }
-                }
+        knn_query = {
+            self._vector_field: {
+                "vector": embedding,
+                "k": size
             }
         }
-        log_handle.verbose(
-            f"Vector query: {json_dumps(query_body, truncate_fields=['vector'])}")
-
+        
         category_filters = self._build_category_filters(categories)
         if category_filters:
-            query_body["query"] = {
+            # For filtered vector search, add filters directly to the knn query
+            knn_query[self._vector_field]["filter"] = {
                 "bool": {
-                    "must": [
-                        query_body["query"]
-                    ],
                     "filter": category_filters
                 }
             }
             log_handle.debug(f"Added {len(category_filters)} category filters to vector query.")
+        
+        query_body = {
+            "size": size,
+            "query": {
+                "knn": knn_query
+            }
+        }
+        
+        log_handle.verbose(
+            f"Vector query: {json_dumps(query_body, truncate_fields=['vector'])}")
+        
         return query_body
 
     def _extract_results(
@@ -565,7 +567,7 @@ class IndexSearcher:
         }
 
         try:
-            print(f"Querying index '{index_name}' for suggestions on: '{text}'")
+            log_handle.info(f"Querying index '{index_name}' for suggestions on: '{text}'")
             response = client.search(
                 index=index_name,
                 body=query_body
