@@ -8,7 +8,7 @@ class HindiParagraphGenerator(BaseParagraphGenerator):
     def __init__(self, config):
         super().__init__(config)
 
-    def _normalize_text(self, text: str) -> str:
+    def _normalize_text(self, text: str, typo_list: List) -> str:
         if not isinstance(text, str):
             return ""
 
@@ -36,23 +36,6 @@ class HindiParagraphGenerator(BaseParagraphGenerator):
         # Normalize spacing around ellipses (two or more dots).
         # This removes any space before an ellipsis.
         cleaned_text = re.sub(r'\s+(\.{2,})', r'\1', cleaned_text)
-
-        typo_list = [
-            ("गुरुदेव श्री", "गुरुदेवश्री"),
-            ("श्रोता -", "श्रोता:"),
-            ("पूज्य गुरुदेवश्री -", "पूज्य गुरुदेवश्री:"),
-            ("मुमुक्षु -", "मुमुक्षु:"),
-            ("मुम॒क्षु:", "मुमुक्षु:"),
-            ("मुमक्षु:", "मुमुक्षु:"),
-            ("इलोक", "श्लोक"),
-            ("शलोक", "श्लोक"),
-            ("प्रव्चन", "प्रवचन"),
-            ("प्रवच्चन", "प्रवचन"),
-            ("प्रवच्चन", "प्रवचन"),
-            ("मुमुक्ष:", "मुमुक्षु:"),
-            ("परवचन", "प्रवचन"),
-            ("सीमंघर", "सीमंधर")
-        ]
 
         for typo in typo_list:
             cleaned_text = cleaned_text.replace(typo[0], typo[1])

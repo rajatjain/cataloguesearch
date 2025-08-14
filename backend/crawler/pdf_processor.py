@@ -64,7 +64,7 @@ class PDFProcessor:
                 traceback.print_exc()
                 log_handle.error(f"Failed to write {fname}")
 
-    def _generate_paragraphs(self, pdf_file: str, page_list: list[int], language: str) -> list[tuple[int, list[str]]]:
+    def _generate_paragraphs(self, pdf_file: str, page_list: list[int], scan_config: dict, language: str) -> list[tuple[int, list[str]]]:
         """
         Extracts paragraphs from a specified list of pages in a PDF file.
 
@@ -129,7 +129,7 @@ class PDFProcessor:
             return []
 
         extracted_data = []
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(max_workers=8) as executor:
             results = list(tqdm(executor.map(
                 PDFProcessor._process_single_page, tasks), total=len(tasks), desc="Processing Pages"))
             extracted_data = results
@@ -145,7 +145,8 @@ class PDFProcessor:
         for page_num, paragraphs in extracted_data:
             fname = f"{tmp_folder}/page_{page_num:04d}.txt"
             for i, para in enumerate(paragraphs):
-                paragraphs[i] = self._paragraph_gen._normalize_text(para)
+                paragraphs[i] = self._paragraph_gen._normalize_text(
+                    para, scan_config.get("typo_list", []))
             content = "\n----\n".join(paragraphs)
             try:
                 with open(fname, 'w', encoding='utf-8') as fh:
@@ -225,11 +226,12 @@ class PDFProcessor:
             return None
 
         paragraphs = self._generate_paragraphs(
-            pdf_path, pages_list, language)
+            pdf_path, pages_list, scan_config, language)
 
         paragraphs = self._paragraph_gen.generate_paragraphs(
             paragraphs, scan_config
         )
+        log_handle.info(f"writing {len(paragraphs)} paragraphs for {output_dir}")
         self._write_paragraphs(output_dir, paragraphs)
         return None
 

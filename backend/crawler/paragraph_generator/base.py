@@ -16,18 +16,20 @@ class BaseParagraphGenerator:
                             file_metadata : dict) -> List[Tuple[int, List[str]]]:
         rejected_paras = []
         # Pass 1: Cleanup the null lines etc.
-        log_handle.info(f"scan_config: {json_dumps(file_metadata)}")
+        log_handle.info(f"Generating paragraphs for {len(paragraphs)} pages")
         header_regex = file_metadata.get("header_regex", [])
         header_prefix = file_metadata.get("header_prefix", [])
+        typo_list = file_metadata.get("typo_list", [])
         processed_paras = []
         for i, (page_num, para_list) in enumerate(paragraphs):
             for para_num, para in enumerate(para_list):
-                para = self._normalize_text(para)
+                para = self._normalize_text(para, typo_list)
                 is_header, processed_para = \
                     self._is_header_footer(para_num, para, header_prefix, header_regex)
                 if not is_header:
                     processed_paras.append((page_num, processed_para))
-
+                else:
+                    log_handle.verbose(f"Skipping para is_header: page:{page_num} -- {para}")
         # Pass 2: Intelligent para reordering
         final_paragraphs = self._combine_paragraphs(processed_paras)
         return final_paragraphs
@@ -85,8 +87,12 @@ class BaseParagraphGenerator:
 
             # If the paragraph we just added ends with punctuation,
             # the buffered chunk is now complete. Finalize it.
-            if para_text.endswith(PUNCTUATION_SUFFIXES) \
-                    or para_text.startswith(DIALOGUE_PREFIXES):
+            # For dialogue prefixes, only finalize if they also end with punctuation
+            should_finalize = (para_text.endswith(PUNCTUATION_SUFFIXES) or 
+                             (para_text.startswith(DIALOGUE_PREFIXES) and 
+                              para_text.endswith(PUNCTUATION_SUFFIXES)))
+            
+            if should_finalize:
                 if final_para := _finalize_buffer(paragraph_buffer):
                     combined_phase1.append(final_para)
 
@@ -101,29 +107,43 @@ class BaseParagraphGenerator:
             page_num, para = combined_phase1[i]
             para = para.strip()
 
-            # Check if the next paragraph exists and meets the combination criteria
-            if (para.startswith(STOP_PREFIXES) and
-                    i + 1 < num_paras and
-                    combined_phase1[i + 1][1].strip().startswith(ANSWER_PREFIXES)):
-
-                # Combine with the next paragraph ---
-                next_para = combined_phase1[i + 1][1].strip()
-                combined_para = para + "\n" + next_para
-                combined_paragraphs.append((page_num, combined_para))
-
-                i += 2
+            # Check if we have a question that can be combined with consecutive answers
+            if para.startswith(STOP_PREFIXES):
+                combined_qa = para
+                i += 1
+                
+                # Keep combining consecutive Q&A pairs
+                while (i < num_paras and 
+                       combined_phase1[i][1].strip().startswith(ANSWER_PREFIXES)):
+                    next_para = combined_phase1[i][1].strip()
+                    combined_qa += "\n" + next_para
+                    i += 1
+                    
+                    # Check if there's another question following this answer
+                    if (i < num_paras and 
+                        combined_phase1[i][1].strip().startswith(STOP_PREFIXES)):
+                        next_question = combined_phase1[i][1].strip()
+                        combined_qa += "\n" + next_question
+                        i += 1
+                
+                combined_paragraphs.append((page_num, combined_qa))
             else:
                 combined_paragraphs.append((page_num, para))
                 i += 1
         return combined_paragraphs
 
-    def _normalize_text(self, text: str):
+    def _normalize_text(self, text: str, typo_list: List):
         raise NotImplementedError("Implement inside subclass")
 
     def _is_header_footer(self, para_num, para, header_prefix, header_regex):
         for prefix in header_prefix:
-            para = re.sub(prefix, '', para, count=1)
-            para = para.strip()
+            match = re.search(prefix, para)
+            if match:
+                stripped_content = match.group(0)
+                log_handle.verbose(f"Stripped: '{stripped_content}'")
+
+                para = re.sub(prefix, '', para, count=1)
+                para = para.strip()
 
         if para_num == 0 and len(para) < 35 \
                 and len(re.findall(f"[0-9०-९]", para)) > 2:

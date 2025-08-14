@@ -1,58 +1,60 @@
+import datetime
 import logging
 import os
 import shutil
+import tempfile
 
+import fitz
+
+from backend.crawler.discovery import SingleFileProcessor
+from backend.crawler.index_generator import IndexGenerator
+from backend.crawler.index_state import IndexState
 from backend.crawler.pdf_processor import PDFProcessor
 from backend.config import Config
 from scratch.prod_setup import prod_setup
+import json
 
 log_handle = logging.getLogger(__name__)
 
 _pdf_processor = None
 
-"""
-Current issues:
-Pravachan Sudha Part 1 - Page 31
+class MySingleFileProcessor(SingleFileProcessor):
+    def __init(self, config: Config, file_path: str,
+               indexing_mod: IndexGenerator,
+               index_state: IndexState,
+               pdf_processor: PDFProcessor,
+               scan_time: str):
+        super().__init__(
+            config, file_path, indexing_mod, index_state, pdf_processor, scan_time)
 
-"""
+def parse_single_pdf(filename):
+    index_state_path = tempfile.mktemp()
+    index_state = IndexState(index_state_path)
+    config = Config()
+    pdf_processor = PDFProcessor(config)
+    scan_time = datetime.datetime.now().isoformat()
+    file_proc = MySingleFileProcessor(
+        config, filename, None, index_state, pdf_processor, scan_time
+    )
+    file_proc.process()
 
 def parse_pdf():
-    global _pdf_processor
-    if _pdf_processor is None:
-        _pdf_processor = PDFProcessor(Config())
+    config = Config()
 
-    meta = {
-        "language": "hi",
-        "start_page": 40,
-        "end_page": 50,
-        "header_regex": [
-            "^.{0,5}गाथा.{0,30}$",
-            "^.{0,5}कलश.{0,30}$",
-            "^प्रवचन\s+नं\.?.*$",
-            "^प्रवच्चन\s+नं\.?.*$",
-            "^[०-९\s]*$",
-            "^प्रवचन-[०-९]+,?\s*(?:(?:श्लोक|गाथा)-[०-९]+(?:(?:\s+से)?\s+[०-९]+)*,?\s*)?.*?दिनांक\s+[०-९]+(?:-[०-९]+){2}\s*",
-            "^प्रवचन-[०-९]+",
-
-            # footer regex
-            "^\\*\\s+",
-            "^[०-९]\\.\\s+",
-        ],
-        "header_prefix": [
-            "^.{0,5}कारण\\s*.?\\s*कार्य\\s*.?\\s*नियम(?:\\s+\\(?भाग\\s*-?\\s*[०-९]+\\s*\\)?)?(?:\\s+[०-९]+)*\\s*",
-            "^.{0,5}\\s*श्लोक-\\s*[०-९]+(?:(?:\\s+से)?\\s+[०-९]+)*\\s*",
-            "^.{0,5}\\s*गाथा-\\s*[०-९]+(?:(?:\\s+से)?\\s+[०-९]+)*\\s*",
-        ]
-    }
     home = os.getenv("HOME")
-    pdf_file = "%s/cataloguesearch/Karan_Karya_Niyam_Part_2_H.pdf" % home
-    output_dir = "%s/cataloguesearch/Karan_Karya_Niyam_Part_2_H" % home
-    shutil.rmtree(output_dir, ignore_errors=True)
-    os.makedirs(output_dir, exist_ok=True)
-    _pdf_processor.process_pdf(pdf_file, output_dir, meta)
+    dir = "%s/github/rajatjain/cataloguesearch-configs/Pravachans/hindi/Dravyanuyog/Pravachansaar/1979_Series" % os.getenv("HOME")
+
+    # scan all the pdf files in this directories
+    for fname in os.listdir(dir):
+        if not fname.endswith(".pdf"):
+            continue
+        full_path = os.path.join(dir, fname)
+        parse_single_pdf(full_path)
+
 
 def main():
-    prod_setup(console_only=True)
+    prod_setup(logs_dir="%s/tmp/cataloguesearch_files/logs" % os.getenv("HOME"),
+               console_only=False)
     parse_pdf()
 
 

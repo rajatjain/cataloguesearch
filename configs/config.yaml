@@ -1,7 +1,7 @@
 # config.yaml
 crawler:
-  base_pdf_path: "{HOME}/cataloguesearch/pdf"
-  base_text_path: "{HOME}/cataloguesearch/text"
+  base_pdf_path: "{HOME}/github/rajatjain/cataloguesearch-configs/"
+  base_text_path: "{HOME}/cataloguesearch/text1"
   sqlite_db_path: "{HOME}/cataloguesearch/db/cataloguesearch.db"
 
 index:
