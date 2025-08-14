@@ -42,7 +42,7 @@ def parse_pdf():
     config = Config()
 
     home = os.getenv("HOME")
-    dir = "%s/github/rajatjain/cataloguesearch-configs/Pravachans/hindi/Dravyanuyog/Pravachansaar/1979_Series" % os.getenv("HOME")
+    dir = "%s/github/rajatjain/cataloguesearch-configs/Pravachans/hindi/Dravyanuyog/Niyamsaar/1979_Series" % os.getenv("HOME")
 
     # scan all the pdf files in this directories
     for fname in os.listdir(dir):

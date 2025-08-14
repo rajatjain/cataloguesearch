@@ -140,7 +140,7 @@ class BaseParagraphGenerator:
             match = re.search(prefix, para)
             if match:
                 stripped_content = match.group(0)
-                log_handle.verbose(f"Stripped: '{stripped_content}'")
+                log_handle.verbose(f"prefix: {prefix} Stripped: '{stripped_content}'")
 
                 para = re.sub(prefix, '', para, count=1)
                 para = para.strip()
@@ -159,6 +159,7 @@ class BaseParagraphGenerator:
         # Check if para is a header_regex
         for regex in header_regex:
             if re.search(regex, para):
+                log_handle.verbose(f"regex: {regex} matched: '{para}'")
                 return True, None
 
         return False, para

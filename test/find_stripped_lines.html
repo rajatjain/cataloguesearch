@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log File Analyzer</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+        #results {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+        .result-item {
+            cursor: pointer;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .result-item:hover {
+            background-color: #f0f0f0;
+        }
+        .line-number {
+            font-weight: bold;
+            color: #007bff;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Log File Analyzer</h1>
+
+    <div>
+        <label for="logFile">Upload Log File:</label>
+        <input type="file" id="logFile" accept=".log, .txt">
+    </div>
+
+    <div style="margin-top: 10px;">
+        <label for="minChars">Min Chars:</label>
+        <input type="number" id="minChars" value="0">
+        <label for="maxChars">Max Chars:</label>
+        <input type="number" id="maxChars" value="1000">
+    </div>
+
+    <button onclick="analyzeLog()" style="margin-top: 10px;">Analyze Log</button>
+
+    <div id="results">
+        <h2>Results</h2>
+        <div id="result-list"></div>
+    </div>
+
+    <script>
+        function analyzeLog() {
+            const fileInput = document.getElementById('logFile');
+            const minChars = parseInt(document.getElementById('minChars').value, 10);
+            const maxChars = parseInt(document.getElementById('maxChars').value, 10);
+            const resultList = document.getElementById('result-list');
+            resultList.innerHTML = ''; // Clear previous results
+
+            if (fileInput.files.length === 0) {
+                alert('Please upload a log file.');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(event) {
+                const fileContent = event.target.result;
+                const lines = fileContent.split('\\n');
+                const regex = /Stripped: "(.*?)"/g;
+                let match;
+
+                lines.forEach((line, index) => {
+                    while ((match = regex.exec(line)) !== null) {
+                        const strippedContent = match[1];
+                        if (strippedContent.length >= minChars && strippedContent.length <= maxChars) {
+                            const resultItem = document.createElement('div');
+                            resultItem.className = 'result-item';
+                            resultItem.textContent = `"${strippedContent}"`;
+
+                            const lineNumberSpan = document.createElement('span');
+                            lineNumberSpan.className = 'line-number';
+                            lineNumberSpan.style.display = 'none'; // Initially hidden
+                            lineNumberSpan.textContent = `(Line: ${index + 1})`;
+
+                            resultItem.appendChild(lineNumberSpan);
+
+                            resultItem.onclick = function() {
+                                // Toggle visibility of the line number
+                                const isVisible = lineNumberSpan.style.display !== 'none';
+                                lineNumberSpan.style.display = isVisible ? 'none' : 'inline';
+                            };
+
+                            resultList.appendChild(resultItem);
+                        }
+                    }
+                });
+
+                if (resultList.innerHTML === '') {
+                    resultList.innerHTML = '<p>No matching "stripped" content found with the specified character limits.</p>';
+                }
+            };
+
+            reader.readAsText(file);
+        }
+    </script>
+
+</body>
+</html>
