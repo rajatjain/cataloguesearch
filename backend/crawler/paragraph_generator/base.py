@@ -16,18 +16,20 @@ class BaseParagraphGenerator:
                             file_metadata : dict) -> List[Tuple[int, List[str]]]:
         rejected_paras = []
         # Pass 1: Cleanup the null lines etc.
-        log_handle.info(f"scan_config: {json_dumps(file_metadata)}")
+        log_handle.info(f"Generating paragraphs for {len(paragraphs)} pages")
         header_regex = file_metadata.get("header_regex", [])
         header_prefix = file_metadata.get("header_prefix", [])
+        typo_list = file_metadata.get("typo_list", [])
         processed_paras = []
         for i, (page_num, para_list) in enumerate(paragraphs):
             for para_num, para in enumerate(para_list):
-                para = self._normalize_text(para)
+                para = self._normalize_text(para, typo_list)
                 is_header, processed_para = \
                     self._is_header_footer(para_num, para, header_prefix, header_regex)
                 if not is_header:
                     processed_paras.append((page_num, processed_para))
-
+                else:
+                    log_handle.verbose(f"Skipping para is_header: page:{page_num} -- {para}")
         # Pass 2: Intelligent para reordering
         final_paragraphs = self._combine_paragraphs(processed_paras)
         return final_paragraphs
@@ -75,80 +77,47 @@ class BaseParagraphGenerator:
 
             paragraph_buffer.append((page_num, para_text))
 
-            # Only finalize if paragraph ends with punctuation
-            # Don't finalize just because it starts with dialogue prefix
-            if para_text.endswith(punctuation_suffixes):
-                _finalize_buffer()
+            # If the paragraph we just added ends with punctuation,
+            # the buffered chunk is now complete. Finalize it.
+            # For dialogue prefixes, only finalize if they also end with punctuation
+            should_finalize = (para_text.endswith(PUNCTUATION_SUFFIXES) or 
+                             (para_text.startswith(DIALOGUE_PREFIXES) and 
+                              para_text.endswith(PUNCTUATION_SUFFIXES)))
+            
+            if should_finalize:
+                if final_para := _finalize_buffer(paragraph_buffer):
+                    combined_phase1.append(final_para)
 
         # Finalize any remaining buffer
         _finalize_buffer()
         return result
 
     def _phase2_split_by_dialogue(self, paragraphs, dialogue_prefixes):
-        """Phase 2: Split paragraphs by all DIALOGUE_PREFIXES"""
-        result = []
-        
-        for page_num, para_text in paragraphs:
-            # Find all dialogue prefix positions
-            split_positions = []
-            for prefix in dialogue_prefixes:
-                pos = para_text.find(prefix)
-                while pos != -1:
-                    if pos == 0 or para_text[pos-1].isspace():  # Ensure it's at word boundary
-                        split_positions.append(pos)
-                    pos = para_text.find(prefix, pos + 1)
-            
-            if not split_positions:
-                result.append((page_num, para_text))
-                continue
-                
-            # Sort positions and split
-            split_positions = sorted(set(split_positions))
-            last_pos = 0
-            
-            for pos in split_positions:
-                if pos > last_pos:
-                    # Add text before this dialogue prefix
-                    before_text = para_text[last_pos:pos].strip()
-                    if before_text:
-                        result.append((page_num, before_text))
-                last_pos = pos
-            
-            # Add remaining text from last position
-            if last_pos < len(para_text):
-                remaining_text = para_text[last_pos:].strip()
-                if remaining_text:
-                    result.append((page_num, remaining_text))
-                    
-        return result
+        num_paras = len(combined_phase1)
+        while i < num_paras:
+            page_num, para = combined_phase1[i]
+            para = para.strip()
 
-    def _phase3_combine_dialogue_pairs(self, paragraphs, stop_prefixes, answer_prefixes):
-        """Phase 3: Combine consecutive dialogue paragraphs into single paragraphs"""
-        result = []
-        i = 0
-        dialogue_prefixes = stop_prefixes + answer_prefixes
-        
-        while i < len(paragraphs):
-            page_num, para_text = paragraphs[i]
-            para_text = para_text.strip()
-            
-            # Check if current paragraph starts with dialogue prefix
-            if para_text.startswith(dialogue_prefixes):
-                # Start collecting consecutive dialogue paragraphs
-                dialogue_buffer = [para_text]
-                dialogue_page_num = page_num
-                j = i + 1
+            # Check if we have a question that can be combined with consecutive answers
+            if para.startswith(STOP_PREFIXES):
+                combined_qa = para
+                i += 1
                 
-                # Continue collecting while next paragraphs start with dialogue prefixes
-                while (j < len(paragraphs) and 
-                       paragraphs[j][1].strip().startswith(dialogue_prefixes)):
-                    dialogue_buffer.append(paragraphs[j][1].strip())
-                    j += 1
+                # Keep combining consecutive Q&A pairs
+                while (i < num_paras and 
+                       combined_phase1[i][1].strip().startswith(ANSWER_PREFIXES)):
+                    next_para = combined_phase1[i][1].strip()
+                    combined_qa += "\n" + next_para
+                    i += 1
+                    
+                    # Check if there's another question following this answer
+                    if (i < num_paras and 
+                        combined_phase1[i][1].strip().startswith(STOP_PREFIXES)):
+                        next_question = combined_phase1[i][1].strip()
+                        combined_qa += "\n" + next_question
+                        i += 1
                 
-                # Combine all collected dialogue paragraphs
-                combined_dialogue = "\n".join(dialogue_buffer)
-                result.append((dialogue_page_num, combined_dialogue))
-                i = j  # Skip all processed paragraphs
+                combined_paragraphs.append((page_num, combined_qa))
             else:
                 # Non-dialogue paragraph, add as-is
                 result.append((page_num, para_text))
@@ -156,13 +125,18 @@ class BaseParagraphGenerator:
                 
         return result
 
-    def _normalize_text(self, text: str):
+    def _normalize_text(self, text: str, typo_list: List):
         raise NotImplementedError("Implement inside subclass")
 
     def _is_header_footer(self, para_num, para, header_prefix, header_regex):
         for prefix in header_prefix:
-            para = re.sub(prefix, '', para, count=1)
-            para = para.strip()
+            match = re.search(prefix, para)
+            if match:
+                stripped_content = match.group(0)
+                log_handle.verbose(f"prefix: {prefix} Stripped: '{stripped_content}'")
+
+                para = re.sub(prefix, '', para, count=1)
+                para = para.strip()
 
         if para_num == 0 and len(para) < 35 \
                 and len(re.findall(f"[0-9०-९]", para)) > 2:
@@ -178,6 +152,7 @@ class BaseParagraphGenerator:
         # Check if para is a header_regex
         for regex in header_regex:
             if re.search(regex, para):
+                log_handle.verbose(f"regex: {regex} matched: '{para}'")
                 return True, None
 
         return False, para

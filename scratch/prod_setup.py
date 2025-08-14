@@ -7,7 +7,7 @@ from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
 
 def prod_setup(console_only=False, logs_dir="logs"):
     # setup logging
-    setup_logging(logs_dir, console_level=logging.INFO,
+    setup_logging(logs_dir, console_level=VERBOSE_LEVEL_NUM,
                   file_level=VERBOSE_LEVEL_NUM, console_only=console_only)
 
     try:
