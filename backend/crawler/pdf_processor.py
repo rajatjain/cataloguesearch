@@ -231,7 +231,6 @@ class PDFProcessor:
         paragraphs = self._paragraph_gen.generate_paragraphs(
             paragraphs, scan_config
         )
-        log_handle.info(f"writing {len(paragraphs)} paragraphs for {output_dir}")
         self._write_paragraphs(output_dir, paragraphs)
         return None
 
