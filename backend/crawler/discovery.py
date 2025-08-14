@@ -78,28 +78,43 @@ class SingleFileProcessor:
             log_handle.error(f"Could not open PDF {self._file_path} to get page count: {e}")
             num_pages = 0
 
+        # Collect all folders from base to PDF's folder
+        folders = []
+        current = os.path.dirname(self._file_path)
+        while True:
+            folders = [current] + folders
+            log_handle.debug(f"Current folder: {current}, Base folder: {self._base_pdf_folder}")
+            if os.path.samefile(current, self._base_pdf_folder):
+                break
+            parent = os.path.dirname(current)
+            current = parent
+
         # Start with baseline configuration.
         scan_meta = {
             "header_prefix": [],
             "header_regex": [],
             "page_list": [],
+            "typo_list": []
         }
 
-        # Load the shared configuration file if it exists.
-        scan_config_path = os.path.join(os.path.dirname(self._file_path), "scan_config.json")
-        scan_config_data = {}
-        if os.path.exists(scan_config_path):
-            try:
-                with open(scan_config_path, "r", encoding="utf-8") as f:
-                    scan_config_data = json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
-                log_handle.warning(f"Could not read or parse {scan_config_path}: {e}")
+        # Merge scan_config.json from each folder, starting from base directory
+        for folder in folders:
+            scan_config_path = os.path.join(folder, "scan_config.json")
+            if os.path.exists(scan_config_path):
+                log_handle.info(f"found scan_config_path: {scan_config_path}")
+                try:
+                    with open(scan_config_path, "r", encoding="utf-8") as f:
+                        scan_config_data = json.load(f)
 
-        # Layer 1: Apply default settings from the config file.
-        default_config = scan_config_data.get("default", {})
-        scan_meta["header_prefix"].extend(default_config.get("header_prefix", []))
-        scan_meta["header_regex"].extend(default_config.get("header_regex", []))
-        scan_meta["page_list"].extend(default_config.get("page_list", []))
+                    # Apply default settings from this config file
+                    default_config = scan_config_data.get("default", {})
+                    scan_meta["header_prefix"].extend(default_config.get("header_prefix", []))
+                    scan_meta["header_regex"].extend(default_config.get("header_regex", []))
+                    scan_meta["page_list"].extend(default_config.get("page_list", []))
+                    scan_meta["typo_list"].extend(default_config.get("typo_list", []))
+
+                except (json.JSONDecodeError, IOError) as e:
+                    log_handle.warning(f"Could not read or parse {scan_config_path}: {e}")
 
         # Layer 2: Apply file-specific settings, which override defaults.
         filename = os.path.splitext(os.path.basename(self._file_path))[0]
@@ -107,6 +122,7 @@ class SingleFileProcessor:
         if file_config:
             scan_meta["header_prefix"].extend(file_config.get("header_prefix", []))
             scan_meta["header_regex"].extend(file_config.get("header_regex", []))
+            scan_meta["file_url"] = file_config.get("file_url", "")
             if file_config.get("start_page") and file_config.get("end_page"):
                 # Page numbers are typically file-specific.
                 scan_meta["start_page"] = file_config.get("start_page", 1)
@@ -185,7 +201,7 @@ class SingleFileProcessor:
                 scan_config = self._get_scan_config()
                 file_metadata = self._get_metadata()
                 scan_config["language"] = file_metadata.get("language", "hi")
-                log_handle.info(f"Scan config: {json_dumps(scan_config)}")
+                log_handle.info(f"Scan config: {json_dumps(scan_config, truncate_fields=['typo_list'])}")
                 self._pdf_processor.process_pdf(
                     self._file_path, output_text_dir, scan_config
                 )

@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Side-by-Side File Comparison</title>
+    <style>
+        :root {
+            --border-color: #dcdcdc;
+            --background-color: #f9f9f9;
+            --text-color: #333;
+            --header-bg: #f1f1f1;
+            --button-bg: #e7e7e7;
+            --button-hover-bg: #ddd;
+            --info-text-color: #555;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            color: var(--text-color);
+            background-color: var(--background-color);
+        }
+        .container {
+            margin: 0 auto;
+            max-width: 1400px;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            background-color: #fff;
+        }
+        header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            background-color: var(--header-bg);
+            text-align: center;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+        }
+        .controls button {
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            background-color: var(--button-bg);
+            border-radius: 4px;
+        }
+        .controls button:hover {
+            background-color: var(--button-hover-bg);
+        }
+        #page-info {
+            font-weight: bold;
+            font-size: 1.2rem;
+            min-width: 200px;
+        }
+        /* --- NEW STYLES for Jump Control --- */
+        #jump-control {
+            margin-top: 0.75rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        #jump-control input[type="number"] {
+            width: 80px;
+            padding: 0.3rem;
+            font-size: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+        #jump-control button {
+            padding: 0.3rem 0.8rem;
+            font-size: 1rem;
+        }
+        /* --- END NEW --- */
+        .comparison-container {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+        .column {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            border-right: 1px solid var(--border-color);
+        }
+        .column:last-child {
+            border-right: none;
+        }
+        /* --- MODIFIED STYLES for Column Headers --- */
+        .column h2 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+        }
+        .dir-name {
+            font-size: 0.8rem;
+            font-weight: normal;
+            color: var(--info-text-color);
+            background-color: #e9e9e9;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        /* --- END MODIFIED --- */
+        .file-content {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        #initial-setup {
+            padding: 2rem;
+            text-align: center;
+        }
+        #initial-setup .controls {
+            flex-direction: column;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <div id="initial-setup">
+        <h1>File Comparison Tool</h1>
+        <p>Please select the source and target directories to begin.</p>
+        <div class="controls">
+            <button id="select-source">Select Source Directory</button>
+            <button id="select-target">Select Target Directory</button>
+        </div>
+    </div>
+
+    <div id="main-content" style="display: none; height: 100%; flex-direction: column; display: flex;">
+        <header>
+            <div class="controls">
+                <button id="prev-btn">◀️ Previous</button>
+                <div id="page-info"></div>
+                <button id="next-btn">Next ▶️</button>
+            </div>
+            <div id="jump-control">
+                <label for="page-input">Jump to Page:</label>
+                <input type="number" id="page-input" min="1">
+                <button id="jump-btn">Go</button>
+            </div>
+        </header>
+
+        <div class="comparison-container">
+            <div class="column" id="source-column">
+                <h2><span>Source</span> <span id="source-dir-info" class="dir-name"></span></h2>
+                <pre class="file-content" id="source-content"></pre>
+            </div>
+            <div class="column" id="target-column">
+                <h2><span>Target</span> <span id="target-dir-info" class="dir-name"></span></h2>
+                <pre class="file-content" id="target-content"></pre>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // State management
+    let sourceHandle = null;
+    let targetHandle = null;
+    let fileList = [];
+    let currentIndex = -1;
+
+    // DOM Elements
+    const selectSourceBtn = document.getElementById('select-source');
+    const selectTargetBtn = document.getElementById('select-target');
+    const initialSetupDiv = document.getElementById('initial-setup');
+    const mainContentDiv = document.getElementById('main-content');
+    const pageInfoEl = document.getElementById('page-info');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const sourceContentEl = document.getElementById('source-content');
+    const targetContentEl = document.getElementById('target-content');
+    const sourceDirInfoEl = document.getElementById('source-dir-info');
+    const targetDirInfoEl = document.getElementById('target-dir-info');
+    // --- NEW DOM ELEMENTS for Jump Control ---
+    const pageInputEl = document.getElementById('page-input');
+    const jumpBtn = document.getElementById('jump-btn');
+
+    // Event Listeners
+    selectSourceBtn.addEventListener('click', async () => {
+        try {
+            sourceHandle = await window.showDirectoryPicker();
+            checkAndStart();
+        } catch (err) {
+            console.log("User cancelled source directory selection.");
+        }
+    });
+
+    selectTargetBtn.addEventListener('click', async () => {
+        try {
+            targetHandle = await window.showDirectoryPicker();
+            checkAndStart();
+        } catch (err) {
+            console.log("User cancelled target directory selection.");
+        }
+    });
+
+    prevBtn.addEventListener('click', () => navigate(-1));
+    nextBtn.addEventListener('click', () => navigate(1));
+
+    // --- NEW Event Listener for Jump Button ---
+    jumpBtn.addEventListener('click', jumpToPage);
+    pageInputEl.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            jumpToPage();
+        }
+    });
+
+    /**
+     * Checks if both directories are selected and then initializes the application.
+     */
+    async function checkAndStart() {
+        if (sourceHandle && targetHandle) {
+            sourceDirInfoEl.textContent = sourceHandle.name;
+            targetDirInfoEl.textContent = targetHandle.name;
+
+            initialSetupDiv.style.display = 'none';
+            mainContentDiv.style.display = 'flex';
+            await loadFiles();
+            if (fileList.length > 0) {
+                pageInputEl.max = fileList.length; // Set max value for input
+                currentIndex = 0;
+                await displayFiles();
+            } else {
+                pageInfoEl.textContent = "No 'page_xxxx.txt' files found.";
+                sourceContentEl.textContent = '';
+                targetContentEl.textContent = '';
+                updateNavButtons();
+            }
+        }
+    }
+
+    /**
+     * Loads and sorts the list of files from the selected directories.
+     */
+    async function loadFiles() {
+        const fileSet = new Set();
+        const fileRegex = /^page_\d{4}\.txt$/;
+
+        for await (const entry of sourceHandle.values()) {
+            if (entry.kind === 'file' && fileRegex.test(entry.name)) {
+                fileSet.add(entry.name);
+            }
+        }
+
+        fileList = Array.from(fileSet).sort();
+    }
+
+    /**
+     * Navigates to the next or previous file.
+     * @param {number} direction - -1 for previous, 1 for next.
+     */
+    function navigate(direction) {
+        const newIndex = currentIndex + direction;
+        if (newIndex >= 0 && newIndex < fileList.length) {
+            currentIndex = newIndex;
+            displayFiles();
+        }
+    }
+
+    // --- NEW FUNCTION to handle jumping to a specific page ---
+    function jumpToPage() {
+        const pageNum = parseInt(pageInputEl.value, 10);
+        if (isNaN(pageNum) || pageNum < 1) {
+            return; // Ignore invalid input
+        }
+
+        // Format the number to a 4-digit string with leading zeros
+        const fileName = `page_${String(pageNum).padStart(4, '0')}.txt`;
+
+        const foundIndex = fileList.indexOf(fileName);
+
+        if (foundIndex !== -1) {
+            currentIndex = foundIndex;
+            displayFiles();
+        } else {
+            alert(`Page ${pageNum} (${fileName}) not found.`);
+        }
+    }
+
+    /**
+     * Reads a file from a directory handle and returns its text content.
+     */
+    async function readFileContent(dirHandle, fileName) {
+        try {
+            const fileHandle = await dirHandle.getFileHandle(fileName);
+            const file = await fileHandle.getFile();
+            return await file.text();
+        } catch (e) {
+            console.error(`Error reading ${fileName}:`, e);
+            return `--- File not found: ${fileName} ---`;
+        }
+    }
+
+    /**
+     * Displays the files for the current index.
+     */
+    async function displayFiles() {
+        if (currentIndex < 0 || currentIndex >= fileList.length) return;
+
+        const fileName = fileList[currentIndex];
+        pageInfoEl.textContent = `Displaying: ${fileName}`;
+        // Update the input box to reflect the current page number
+        pageInputEl.value = parseInt(fileName.replace('page_', '').replace('.txt', ''), 10);
+
+
+        const [sourceText, targetText] = await Promise.all([
+            readFileContent(sourceHandle, fileName),
+            readFileContent(targetHandle, fileName)
+        ]);
+
+        sourceContentEl.textContent = sourceText;
+        targetContentEl.textContent = targetText;
+
+        updateNavButtons();
+    }
+
+    /**
+     * Enables or disables the navigation buttons based on the current index.
+     */
+    function updateNavButtons() {
+        if (fileList.length === 0) {
+            prevBtn.disabled = true;
+            nextBtn.disabled = true;
+            jumpBtn.disabled = true;
+            pageInputEl.disabled = true;
+        } else {
+            prevBtn.disabled = (currentIndex <= 0);
+            nextBtn.disabled = (currentIndex >= fileList.length - 1);
+            jumpBtn.disabled = false;
+            pageInputEl.disabled = false;
+        }
+    }
+
+</script>
+</body>
+</html>
