@@ -312,6 +312,7 @@ class IndexSearcher:
                 "score": score,
                 "bookmarks": source.get(self._bookmark_field, {}),
                 "metadata": source.get(self._metadata_prefix, {}),
+                "file_url": metadata.get("file_url", "")
             })
         return extracted
 
