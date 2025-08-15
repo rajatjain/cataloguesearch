@@ -182,6 +182,16 @@ const ResultCard = ({ result, onFindSimilar, onExpand, isFirst }) => {
                 {result.metadata?.Series && <span>{result.metadata.Series}</span>}
                 <span className="text-slate-600">{result.filename}</span>
                 <span>Page: {result.page_number}</span>
+                {result.file_url && (
+                    <a 
+                        href={`${result.file_url}#page=${result.page_number}`}
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline font-medium"
+                    >
+                        [View PDF]
+                    </a>
+                )}
                 {result.bookmarks && <span className="truncate max-w-xs">Details: {result.bookmarks}</span>}
                 <div className="ml-auto flex items-center gap-3 text-sm">
                     <button onClick={() => onExpand(result.document_id)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center"><ExpandIcon />Expand</button>
