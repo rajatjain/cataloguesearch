@@ -26,13 +26,36 @@ fi
 echo "Starting OpenSearch snapshot creation..."
 echo "Local snapshots directory: $LOCAL_SNAPSHOTS_DIR"
 
-# Step 1: Clean up existing repository and directory
+# Step 1: Clean up existing repository
 echo "Step 1: Cleaning up existing repository..."
 curl -s -X DELETE "localhost:9200/_snapshot/local_backup" || echo "Repository didn't exist or already deleted"
 
-echo "Step 2: Preparing container snapshot directory..."
-docker exec opensearch-node rm -rf /tmp/snapshots 2>/dev/null || echo "Directory cleanup skipped (permission issue)"
-docker exec opensearch-node mkdir -p /tmp/snapshots
+# Step 2: Work around the mounted directory issue
+echo "Step 2: Setting up snapshot directory..."
+# Since /tmp/snapshots is mounted and has permission issues, we'll:
+# 1. Stop OpenSearch temporarily
+# 2. Fix the mount and permissions
+# 3. Restart OpenSearch
+echo "Stopping OpenSearch temporarily to fix snapshot directory..."
+docker-compose stop opensearch
+
+# Clear and setup the host directory properly
+rm -rf "$LOCAL_SNAPSHOTS_DIR"/*
+mkdir -p "$LOCAL_SNAPSHOTS_DIR"
+chmod 755 "$LOCAL_SNAPSHOTS_DIR"
+
+# Restart OpenSearch
+echo "Restarting OpenSearch..."
+docker-compose start opensearch
+
+# Wait for OpenSearch to be ready
+echo "Waiting for OpenSearch to start..."
+sleep 15
+while ! curl -s localhost:9200/_cluster/health >/dev/null 2>&1; do
+    echo "Waiting for OpenSearch..."
+    sleep 5
+done
+echo "OpenSearch is ready!"
 
 # Step 3: Register snapshot repository
 echo "Step 3: Registering snapshot repository..."
@@ -87,7 +110,8 @@ echo "Snapshot created: $SNAPSHOT_NAME_META"
 
 # Step 7: Copy snapshots from container to local directory
 echo "Step 6: Copying snapshots to local directory..."
-docker cp opensearch-node:/tmp/snapshots/. "$LOCAL_SNAPSHOTS_DIR/"
+# Since /tmp/snapshots is mounted from host, snapshots are already in the local directory
+echo "Snapshots are already available in the mounted directory."
 
 echo "Snapshots copied to: $LOCAL_SNAPSHOTS_DIR"
 
