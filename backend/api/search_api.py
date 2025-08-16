@@ -73,9 +73,13 @@ async def initialize():
     try:
         log_handle.info("Populating metadata cache at startup...")
         metadata = get_metadata(config)
-        app.state.metadata_cache["data"] = metadata
+        filtered_metadata = {
+            key: values for key, values in metadata.items()
+            if key in ["Granth", "Anuyog", "Year"]
+        }
+        app.state.metadata_cache["data"] = filtered_metadata
         app.state.metadata_cache["timestamp"] = time.time()
-        log_handle.info(f"Metadata cache populated with {len(metadata)} keys.")
+        log_handle.info(f"Metadata cache populated with {json_dumps(metadata)}.")
     except Exception as e:
         log_handle.exception(f"Failed to populate metadata cache at startup: {e}")
 
@@ -102,12 +106,18 @@ async def get_metadata_api(request: Request):
         log_handle.info("Cache expired or empty, fetching metadata from OpenSearch")
         metadata = get_metadata(request.app.state.config)
 
-        # Update cache
-        cache["data"] = metadata
+        # Filter to only return Granth, Anuyog, Year fields
+        filtered_metadata = {
+            key: values for key, values in metadata.items() 
+            if key in ["Granth", "Anuyog", "Year"]
+        }
+
+        # Update cache with filtered data
+        cache["data"] = filtered_metadata
         cache["timestamp"] = current_time
 
-        log_handle.info(f"Metadata retrieved and cached: {len(metadata)} keys found")
-        return JSONResponse(content=metadata, status_code=200)
+        log_handle.info(f"Filtered metadata retrieved and cached: {len(filtered_metadata)} keys found")
+        return JSONResponse(content=filtered_metadata, status_code=200)
     except Exception as e:
         log_handle.exception(f"Error retrieving metadata: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")

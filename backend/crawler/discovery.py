@@ -34,7 +34,7 @@ class SingleFileProcessor:
         self._pdf_processor = pdf_processor
         self._scan_time = scan_time
 
-    def _get_metadata(self) -> dict:
+    def _get_metadata(self, scan_config: dict = None) -> dict:
         """
         Loads all the metadata for the file. This metadata will be indexed in OpenSearch
         """
@@ -63,6 +63,10 @@ class SingleFileProcessor:
         if os.path.exists(file_config_path):
             with open(file_config_path, "r", encoding="utf-8") as f:
                 config.update(json.load(f))
+
+        # Add file_url from scan_config if provided
+        if scan_config:
+            config["file_url"] = scan_config.get("file_url", "")
 
         return config
 
@@ -175,7 +179,8 @@ class SingleFileProcessor:
         last_state = self._index_state.get_state(document_id)
 
         current_file_checksum = self._get_file_checksum()
-        file_metadata = self._get_metadata()
+        scan_config = self._get_scan_config()
+        file_metadata = self._get_metadata(scan_config)
         file_metadata_hash = self._get_config_hash(file_metadata)
 
         if not last_state:
@@ -199,7 +204,7 @@ class SingleFileProcessor:
                     f"file_path: {self._file_path}, output_text_dir: {output_text_dir}"
                 )
                 scan_config = self._get_scan_config()
-                file_metadata = self._get_metadata()
+                file_metadata = self._get_metadata(scan_config)
                 scan_config["language"] = file_metadata.get("language", "hi")
                 log_handle.info(f"Scan config: {json_dumps(scan_config, truncate_fields=['typo_list'])}")
                 self._pdf_processor.process_pdf(
@@ -258,7 +263,8 @@ class SingleFileProcessor:
                     continue
                 page_text_paths.append(os.path.join(root, file_name))
         page_text_paths = sorted(page_text_paths)
-        file_metadata = self._get_metadata()
+        scan_config = self._get_scan_config()
+        file_metadata = self._get_metadata(scan_config)
         bookmarks = self._pdf_processor.fetch_bookmarks(self._file_path)
         self._indexing_module.index_document(
             document_id, relative_path, page_text_paths, file_metadata, bookmarks,
