@@ -36,7 +36,14 @@ def get_opensearch_config(config: Config) -> dict:
     if not _opensearch_settings:
         log_handle.info(f"Loading OpenSearch config from {opensearch_config_path}")
         with open(opensearch_config_path, 'r', encoding='utf-8') as f:
-            _opensearch_settings = yaml.safe_load(f)
+            full_config = yaml.safe_load(f)
+        
+        # Extract the search_index configuration
+        _opensearch_settings = full_config.get('search_index', {})
+        if not _opensearch_settings:
+            log_handle.critical(f"search_index configuration not found in {opensearch_config_path}")
+            raise ValueError(f"search_index configuration not found in {opensearch_config_path}")
+            
         log_handle.info(f"Loaded OpenSearch config from {opensearch_config_path}")
         log_handle.info(f"Open Search settings is {_opensearch_settings}")
 
@@ -57,6 +64,8 @@ def get_metadata_index_config(config: Config) -> dict:
 
     if not metadata_config:
         log_handle.warning(f"metadata_index configuration not found in {opensearch_config_path}")
+        return {}
+    
     return metadata_config
 
 def _create_index_if_not_exists(opensearch_client: OpenSearch, index_name: str, index_body: dict):

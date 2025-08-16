@@ -18,6 +18,8 @@ from datetime import datetime
 from threading import Event
 
 from backend.common.opensearch import get_opensearch_client, get_metadata, delete_documents_by_filename
+from backend.common.opensearch import create_indices_if_not_exists
+from backend.common import opensearch
 from backend.config import Config
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
@@ -191,6 +193,9 @@ def run_discovery_once(config: Config, crawl=False, index=False):
         indexing_module = IndexGenerator(config, get_opensearch_client(config))
         discovery = Discovery(config, indexing_module, pdf_processor, index_state)
 
+        client = get_opensearch_client(config)
+        create_indices_if_not_exists(config, client)
+
         # Run discovery
         discovery.crawl(crawl, index)
 
@@ -210,8 +215,8 @@ def run_discovery_once(config: Config, crawl=False, index=False):
         sys.exit(1)
 
 def delete_index(config: Config):
-    get_opensearch_client(config, force_clean=True)
-
+    client = get_opensearch_client(config)
+    opensearch.delete_index(config)
     # delete index_state as well
     index_state = IndexState(config.SQLITE_DB_PATH)
     index_state.delete_index_state()
