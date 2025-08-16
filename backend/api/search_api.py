@@ -73,9 +73,13 @@ async def initialize():
     try:
         log_handle.info("Populating metadata cache at startup...")
         metadata = get_metadata(config)
-        app.state.metadata_cache["data"] = metadata
+        filtered_metadata = {
+            key: values for key, values in metadata.items()
+            if key in ["Granth", "Anuyog", "Year"]
+        }
+        app.state.metadata_cache["data"] = filtered_metadata
         app.state.metadata_cache["timestamp"] = time.time()
-        log_handle.info(f"Metadata cache populated with {len(metadata)} keys.")
+        log_handle.info(f"Metadata cache populated with {json_dumps(metadata)}.")
     except Exception as e:
         log_handle.exception(f"Failed to populate metadata cache at startup: {e}")
 

@@ -49,8 +49,15 @@ def get_opensearch_config(config: Config) -> dict:
 
     # Get embedding dimension from factory pattern
     embedding_model = get_embedding_model_factory(config)
-    _opensearch_settings['mappings']['properties']['vector_embedding']['dimension'] = \
-        embedding_model.get_embedding_dimension()
+    
+    # Ensure mappings structure exists before setting dimension
+    if 'mappings' in _opensearch_settings and \
+       'properties' in _opensearch_settings['mappings'] and \
+       'vector_embedding' in _opensearch_settings['mappings']['properties']:
+        _opensearch_settings['mappings']['properties']['vector_embedding']['dimension'] = \
+            embedding_model.get_embedding_dimension()
+    else:
+        log_handle.warning("vector_embedding mapping not found in OpenSearch config, skipping dimension update")
 
     return _opensearch_settings
 
