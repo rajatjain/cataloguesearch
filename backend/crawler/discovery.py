@@ -31,6 +31,7 @@ class SingleFileProcessor:
         self._indexing_module = indexing_mod
         self._index_state = index_state
         self._output_text_base_dir = config.BASE_TEXT_PATH
+        self._output_ocr_base_dir = config.BASE_OCR_PATH
         self._pdf_processor = pdf_processor
         self._scan_time = scan_time
 
@@ -165,77 +166,63 @@ class SingleFileProcessor:
     def process(self):
         relative_pdf_path = os.path.relpath(self._file_path, self._base_pdf_folder)
         document_id = str(uuid.uuid5(uuid.NAMESPACE_URL, relative_pdf_path))
-        log_handle.info(f"Processing PDF: {self._file_path} (ID: {document_id})")
+        log_handle.info(f"Processing PDF for OCR extraction: {self._file_path} (ID: {document_id})")
 
-        should_full_reindex = False
-        should_metadata_reindex = False
-
-        output_text_dir = "%s/%s" % (
-            self._output_text_base_dir, os.path.splitext(relative_pdf_path)[0]
+        output_ocr_dir = "%s/%s" % (
+            self._output_ocr_base_dir, os.path.splitext(relative_pdf_path)[0]
         )
-        if not os.path.exists(output_text_dir):
-            self._index_state.delete_state(document_id)
-            should_full_reindex = True
+        
+        scan_config = self._get_scan_config()
+        pages_list = self._pdf_processor._get_page_list(scan_config)
+        current_ocr_checksum = self._index_state.calculate_ocr_checksum(relative_pdf_path, pages_list)
+        
         last_state = self._index_state.get_state(document_id)
 
-        current_file_checksum = self._get_file_checksum()
-        scan_config = self._get_scan_config()
-        file_metadata = self._get_metadata(scan_config)
-        file_metadata_hash = self._get_config_hash(file_metadata)
+        # Check if OCR text files already exist for this OCR configuration
+        if last_state and last_state.get("ocr_checksum") == current_ocr_checksum:
+            if os.path.exists(output_ocr_dir) and any(f.endswith('.txt') for f in os.listdir(output_ocr_dir)):
+                log_handle.info(f"OCR text files already exist for {self._file_path}. Skipping.")
+                return
 
-        if not last_state:
-            should_full_reindex = True
-        elif current_file_checksum != last_state["file_checksum"]:
-            should_full_reindex = True
-        elif file_metadata_hash != last_state["config_hash"]:
-            should_metadata_reindex = True
-        else:
-            log_handle.info(f"No changes detected for {self._file_path}. Skipping.")
+        try:
+            os.makedirs(output_ocr_dir, exist_ok=True)
+            
+            file_metadata = self._get_metadata(scan_config)
+            scan_config["language"] = file_metadata.get("language", "hi")
+            
+            log_handle.info(f"Extracting OCR paragraphs for {self._file_path} to {output_ocr_dir}")
+            
+            language = scan_config.get("language", "hi")
+            
+            paragraphs = self._pdf_processor._generate_paragraphs(
+                self._file_path, pages_list, scan_config, language)
+
+            # Save paragraphs to OCR directory with same format as text files
+            for page_num, page_paragraphs in paragraphs:
+                fname = f"{output_ocr_dir}/page_{page_num:04d}.txt"
+                content = "\n----\n".join(page_paragraphs)
+                try:
+                    with open(fname, 'w', encoding='utf-8') as fh:
+                        fh.write(content)
+                except IOError as e:
+                    traceback.print_exc()
+                    log_handle.error(f"Failed to write OCR file {fname}: {e}")
+            
+            log_handle.info(f"Generated OCR text files for {self._file_path}")
+            
+        except Exception as e:
+            traceback.print_exc()
+            log_handle.error(f"Failed to generate OCR text for {self._file_path}: {e}")
             return
-
-        if should_full_reindex:
-            try:
-                output_text_dir = "%s/%s" % (
-                    self._output_text_base_dir,
-                    os.path.splitext(relative_pdf_path)[0])
-                os.makedirs(output_text_dir, exist_ok=True)
-                # Process PDF (OCR, page-wise text, bookmarks)
-                log_handle.info(
-                    f"file_path: {self._file_path}, output_text_dir: {output_text_dir}"
-                )
-                scan_config = self._get_scan_config()
-                file_metadata = self._get_metadata(scan_config)
-                scan_config["language"] = file_metadata.get("language", "hi")
-                log_handle.info(f"Scan config: {json_dumps(scan_config, truncate_fields=['typo_list'])}")
-                self._pdf_processor.process_pdf(
-                    self._file_path, output_text_dir, scan_config
-                )
-                log_handle.info(f"Processed PDF: {self._file_path}")
-                # Index into OpenSearch
-            except Exception as e:
-                traceback.print_exc()
-                log_handle.error(f"Failed to full index document {self._file_path}: {e}")
-        elif should_metadata_reindex:
-            try:
-                # For metadata-only, we don't need to re-process PDF pages, just update metadata
-                # We still need bookmarks, so re-extract them.
-                bookmarks = self._pdf_processor.fetch_bookmarks(self._file_path)
-                self._indexing_module.index_document(
-                    document_id, relative_pdf_path, [], file_metadata, bookmarks,
-                    reindex_metadata_only=True
-                )
-                log_handle.info(f"Metadata re-index of {self._file_path} completed successfully.")
-            except Exception as e:
-                traceback.print_exc()
-                log_handle.error(f"Failed to metadata re-index document {self._file_path}: {e}")
 
         self._save_state(
             document_id,
             {
                 "file_path": self._file_path,
                 "last_indexed_timestamp": self._scan_time,
-                "file_checksum": current_file_checksum,
-                "config_hash": file_metadata_hash
+                "file_checksum": "",  # Not needed for OCR-only processing
+                "config_hash": "",  # Not needed for OCR-only processing
+                "ocr_checksum": current_ocr_checksum
             }
         )
 
@@ -244,39 +231,101 @@ class SingleFileProcessor:
         document_id = str(uuid.uuid5(uuid.NAMESPACE_URL, relative_path))
         log_handle.info(f"Indexing PDF: {self._file_path} ID: {document_id}")
 
-        index_checksum = self._get_file_checksum()
+        output_ocr_dir = "%s/%s" % (
+            self._output_ocr_base_dir, os.path.splitext(relative_path)[0]
+        )
+        output_text_dir = "%s/%s" % (
+            self._output_text_base_dir, os.path.splitext(relative_path)[0]
+        )
+
+        # Check if OCR directory exists
+        if not os.path.exists(output_ocr_dir):
+            log_handle.error(f"OCR directory does not exist for {self._file_path}. Run process() first.")
+            return
+
+        scan_config = self._get_scan_config()
+        pages_list = self._pdf_processor._get_page_list(scan_config)
+        
+        # Check if all required OCR pages exist
+        missing_pages = []
+        for page_num in pages_list:
+            ocr_file = f"{output_ocr_dir}/page_{page_num:04d}.txt"
+            if not os.path.exists(ocr_file):
+                missing_pages.append(page_num)
+        
+        if missing_pages:
+            log_handle.error(f"Missing OCR files for pages {missing_pages} in {self._file_path}. Run process() first.")
+            return
+
+        # Calculate current checksums for comparison
+        scan_config = self._get_scan_config()
+        file_metadata = self._get_metadata(scan_config)
+        current_config_hash = self._get_config_hash(file_metadata)
+        current_ocr_checksum = self._index_state.calculate_ocr_checksum(relative_path, pages_list)
+        
         index_state = self._index_state.get_state(document_id)
-        if index_state and \
-                index_state["index_checksum"] == index_checksum:
+        
+        # Check if indexing is needed based on config changes or OCR changes
+        if (index_state and 
+            index_state.get("config_hash") == current_config_hash and
+            index_state.get("ocr_checksum") == current_ocr_checksum):
             log_handle.info(f"No changes detected for {self._file_path}. Not indexing.")
             return
 
-        # get all the file paths
-        folder_name = os.path.splitext(relative_path)[0]
-        text_path = os.path.join(self._output_text_base_dir, folder_name)
-        log_handle.info(f"Output file path: {text_path}")
+        try:
+            # Create text directory
+            os.makedirs(output_text_dir, exist_ok=True)
+            
+            scan_config["language"] = file_metadata.get("language", "hi")
+            
+            log_handle.info(f"Processing OCR files to generate final text for {self._file_path}")
+            
+            # Read OCR files and prepare paragraphs in correct format: List[Tuple[int, List[str]]]
+            paragraphs = []
+            for page_num in pages_list:
+                ocr_file = f"{output_ocr_dir}/page_{page_num:04d}.txt"
+                with open(ocr_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    page_paragraphs = content.split('\n----\n') if content.strip() else []
+                    paragraphs.append((page_num, page_paragraphs))
+            
+            # Apply paragraph generation processing
+            processed_paragraphs = self._pdf_processor._paragraph_gen.generate_paragraphs(
+                paragraphs, scan_config
+            )
+            
+            # Write processed paragraphs to text directory
+            self._pdf_processor._write_paragraphs(output_text_dir, processed_paragraphs)
+            
+            log_handle.info(f"Generated processed text files for {self._file_path}")
 
+        except Exception as e:
+            traceback.print_exc()
+            log_handle.error(f"Failed to process OCR files for {self._file_path}: {e}")
+            return
+
+        # Get all the text file paths for indexing
         page_text_paths = []
-        for root, _, files in os.walk(text_path):
+        for root, _, files in os.walk(output_text_dir):
             for file_name in files:
                 if not file_name.lower().endswith(".txt"):
                     continue
                 page_text_paths.append(os.path.join(root, file_name))
         page_text_paths = sorted(page_text_paths)
-        scan_config = self._get_scan_config()
-        file_metadata = self._get_metadata(scan_config)
+        
         bookmarks = self._pdf_processor.fetch_bookmarks(self._file_path)
         self._indexing_module.index_document(
             document_id, relative_path, page_text_paths, file_metadata, bookmarks,
             reindex_metadata_only=False
         )
-        index_state["index_checksum"] = index_checksum
+        
         self._save_state(document_id, {
             "file_path": self._file_path,
             "last_indexed_timestamp": self._scan_time,
-            "file_checksum": index_checksum,
-            "config_hash": self._get_config_hash(file_metadata),
-            "index_checksum": index_checksum
+            "file_checksum": "",  # Not needed - using ocr_checksum instead
+            "config_hash": current_config_hash,
+            "index_checksum": "",  # Not needed - using ocr_checksum instead
+            "ocr_checksum": current_ocr_checksum
         })
         log_handle.info(f"Completed indexing of {self._file_path}")
 
@@ -315,10 +364,12 @@ class Discovery:
 
         self.base_pdf_folder = self._config.BASE_PDF_PATH
         self.base_text_folder = self._config.BASE_TEXT_PATH
+        self.base_ocr_folder = self._config.BASE_OCR_PATH
 
         # Ensure output directories exist
         os.makedirs(self.base_pdf_folder, exist_ok=True)
         os.makedirs(self.base_text_folder, exist_ok=True)
+        os.makedirs(self.base_ocr_folder, exist_ok=True)
 
         log_handle.info(f"DiscoveryModule initialized for base folder: {self.base_pdf_folder}")
 

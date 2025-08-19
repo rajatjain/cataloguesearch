@@ -93,6 +93,8 @@ class Config:
             return self._settings.get("crawler", {}).get("base_pdf_path", None)
         elif name == "BASE_TEXT_PATH":
             return self._settings.get("crawler", {}).get("base_text_path", None)
+        elif name == "BASE_OCR_PATH":
+            return self._settings.get("crawler", {}).get("base_ocr_path", None)
         elif name == "SQLITE_DB_PATH":
             return self._settings.get("crawler", {}).get("sqlite_db_path", None)
         elif name == "OPENSEARCH_CONFIG_PATH":
