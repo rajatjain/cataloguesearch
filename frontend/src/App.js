@@ -95,16 +95,11 @@ const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter 
     );
 };
 
-const SearchOptions = ({ language, setLanguage, proximity, setProximity, searchType, setSearchType }) => {
+const SearchOptions = ({ language, setLanguage, searchType, setSearchType, exactPhrase, setExactPhrase, excludeWords, setExcludeWords }) => {
     const languageOptions = ['hindi', 'gujarati', 'both'];
-    const proximityOptions = [
-        { label: 'Exact Phrase', value: 0 },
-        { label: 'Near (10)', value: 10 },
-        { label: 'Medium (20)', value: 20 },
-        { label: 'Far (30)', value: 30 }
-    ];
+
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-slate-200">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-200">
              <div>
                 <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Language</h3>
                 <div className="flex gap-4">
@@ -117,50 +112,43 @@ const SearchOptions = ({ language, setLanguage, proximity, setProximity, searchT
                 </div>
              </div>
              <div>
-                <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Proximity</h3>
-                <div className="flex flex-wrap gap-3">
-                    {proximityOptions.map(opt => (
-                        <label key={opt.value} className="flex items-center gap-1.5 text-base text-slate-700">
-                            <input
-                                type="radio"
-                                name="proximity"
-                                value={opt.value}
-                                checked={proximity === opt.value}
-                                onChange={() => setProximity(opt.value)}
-                                className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500"
-                            />
-                            {opt.label}
-                        </label>
-                    ))}
-                </div>
-             </div>
-             <div>
                 <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Search Type</h3>
                 <div className="flex flex-col gap-2">
                     <label className="flex items-center gap-2 text-slate-700">
-                        <input 
-                            type="radio" 
-                            name="searchType" 
-                            value="relevance" 
-                            checked={searchType === 'relevance'} 
-                            onChange={(e) => setSearchType(e.target.value)} 
-                            className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500" 
-                        />
+                        <input type="radio" name="searchType" value="relevance" checked={searchType === 'relevance'} onChange={(e) => setSearchType(e.target.value)} className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500" />
                         <span className="text-base font-medium flex items-center">Better Relevance <span className="text-sm text-slate-500">(slower)</span><BetaBadge /></span>
                     </label>
                     <label className="flex items-center gap-2 text-slate-700">
-                        <input 
-                            type="radio" 
-                            name="searchType" 
-                            value="speed" 
-                            checked={searchType === 'speed'} 
-                            onChange={(e) => setSearchType(e.target.value)} 
-                            className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500" 
-                        />
+                        <input type="radio" name="searchType" value="speed" checked={searchType === 'speed'} onChange={(e) => setSearchType(e.target.value)} className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500" />
                         <span className="text-base font-medium">Better Speed <span className="text-sm text-slate-500">(slightly less relevant)</span></span>
                     </label>
                 </div>
              </div>
+             <div className="sm:col-span-2 mt-2 pt-3 border-t border-slate-200">
+                 <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Advanced Search Options</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <label className="flex items-center gap-2 text-slate-700 pt-2">
+                         <input
+                             type="checkbox"
+                             checked={exactPhrase}
+                             onChange={(e) => setExactPhrase(e.target.checked)}
+                             className="form-checkbox h-4 w-4 text-sky-600 focus:ring-sky-500 rounded"
+                         />
+                         <span className="text-base font-medium">Search for the exact phrase</span>
+                     </label>
+                     <div>
+                         <label htmlFor="exclude-words" className="text-base font-medium text-slate-700 mb-1 block">Exclude these words</label>
+                         <input
+                             id="exclude-words"
+                             type="text"
+                             value={excludeWords}
+                             onChange={(e) => setExcludeWords(e.target.value)}
+                             placeholder="e.g., atma, karma"
+                             className="w-full p-2 text-base bg-slate-50 border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500 text-slate-900 font-sans"
+                         />
+                     </div>
+                 </div>
+            </div>
         </div>
     );
 };
@@ -184,9 +172,9 @@ const ResultCard = ({ result, onFindSimilar, onExpand, isFirst }) => {
                 <span className="text-slate-600">{result.filename}</span>
                 <span>Page: {result.page_number}</span>
                 {result.file_url && (
-                    <a 
+                    <a
                         href={`${result.file_url}#page=${result.page_number}`}
-                        target="_blank" 
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:text-blue-800 font-medium flex items-center"
                     >
@@ -300,7 +288,7 @@ const Tabs = ({ activeTab, setActiveTab, searchData, similarDocumentsData, onCle
 
 const SuggestionsCard = ({ suggestions, originalQuery, onSuggestionClick }) => {
     if (!suggestions || suggestions.length === 0) return null;
-    
+
     return (
         <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg mb-4">
             <div className="text-base text-yellow-800">
@@ -308,14 +296,14 @@ const SuggestionsCard = ({ suggestions, originalQuery, onSuggestionClick }) => {
                     No results found for "<span className="font-bold text-red-700">{originalQuery}</span>".
                 </p>
                 <p>
-                    Did you mean: 
+                    Did you mean:
                     <span className="inline-flex flex-wrap items-center gap-2 ml-2">
                         {suggestions.map((suggestion, index) => (
                             <button
                                 key={index}
                                 onClick={() => onSuggestionClick(suggestion)}
-                                className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 font-bold cursor-pointer 
-                                         underline decoration-2 underline-offset-2 
+                                className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 font-bold cursor-pointer
+                                         underline decoration-2 underline-offset-2
                                          px-2 py-1 rounded transition-colors duration-200
                                          border border-transparent hover:border-blue-300"
                             >
@@ -399,8 +387,9 @@ export default function App() {
     const [query, setQuery] = useState('');
     const [activeFilters, setActiveFilters] = useState([]);
     const [language, setLanguage] = useState('hindi');
-    const [proximity, setProximity] = useState(20);
     const [searchType, setSearchType] = useState('speed');
+    const [exactPhrase, setExactPhrase] = useState(false);
+    const [excludeWords, setExcludeWords] = useState('');
     const [showFilters, setShowFilters] = useState(false);
     const [metadata, setMetadata] = useState({});
     const [searchData, setSearchData] = useState(null);
@@ -422,12 +411,24 @@ export default function App() {
     const handleSearch = useCallback(async (page = 1) => {
         if (!query.trim()) { alert("Please enter a search query."); return; }
         setIsLoading(true); setKeywordPage(page); setVectorPage(1); setSimilarDocumentsData(null); setSourceDocForSimilarity(null);
-        const requestPayload = { query, allow_typos: false, categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}), language: language === 'both' ? null : language, proximity_distance: proximity, page_number: page, page_size: PAGE_SIZE, enable_reranking: searchType === 'relevance' };
+
+        const requestPayload = {
+            query,
+            allow_typos: false,
+            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
+            language: language === 'both' ? null : language,
+            exact_phrase: exactPhrase,
+            exclude_words: excludeWords.split(',').map(w => w.trim()).filter(Boolean),
+            page_number: page,
+            page_size: PAGE_SIZE,
+            enable_reranking: searchType === 'relevance'
+        };
+
         const data = await api.search(requestPayload);
         setSearchData(data);
         if (data.results && data.results.length > 0) { setActiveTab('keyword'); } else { setActiveTab('vector'); }
         setIsLoading(false);
-    }, [query, activeFilters, language, proximity, searchType]);
+    }, [query, activeFilters, language, searchType, exactPhrase, excludeWords]);
 
     const handleFindSimilar = async (sourceDoc) => {
         setIsLoading(true); setSourceDocForSimilarity(sourceDoc); setSimilarDocsPage(1);
@@ -453,7 +454,17 @@ export default function App() {
         // Trigger a new search with the suggestion
         const newQuery = suggestion;
         setIsLoading(true); setKeywordPage(1); setVectorPage(1); setSimilarDocumentsData(null); setSourceDocForSimilarity(null);
-        const requestPayload = { query: newQuery, allow_typos: false, categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}), language: language === 'both' ? null : language, proximity_distance: proximity, page_number: 1, page_size: PAGE_SIZE, enable_reranking: searchType === 'relevance' };
+        const requestPayload = {
+            query: newQuery,
+            allow_typos: false,
+            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
+            language: language === 'both' ? null : language,
+            exact_phrase: exactPhrase,
+            exclude_words: excludeWords.split(',').map(w => w.trim()).filter(Boolean),
+            page_number: 1,
+            page_size: PAGE_SIZE,
+            enable_reranking: searchType === 'relevance'
+        };
         api.search(requestPayload).then(data => {
             setSearchData(data);
             if (data.results && data.results.length > 0) { setActiveTab('keyword'); } else { setActiveTab('vector'); }
@@ -490,7 +501,7 @@ export default function App() {
                             <button onClick={() => handleSearch(1)} disabled={isLoading} className="bg-sky-600 text-white font-bold py-3 px-4 rounded-md text-base hover:bg-sky-700 transition duration-300 disabled:bg-slate-300 flex items-center justify-center w-full">{isLoading ? <Spinner /> : 'Search'}</button>
                         </div>
                         <div className="mt-3"><button onClick={() => setShowFilters(!showFilters)} className="flex items-center text-sky-700 font-semibold hover:text-sky-800 text-sm">{showFilters ? <ChevronUpIcon /> : <ChevronDownIcon />}{showFilters ? 'Hide Filters' : 'Show Filters'}<span className="ml-2 bg-slate-200 text-slate-600 text-sm font-bold px-1.5 py-0.5 rounded-full">{activeFilters.length}</span></button></div>
-                        {showFilters && <div className="mt-3 space-y-3"><MetadataFilters metadata={metadata} activeFilters={activeFilters} onAddFilter={addFilter} onRemoveFilter={removeFilter} /><SearchOptions language={language} setLanguage={setLanguage} proximity={proximity} setProximity={setProximity} searchType={searchType} setSearchType={setSearchType} /></div>}
+                        {showFilters && <div className="mt-3 space-y-3"><MetadataFilters metadata={metadata} activeFilters={activeFilters} onAddFilter={addFilter} onRemoveFilter={removeFilter} /><SearchOptions language={language} setLanguage={setLanguage} searchType={searchType} setSearchType={setSearchType} exactPhrase={exactPhrase} setExactPhrase={setExactPhrase} excludeWords={excludeWords} setExcludeWords={setExcludeWords} /></div>}
                     </div>
                     {isLoading && <div className="text-center py-8"><div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div><p className="mt-3 text-base text-slate-500">Searching...</p></div>}
                     {!isLoading && (searchData || similarDocumentsData) && (
