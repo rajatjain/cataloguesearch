@@ -57,6 +57,11 @@ services:
       - PYTHONPATH=/app
       - ENVIRONMENT=${ENVIRONMENT:-local}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Feedback/Email Configuration
+      - BREVO_API_KEY=${BREVO_API_KEY}
+      - RECAPTCHA_SECRET_KEY=${RECAPTCHA_SECRET_KEY}
+      - FEEDBACK_FROM_EMAIL=${FEEDBACK_FROM_EMAIL:-feedback@swalakshya.me}
+      - FEEDBACK_TO_EMAIL=${FEEDBACK_TO_EMAIL:-admin@swalakshya.me}
       # Config file substitution variables (override local env vars)
       - HOME=/app/data
       - BASE_DIR=/app
@@ -92,6 +97,8 @@ services:
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
+      args:
+        - REACT_APP_RECAPTCHA_SITE_KEY=${REACT_APP_RECAPTCHA_SITE_KEY}
     platform: linux/amd64
     container_name: cataloguesearch-frontend
     ports:

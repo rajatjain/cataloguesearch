@@ -3,6 +3,10 @@
 # Stage 1: Build the React application
 FROM node:18-alpine AS build
 
+# Accept build arguments
+ARG REACT_APP_RECAPTCHA_SITE_KEY
+ENV REACT_APP_RECAPTCHA_SITE_KEY=$REACT_APP_RECAPTCHA_SITE_KEY
+
 # Set working directory
 WORKDIR /app
 

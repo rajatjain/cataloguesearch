@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ReCAPTCHA from 'react-google-recaptcha';
 
 // --- API SERVICE ---
 const API_BASE_URL = '/api';
@@ -35,6 +36,15 @@ const api = {
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             return await response.json();
         } catch (error) { console.error("API Error: Could not fetch context", error); return null; }
+    },
+    submitFeedback: async (feedbackData) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/feedback`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(feedbackData),
+            });
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return await response.json();
+        } catch (error) { console.error("API Error: Could not submit feedback", error); throw error; }
     }
 };
 
@@ -48,6 +58,7 @@ const PdfIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4
 const BetaBadge = () => <span className="inline-block bg-orange-100 text-orange-800 text-xs font-semibold px-2 py-0.5 rounded-full ml-2">BETA</span>;
 const MenuIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>;
 const CloseIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
+const SubmitIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>;
 
 
 // --- UI COMPONENTS ---
@@ -58,7 +69,7 @@ const Navigation = ({ currentPage, setCurrentPage }) => {
         { id: 'home', label: 'Home', showSearch: true },
         { id: 'aagam-khoj', label: 'Aagam Khoj', showSearch: true },
         { id: 'about', label: 'About', showSearch: false },
-        { id: 'contact', label: 'Contact/Feedback', showSearch: false }
+        { id: 'feedback', label: 'Feedback', showSearch: false }
     ];
     
     const handleMenuClick = (itemId) => {
@@ -146,16 +157,12 @@ const Header = ({ currentPage }) => {
         );
     }
     
-    if (currentPage === 'contact') {
+    if (currentPage === 'feedback') {
         return (
             <div className="text-center py-12">
-                <h1 className="text-4xl font-bold text-slate-800 mb-4">Contact & Feedback</h1>
+                <h1 className="text-4xl font-bold text-slate-800 mb-4">Feedback</h1>
                 <div className="max-w-lg mx-auto text-slate-600 space-y-4">
-                    <p>We value your feedback and suggestions for improving Aagam-Khoj.</p>
-                    <p>Please reach out to us through our community channels or submit your feedback to help us serve you better.</p>
-                    <div className="pt-4">
-                        <p className="text-slate-500 text-sm">More contact options coming soon...</p>
-                    </div>
+                    <p>Please provide your feedback and suggestions for improving Aagam-Khoj using the form below.</p>
                 </div>
             </div>
         );
@@ -517,6 +524,236 @@ const ExpandModal = ({ data, onClose, isLoading }) => {
     );
 };
 
+const FeedbackForm = () => {
+    const [formData, setFormData] = useState({
+        name: '',
+        email: '',
+        phoneNumber: '',
+        subject: '',
+        feedback: '',
+        captchaToken: null
+    });
+    const [errors, setErrors] = useState({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitSuccess, setSubmitSuccess] = useState(false);
+    const recaptchaRef = useRef();
+
+    const validateForm = () => {
+        const newErrors = {};
+        
+        if (!formData.name.trim()) {
+            newErrors.name = 'Name is required';
+        }
+        
+        if (!formData.subject.trim()) {
+            newErrors.subject = 'Subject is required';
+        }
+        
+        if (!formData.feedback.trim()) {
+            newErrors.feedback = 'Feedback is required';
+        }
+        
+        if (!formData.captchaToken) {
+            newErrors.captcha = 'Please complete the CAPTCHA';
+        }
+        
+        if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+            newErrors.email = 'Please enter a valid email address';
+        }
+        
+        return newErrors;
+    };
+
+    const handleInputChange = (field, value) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+        if (errors[field]) {
+            setErrors(prev => ({ ...prev, [field]: '' }));
+        }
+    };
+
+    const handleCaptchaChange = (token) => {
+        setFormData(prev => ({ ...prev, captchaToken: token }));
+        if (errors.captcha) {
+            setErrors(prev => ({ ...prev, captcha: '' }));
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        
+        const formErrors = validateForm();
+        if (Object.keys(formErrors).length > 0) {
+            setErrors(formErrors);
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            await api.submitFeedback(formData);
+            setSubmitSuccess(true);
+            setFormData({
+                name: '',
+                email: '',
+                phoneNumber: '',
+                subject: '',
+                feedback: '',
+                captchaToken: null
+            });
+            recaptchaRef.current?.reset();
+        } catch (error) {
+            setErrors({ submit: 'Failed to submit feedback. Please try again.' });
+        }
+        setIsSubmitting(false);
+    };
+
+    if (submitSuccess) {
+        return (
+            <div className="max-w-2xl mx-auto">
+                <div className="bg-green-50 border border-green-200 p-6 rounded-lg text-center">
+                    <div className="text-green-600 mb-4">
+                        <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-green-800 mb-2">Thank you for your feedback!</h3>
+                    <p className="text-green-700 mb-4">Your message has been successfully submitted. We appreciate your input and will review it carefully.</p>
+                    <button 
+                        onClick={() => setSubmitSuccess(false)}
+                        className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition duration-200"
+                    >
+                        Submit Another Feedback
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="max-w-2xl mx-auto">
+            <form onSubmit={handleSubmit} className="bg-white p-6 md:p-8 rounded-lg shadow-sm border border-slate-200 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label htmlFor="name" className="block text-sm font-semibold text-slate-700 mb-2">
+                            Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="name"
+                            value={formData.name}
+                            onChange={(e) => handleInputChange('name', e.target.value)}
+                            className={`w-full p-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-slate-900 ${
+                                errors.name ? 'border-red-500' : 'border-slate-300'
+                            }`}
+                            placeholder="Enter your name"
+                        />
+                        {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+                    </div>
+
+                    <div>
+                        <label htmlFor="email" className="block text-sm font-semibold text-slate-700 mb-2">
+                            Email <span className="text-slate-400">(optional)</span>
+                        </label>
+                        <input
+                            type="email"
+                            id="email"
+                            value={formData.email}
+                            onChange={(e) => handleInputChange('email', e.target.value)}
+                            className={`w-full p-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-slate-900 ${
+                                errors.email ? 'border-red-500' : 'border-slate-300'
+                            }`}
+                            placeholder="Enter your email"
+                        />
+                        {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+                    </div>
+                </div>
+
+                <div>
+                    <label htmlFor="phoneNumber" className="block text-sm font-semibold text-slate-700 mb-2">
+                        Phone Number <span className="text-slate-400">(optional)</span>
+                    </label>
+                    <input
+                        type="tel"
+                        id="phoneNumber"
+                        value={formData.phoneNumber}
+                        onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
+                        className="w-full p-3 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-slate-900"
+                        placeholder="Enter your phone number"
+                    />
+                </div>
+
+                <div>
+                    <label htmlFor="subject" className="block text-sm font-semibold text-slate-700 mb-2">
+                        Subject <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="subject"
+                        value={formData.subject}
+                        onChange={(e) => handleInputChange('subject', e.target.value)}
+                        className={`w-full p-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-slate-900 ${
+                            errors.subject ? 'border-red-500' : 'border-slate-300'
+                        }`}
+                        placeholder="Enter the subject of your feedback"
+                    />
+                    {errors.subject && <p className="text-red-500 text-sm mt-1">{errors.subject}</p>}
+                </div>
+
+                <div>
+                    <label htmlFor="feedback" className="block text-sm font-semibold text-slate-700 mb-2">
+                        Feedback <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                        id="feedback"
+                        rows="6"
+                        value={formData.feedback}
+                        onChange={(e) => handleInputChange('feedback', e.target.value)}
+                        className={`w-full p-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-slate-900 resize-vertical ${
+                            errors.feedback ? 'border-red-500' : 'border-slate-300'
+                        }`}
+                        placeholder="Please share your feedback, suggestions, or report any issues..."
+                    />
+                    {errors.feedback && <p className="text-red-500 text-sm mt-1">{errors.feedback}</p>}
+                </div>
+
+                <div>
+                    <ReCAPTCHA
+                        ref={recaptchaRef}
+                        sitekey={process.env.REACT_APP_RECAPTCHA_SITE_KEY || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}
+                        onChange={handleCaptchaChange}
+                    />
+                    {errors.captcha && <p className="text-red-500 text-sm mt-1">{errors.captcha}</p>}
+                </div>
+
+                {errors.submit && (
+                    <div className="bg-red-50 border border-red-200 p-3 rounded-md">
+                        <p className="text-red-700 text-sm">{errors.submit}</p>
+                    </div>
+                )}
+
+                <div className="pt-4">
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="w-full bg-sky-600 text-white font-semibold py-3 px-6 rounded-md hover:bg-sky-700 transition duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center text-base"
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <Spinner />
+                                <span className="ml-2">Submitting...</span>
+                            </>
+                        ) : (
+                            <>
+                                <SubmitIcon />
+                                Submit Feedback
+                            </>
+                        )}
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+};
+
 // --- MAIN APP COMPONENT ---
 export default function App() {
     const [currentPage, setCurrentPage] = useState('home');
@@ -634,6 +871,11 @@ export default function App() {
                     )}
                     {!isLoading && !searchData && <div className="text-center py-8 text-base text-slate-500 bg-white rounded-lg border border-slate-200">Enter a query and click Search to see results.</div>}
                 </main>
+                )}
+                {currentPage === 'feedback' && (
+                    <main className="max-w-[1200px] mx-auto">
+                        <FeedbackForm />
+                    </main>
                 )}
             </div>
         </div>
