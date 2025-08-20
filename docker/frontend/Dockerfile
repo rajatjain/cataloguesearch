@@ -3,10 +3,6 @@
 # Stage 1: Build the React application
 FROM node:18-alpine AS build
 
-# Accept build arguments
-ARG REACT_APP_RECAPTCHA_SITE_KEY
-ENV REACT_APP_RECAPTCHA_SITE_KEY=$REACT_APP_RECAPTCHA_SITE_KEY
-
 # Set working directory
 WORKDIR /app
 
@@ -19,7 +15,7 @@ RUN npm install
 # Copy source code
 COPY frontend/ .
 
-# Build the application
+# Build the application without environment-specific values
 RUN npm run build
 
 # Stage 2: Serve with nginx
@@ -31,6 +27,10 @@ COPY --from=build /app/build /usr/share/nginx/html
 # Copy nginx configuration
 COPY docker/frontend/nginx.conf /etc/nginx/nginx.conf
 
+# Copy and make entrypoint script executable
+COPY docker/frontend/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Expose port 80
 EXPOSE 80
 
@@ -38,5 +38,6 @@ EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost/ || exit 1
 
-# Start nginx
+# Use entrypoint script
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

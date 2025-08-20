@@ -718,7 +718,7 @@ const FeedbackForm = () => {
                 <div>
                     <ReCAPTCHA
                         ref={recaptchaRef}
-                        sitekey={process.env.REACT_APP_RECAPTCHA_SITE_KEY || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}
+                        sitekey={process.env.REACT_APP_RECAPTCHA_SITE_KEY || "__REACT_APP_RECAPTCHA_SITE_KEY__" || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}
                         onChange={handleCaptchaChange}
                     />
                     {errors.captcha && <p className="text-red-500 text-sm mt-1">{errors.captcha}</p>}
