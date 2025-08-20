@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 // --- API SERVICE ---
 const API_BASE_URL = '/api';
@@ -46,18 +46,141 @@ const SimilarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4
 const ExpandIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5" /></svg>;
 const PdfIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>;
 const BetaBadge = () => <span className="inline-block bg-orange-100 text-orange-800 text-xs font-semibold px-2 py-0.5 rounded-full ml-2">BETA</span>;
+const MenuIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>;
+const CloseIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>;
 
 
 // --- UI COMPONENTS ---
-const Header = () => (
-    <div className="text-center py-6 mb-4">
-        <div className="bg-slate-100 h-32 md:h-40 flex items-center justify-center rounded-lg mb-4 overflow-hidden">
-            <img src="/images/banner.jpg" alt="Swa-Lakshya Banner" className="w-full h-full object-contain" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/1200x160/f1f5f9/475569?text=Jain+Catalogue+Search' }} />
+const Navigation = ({ currentPage, setCurrentPage }) => {
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    
+    const menuItems = [
+        { id: 'home', label: 'Home', showSearch: true },
+        { id: 'aagam-khoj', label: 'Aagam Khoj', showSearch: true },
+        { id: 'about', label: 'About', showSearch: false },
+        { id: 'contact', label: 'Contact/Feedback', showSearch: false }
+    ];
+    
+    const handleMenuClick = (itemId) => {
+        setCurrentPage(itemId);
+        setIsMobileMenuOpen(false);
+    };
+    
+    return (
+        <nav className="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-40">
+            <div className="max-w-6xl mx-auto px-4">
+                <div className="flex items-center justify-between h-16">
+                    {/* Logo */}
+                    <div className="flex items-center space-x-4">
+                        <img 
+                            src="/images/swalakshya.png" 
+                            alt="Swalakshya Logo" 
+                            className="h-10 w-auto" 
+                            onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/40x40/f1f5f9/475569?text=S' }} 
+                        />
+                    </div>
+                    
+                    {/* Desktop Menu */}
+                    <div className="hidden md:flex space-x-8">
+                        {menuItems.map((item) => (
+                            <button
+                                key={item.id}
+                                onClick={() => handleMenuClick(item.id)}
+                                className={`px-3 py-2 text-base font-medium transition-colors duration-200 ${
+                                    currentPage === item.id 
+                                        ? 'text-sky-600 border-b-2 border-sky-600' 
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                {item.label}
+                            </button>
+                        ))}
+                    </div>
+                    
+                    {/* Mobile Menu Button */}
+                    <div className="md:hidden">
+                        <button
+                            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                            className="p-2 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors duration-200"
+                        >
+                            {isMobileMenuOpen ? <CloseIcon /> : <MenuIcon />}
+                        </button>
+                    </div>
+                </div>
+                
+                {/* Mobile Menu */}
+                {isMobileMenuOpen && (
+                    <div className="md:hidden border-t border-slate-200 bg-white">
+                        <div className="px-2 pt-2 pb-3 space-y-1">
+                            {menuItems.map((item) => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => handleMenuClick(item.id)}
+                                    className={`block w-full text-left px-3 py-2 text-base font-medium rounded-md transition-colors duration-200 ${
+                                        currentPage === item.id 
+                                            ? 'text-sky-600 bg-sky-50' 
+                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    {item.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </nav>
+    );
+};
+
+const Header = ({ currentPage }) => {
+    if (currentPage === 'about') {
+        return (
+            <div className="text-center py-12">
+                <h1 className="text-4xl font-bold text-slate-800 mb-4">About Aagam-Khoj</h1>
+                <div className="max-w-2xl mx-auto text-slate-600 space-y-4">
+                    <p>Aagam-Khoj (आगम-खोज) is a comprehensive search platform for exploring the profound teachings and Pravachans of Pujya Gurudev Shri Kanji Swami.</p>
+                    <p>This digital repository allows seekers to search through extensive collections of spiritual wisdom, making the timeless teachings easily accessible to all.</p>
+                </div>
+            </div>
+        );
+    }
+    
+    if (currentPage === 'contact') {
+        return (
+            <div className="text-center py-12">
+                <h1 className="text-4xl font-bold text-slate-800 mb-4">Contact & Feedback</h1>
+                <div className="max-w-lg mx-auto text-slate-600 space-y-4">
+                    <p>We value your feedback and suggestions for improving Aagam-Khoj.</p>
+                    <p>Please reach out to us through our community channels or submit your feedback to help us serve you better.</p>
+                    <div className="pt-4">
+                        <p className="text-slate-500 text-sm">More contact options coming soon...</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    
+    // For 'home' and 'aagam-khoj' pages
+    return (
+        <div className="text-center py-6 mb-4">
+            <div className="inline-block">
+                <div className="bg-slate-100 h-32 md:h-40 flex items-center justify-center mb-4 overflow-hidden">
+                    <img 
+                        src="/images/banner.jpg" 
+                        alt="Swa-Lakshya Banner" 
+                        className="h-full object-contain" 
+                        onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/1200x160/f1f5f9/475569?text=Jain+Catalogue+Search' }} 
+                    />
+                </div>
+                <div className="h-32 md:h-40 flex flex-col items-center justify-center">
+                    <h1 className="text-4xl font-bold text-slate-800 font-display">Aagam-Khoj (आगम-खोज)</h1>
+                    <p className="text-base text-slate-500 mt-1 font-sans">Get answers from Pravachans of Pujya Gurudev Shri Kanji Swami!</p>
+                </div>
+            </div>
         </div>
-        <h1 className="text-4xl font-bold text-slate-800 font-display">Aagam-Khoj (आगम-खोज)</h1>
-        <p className="text-base text-slate-500 mt-1 font-sans">Get answers from Pravachans of Pujya Gurudev Shri Kanji Swami!</p>
-    </div>
-);
+    );
+};
 
 const SearchBar = ({ query, setQuery, onSearch }) => (
     <div className="relative">
@@ -396,6 +519,7 @@ const ExpandModal = ({ data, onClose, isLoading }) => {
 
 // --- MAIN APP COMPONENT ---
 export default function App() {
+    const [currentPage, setCurrentPage] = useState('home');
     const [query, setQuery] = useState('');
     const [activeFilters, setActiveFilters] = useState([]);
     const [language, setLanguage] = useState('hindi');
@@ -478,12 +602,18 @@ export default function App() {
     const paginatedVectorResults = getPaginatedResults(searchData?.vector_results, vectorPage);
     const paginatedSimilarResults = getPaginatedResults(similarDocumentsData?.results, similarDocsPage);
 
+    const showSearchInterface = currentPage === 'home' || currentPage === 'aagam-khoj';
+
     return (
         <div className="bg-slate-50 text-slate-900 min-h-screen font-sans">
             {modalData && <ExpandModal data={modalData} onClose={handleCloseModal} isLoading={isContextLoading} />}
+            <Navigation currentPage={currentPage} setCurrentPage={setCurrentPage} />
             <div className="container mx-auto p-4 md:p-5">
-                <Header />
-                <main>
+                <div className="max-w-[1200px] mx-auto">
+                    <Header currentPage={currentPage} />
+                </div>
+                {showSearchInterface && (
+                    <main className="max-w-[1200px] mx-auto">
                     <div className="bg-white p-3 md:p-4 rounded-lg shadow-sm border border-slate-200 mb-4">
                         <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
                             <div className="sm:col-span-3"><SearchBar query={query} setQuery={setQuery} onSearch={() => handleSearch(1)} /></div>
@@ -504,6 +634,7 @@ export default function App() {
                     )}
                     {!isLoading && !searchData && <div className="text-center py-8 text-base text-slate-500 bg-white rounded-lg border border-slate-200">Enter a query and click Search to see results.</div>}
                 </main>
+                )}
             </div>
         </div>
     );
