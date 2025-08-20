@@ -16,16 +16,29 @@ class ONNXReranker:
     def predict(self, sentence_pairs: list[list[str]], batch_size: int = 4):
         """Reranks a list of sentence pairs and returns their scores."""
         start_time = time.time()
+        all_scores = []
+        
         with torch.no_grad():
-            inputs = self.tokenizer(
-                sentence_pairs,
-                padding=True,
-                truncation=True,
-                return_tensors="pt",
-                max_length=512,
-            )
-            outputs = self.model(**inputs)
-            scores = torch.sigmoid(outputs.logits.squeeze()).cpu().numpy()
+            for i in range(0, len(sentence_pairs), batch_size):
+                batch = sentence_pairs[i:i + batch_size]
+                inputs = self.tokenizer(
+                    batch,
+                    padding=True,
+                    truncation=True,
+                    return_tensors="pt",
+                    max_length=512,
+                )
+                outputs = self.model(**inputs)
+                batch_scores = torch.sigmoid(outputs.logits.squeeze()).cpu().numpy()
+                
+                # Handle single item case where squeeze removes all dimensions
+                if len(batch) == 1:
+                    batch_scores = [batch_scores.item()]
+                elif batch_scores.ndim == 0:
+                    batch_scores = [batch_scores.item()]
+                
+                all_scores.extend(batch_scores)
+        
         end_time = time.time()
         log_handle.info(f"Reranking took {end_time - start_time:.2f} seconds")
-        return scores
+        return all_scores

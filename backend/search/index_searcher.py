@@ -343,7 +343,7 @@ class IndexSearcher:
 
     def perform_vector_search(
             self, keywords: str, embedding: List[float], categories: Dict[str, List[str]],
-            page_size: int, page_number: int, language: str, rerank: bool = True, rerank_top_k: int = 20) \
+            page_size: int, page_number: int, language: str, rerank: bool = True, rerank_top_k: int = 40) \
             -> Tuple[List[Dict[str, Any]], int]:
         initial_fetch_size = rerank_top_k if rerank else page_size
         from_ = 0 if rerank else (page_number - 1) * page_size
@@ -381,9 +381,7 @@ class IndexSearcher:
             rerank_start_time = time.time()
             # Use very small batch size for e2-medium
             rerank_scores = self._reranker.predict(
-                sentence_pairs,
-                batch_size=2,  # Very small batch size for low-memory instances
-            )
+                sentence_pairs)
             rerank_duration = time.time() - rerank_start_time
             log_handle.warning(f"--- Reranker.predict() finished. Took {rerank_duration:.2f} seconds. ---")
 
