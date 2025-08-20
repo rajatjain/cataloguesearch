@@ -73,7 +73,7 @@ const Navigation = ({ currentPage, setCurrentPage }) => {
                     {/* Logo */}
                     <div className="flex items-center space-x-4">
                         <img 
-                            src="/images/swalakshya.png" 
+                            src="/images/swalakshya_wide.png"
                             alt="Swalakshya Logo" 
                             className="h-10 w-auto" 
                             onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/40x40/f1f5f9/475569?text=S' }} 
