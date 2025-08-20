@@ -96,6 +96,8 @@ services:
     container_name: cataloguesearch-frontend
     ports:
       - "3000:80"
+    volumes:
+      - ./docker/frontend/nginx-local.conf:/etc/nginx/nginx.conf:ro
     networks:
       - opensearch-net
     depends_on:
