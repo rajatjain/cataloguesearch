@@ -54,8 +54,8 @@ const Header = () => (
         <div className="bg-slate-100 h-32 md:h-40 flex items-center justify-center rounded-lg mb-4 overflow-hidden">
             <img src="/images/banner.jpg" alt="Jain Catalogue Search Banner" className="w-full h-full object-contain" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/1200x160/f1f5f9/475569?text=Jain+Catalogue+Search' }} />
         </div>
-        <h1 className="text-4xl font-bold text-slate-800 font-display">Jain Catalogue Search</h1>
-        <p className="text-base text-slate-500 mt-1 font-sans">Discourses by Pujya Gurudev Shri Kanji Swami</p>
+        <h1 className="text-4xl font-bold text-slate-800 font-display">Swa Lakshya (स्व-लक्ष्य)</h1>
+        <p className="text-base text-slate-500 mt-1 font-sans">Get answers through Pravachans from Pujya Gurudev Shri Kanji Swami!</p>
     </div>
 );
 
