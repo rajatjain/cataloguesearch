@@ -78,8 +78,6 @@ services:
       - "443:443"
     networks:
       - app-net
-    depends_on:
-      - cataloguesearch-api
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s

@@ -107,9 +107,6 @@ services:
       - ./docker/frontend/nginx-local.conf:/etc/nginx/nginx.conf:ro
     networks:
       - opensearch-net
-    depends_on:
-      cataloguesearch-api:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
