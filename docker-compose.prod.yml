@@ -45,8 +45,8 @@ services:
       # Feedback/Email Configuration
       - BREVO_API_KEY=${BREVO_API_KEY}
       - RECAPTCHA_SECRET_KEY=${RECAPTCHA_SECRET_KEY}
-      - FEEDBACK_FROM_EMAIL=${FEEDBACK_FROM_EMAIL:-feedback@swalakshya.me}
-      - FEEDBACK_TO_EMAIL=${FEEDBACK_TO_EMAIL:-admin@swalakshya.me}
+      - FEEDBACK_FROM_EMAIL=${FEEDBACK_FROM_EMAIL}
+      - FEEDBACK_TO_EMAIL=${FEEDBACK_TO_EMAIL}
       - HOME=/app/data
       - BASE_DIR=/app
     volumes:
@@ -78,6 +78,8 @@ services:
       - "443:443"
     networks:
       - app-net
+    depends_on:
+      - cataloguesearch-api
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s

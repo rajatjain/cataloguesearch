@@ -74,7 +74,8 @@ case $ACTION in
         docker-compose --env-file "$ENV_FILE" build cataloguesearch-frontend
         ;;
     "restart-frontend")
-        echo "Rebuilding and restarting only the frontend service..."        docker-compose --env-file "$ENV_FILE" build cataloguesearch-frontend
+        echo "Rebuilding and restarting only the frontend service..."
+        docker-compose --env-file "$ENV_FILE" build cataloguesearch-frontend
         docker-compose --env-file "$ENV_FILE" up -d --no-deps cataloguesearch-frontend
         echo "Frontend service restarted. Available at: http://localhost:3000"
         ;;

@@ -15,7 +15,7 @@ RUN npm install
 # Copy source code
 COPY frontend/ .
 
-# Build the application without environment-specific values
+# Build the application
 RUN npm run build
 
 # Stage 2: Serve with nginx
