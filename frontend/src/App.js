@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Navigation, Header } from './components/Navigation';
 import { SearchBar, MetadataFilters, SearchOptions } from './components/SearchInterface';
 import { ResultsList, SuggestionsCard, Tabs, SimilarSourceInfoCard } from './components/SearchResults';
-import { ExpandModal } from './components/Modals';
+import { ExpandModal, WelcomeModal } from './components/Modals';
 import { FeedbackForm } from './components/Feedback';
 import { Spinner, ChevronUpIcon, ChevronDownIcon } from './components/SharedComponents';
 
@@ -31,10 +31,23 @@ export default function App() {
     const [sourceDocForSimilarity, setSourceDocForSimilarity] = useState(null);
     const [modalData, setModalData] = useState(null);
     const [isContextLoading, setIsContextLoading] = useState(false);
+    const [showWelcomePopup, setShowWelcomePopup] = useState(false);
     const PAGE_SIZE = 20;
 
     useEffect(() => { 
         api.getMetadata().then(data => setMetadata(data)); 
+    }, []);
+
+    useEffect(() => {
+        try {
+            const hasVisited = localStorage.getItem('aagamKhojHasVisited');
+            if (!hasVisited) {
+                setShowWelcomePopup(true);
+                localStorage.setItem('aagamKhojHasVisited', 'true');
+            }
+        } catch (error) {
+            console.warn('localStorage not available:', error);
+        }
     }, []);
     
     const addFilter = (filter) => { 
@@ -99,6 +112,15 @@ export default function App() {
     };
 
     const handleCloseModal = () => setModalData(null);
+
+    const handleWelcomeClose = () => {
+        setShowWelcomePopup(false);
+    };
+
+    const handleWelcomeGoToUsageGuide = () => {
+        setShowWelcomePopup(false);
+        setCurrentPage('about');
+    };
 
     const handleClearSimilar = () => {
         setSimilarDocumentsData(null); 
@@ -175,6 +197,13 @@ export default function App() {
                     data={modalData} 
                     onClose={handleCloseModal} 
                     isLoading={isContextLoading} 
+                />
+            )}
+            
+            {showWelcomePopup && (
+                <WelcomeModal 
+                    onClose={handleWelcomeClose} 
+                    onGoToUsageGuide={handleWelcomeGoToUsageGuide} 
                 />
             )}
             
