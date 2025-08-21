@@ -526,7 +526,7 @@ const ExpandModal = ({ data, onClose, isLoading }) => {
     );
 };
 
-const FeedbackForm = () => {
+const FeedbackForm = ({ onReturnToAagamKhoj }) => {
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -620,10 +620,10 @@ const FeedbackForm = () => {
                     <h3 className="text-xl font-semibold text-green-800 mb-2">Thank you for your feedback!</h3>
                     <p className="text-green-700 mb-4">Your message has been successfully submitted. We appreciate your input and will review it carefully.</p>
                     <button
-                        onClick={() => setSubmitSuccess(false)}
+                        onClick={() => onReturnToAagamKhoj()}
                         className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition duration-200"
                     >
-                        Submit Another Feedback
+                        Return to Aagam-Khoj
                     </button>
                 </div>
             </div>
@@ -744,10 +744,7 @@ const FeedbackForm = () => {
                                 <span className="ml-2">Submitting...</span>
                             </>
                         ) : (
-                            <>
-                                <SubmitIcon />
-                                Submit Feedback
-                            </>
+                            'Submit Feedback'
                         )}
                     </button>
                 </div>
@@ -878,7 +875,7 @@ export default function App() {
 
                     {currentPage === 'feedback' && (
                         <main>
-                            <FeedbackForm />
+                            <FeedbackForm onReturnToAagamKhoj={() => setCurrentPage('home')} />
                         </main>
                     )}
                 </div>
