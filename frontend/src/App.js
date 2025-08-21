@@ -11,6 +11,81 @@ import { Spinner, ChevronUpIcon, ChevronDownIcon } from './components/SharedComp
 // Import API service
 import { api } from './services/api';
 
+// --- TIPS MODAL COMPONENT ---
+const TipsModal = ({ onClose }) => {
+    // Effect to handle 'Escape' key press for closing the modal
+    useEffect(() => {
+        const handleEsc = (event) => {
+            if (event.key === 'Escape') {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+
+        // Cleanup the event listener on component unmount
+        return () => {
+            window.removeEventListener('keydown', handleEsc);
+        };
+    }, [onClose]);
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-6 border-b border-slate-200 sticky top-0 bg-white">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-bold text-slate-800">Tips to write good queries</h2>
+                        <button onClick={onClose} className="text-slate-500 hover:text-slate-700 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div className="p-6">
+                    <ul className="space-y-4 text-slate-700">
+                        <li className="flex items-start">
+                            <span className="text-sky-500 font-bold mr-3">1.</span>
+                            <span>Write in Hindi for the most accurate results.</span>
+                        </li>
+                        <li className="flex items-start">
+                            <span className="text-sky-500 font-bold mr-3">2.</span>
+                            <span>For questions or specific phrases, end with punctuation like a question mark (?) or a Purn Viram (।).</span>
+                        </li>
+                        <li className="flex items-start">
+                            <span className="text-sky-500 font-bold mr-3">3.</span>
+                            <span>If writing in English, avoid mixing in Hindi words written in the English alphabet (Hinglish).</span>
+                        </li>
+                    </ul>
+                    <div className="mt-6">
+                        <h3 className="text-lg font-semibold text-slate-800 mb-3">Examples:</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <p className="font-semibold mb-2">✅ Right</p>
+                                <ul className="space-y-2">
+                                    <li className="bg-green-50 border border-green-200 rounded-md p-2">"कुन्दकुन्दाचार्य विदेह"</li>
+                                    <li className="bg-green-50 border border-green-200 rounded-md p-2">"शुद्धभाव अधिकार"</li>
+                                    <li className="bg-green-50 border border-green-200 rounded-md p-2">"सम्यक् एकांत"</li>
+                                    <li className="bg-green-50 border border-green-200 rounded-md p-2">"दृष्टि का विषय क्या है?"</li>
+                                    <li className="bg-green-50 border border-green-200 rounded-md p-2">"कुन्दकुन्दाचार्य विदेह क्षेत्र कब गए थे?"</li>
+                                    <li className="bg-green-50 border border-green-200 rounded-md p-2">"Where does Seemandhar God reside?"</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <p className="font-semibold mb-2">❌ Wrong</p>
+                                <ul className="space-y-2">
+                                    <li className="bg-red-50 border border-red-200 rounded-md p-2">"सम्यक् एकांत क्या है"</li>
+                                    <li className="bg-red-50 border border-red-200 rounded-md p-2">"Kundkund Acharya kaun hai?"</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 // --- MAIN APP COMPONENT ---
 export default function App() {
     const [currentPage, setCurrentPage] = useState('home');
@@ -32,6 +107,7 @@ export default function App() {
     const [modalData, setModalData] = useState(null);
     const [isContextLoading, setIsContextLoading] = useState(false);
     const [showWelcomePopup, setShowWelcomePopup] = useState(false);
+    const [showTipsModal, setShowTipsModal] = useState(false);
     const PAGE_SIZE = 20;
 
     useEffect(() => { 
@@ -206,6 +282,8 @@ export default function App() {
                     onGoToUsageGuide={handleWelcomeGoToUsageGuide} 
                 />
             )}
+
+            {showTipsModal && <TipsModal onClose={() => setShowTipsModal(false)} />}
             
             <Navigation currentPage={currentPage} setCurrentPage={setCurrentPage} />
             
@@ -216,50 +294,68 @@ export default function App() {
                     {showSearchInterface && (
                         <main>
                             <div className="bg-white p-3 md:p-4 rounded-lg shadow-sm border border-slate-200 mb-4">
-                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
-                                    <div className="sm:col-span-3">
-                                        <SearchBar 
-                                            query={query} 
-                                            setQuery={setQuery} 
-                                            onSearch={() => handleSearch(1)} 
+                                {/* Row 1: Search Bar and Button */}
+                                <div className="flex items-center gap-2">
+                                    <div className="flex-grow">
+                                        <SearchBar
+                                            query={query}
+                                            setQuery={setQuery}
+                                            onSearch={() => handleSearch(1)}
                                         />
                                     </div>
-                                    <button 
-                                        onClick={() => handleSearch(1)} 
-                                        disabled={isLoading} 
-                                        className="bg-sky-600 text-white font-bold py-3 px-4 rounded-md text-base hover:bg-sky-700 transition duration-300 disabled:bg-slate-300 flex items-center justify-center w-full"
+                                    <button
+                                        onClick={() => handleSearch(1)}
+                                        disabled={isLoading}
+                                        className="bg-sky-600 text-white font-bold py-3 px-4 rounded-md text-base hover:bg-sky-700 transition duration-300 disabled:bg-slate-300 flex items-center justify-center"
                                     >
                                         {isLoading ? <Spinner /> : 'Search'}
                                     </button>
                                 </div>
-                                <div className="mt-3">
-                                    <button 
-                                        onClick={() => setShowFilters(!showFilters)} 
-                                        className="flex items-center text-sky-700 font-semibold hover:text-sky-800 text-sm"
-                                    >
-                                        {showFilters ? <ChevronUpIcon /> : <ChevronDownIcon />}
-                                        {showFilters ? 'Hide Filters' : 'Show Filters'}
-                                        <span className="ml-2 bg-slate-200 text-slate-600 text-sm font-bold px-1.5 py-0.5 rounded-full">
-                                            {activeFilters.length}
-                                        </span>
-                                    </button>
+
+                                {/* Row 2: Filters and Info */}
+                                <div className="flex items-center justify-between mt-3">
+                                    <div>
+                                        <button
+                                            onClick={() => setShowFilters(!showFilters)}
+                                            className="flex items-center text-sky-700 font-semibold hover:text-sky-800 text-sm whitespace-nowrap"
+                                        >
+                                            {showFilters ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                                            {showFilters ? 'Hide Filters' : 'Show Filters'}
+                                            <span className="ml-2 bg-slate-200 text-slate-600 text-sm font-bold px-1.5 py-0.5 rounded-full">
+                                                {activeFilters.length}
+                                            </span>
+                                        </button>
+                                    </div>
+                                    <div>
+                                        <button
+                                            onClick={() => setShowTipsModal(true)}
+                                            className="text-sm text-sky-600 hover:text-sky-800 hover:underline focus:outline-none focus:ring-2 focus:ring-sky-500 rounded"
+                                            aria-label="Show search tips"
+                                        >
+                                            Tips for writing good queries
+                                        </button>
+                                    </div>
                                 </div>
+
+                                {/* Filters section that shows/hides */}
                                 {showFilters && (
-                                    <div className="mt-3 space-y-3">
-                                        <MetadataFilters 
-                                            metadata={metadata} 
-                                            activeFilters={activeFilters} 
-                                            onAddFilter={addFilter} 
-                                            onRemoveFilter={removeFilter} 
-                                        />
-                                        <SearchOptions 
-                                            language={language} 
-                                            setLanguage={setLanguage} 
-                                            proximity={proximity} 
-                                            setProximity={setProximity} 
-                                            searchType={searchType} 
-                                            setSearchType={setSearchType} 
-                                        />
+                                    <div className="mt-4 border-t border-slate-200 pt-4">
+                                        <div className="space-y-3">
+                                            <MetadataFilters
+                                                metadata={metadata}
+                                                activeFilters={activeFilters}
+                                                onAddFilter={addFilter}
+                                                onRemoveFilter={removeFilter}
+                                            />
+                                            <SearchOptions
+                                                language={language}
+                                                setLanguage={setLanguage}
+                                                proximity={proximity}
+                                                setProximity={setProximity}
+                                                searchType={searchType}
+                                                setSearchType={setSearchType}
+                                            />
+                                        </div>
                                     </div>
                                 )}
                             </div>
