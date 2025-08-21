@@ -30,9 +30,10 @@ export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemove
         }
     }, [selectedKey, metadata]);
     
-    const handleAddClick = () => {
-        if (selectedKey && selectedValue) {
-            onAddFilter({ key: selectedKey, value: selectedValue });
+    const handleValueChange = (value) => {
+        setSelectedValue(value);
+        if (selectedKey && value) {
+            onAddFilter({ key: selectedKey, value: value });
             setSelectedKey(""); 
             setSelectedValue("");
         }
@@ -41,7 +42,7 @@ export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemove
     return (
         <div className="space-y-3">
             <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Filter by Category</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <select 
                     value={selectedKey} 
                     onChange={(e) => setSelectedKey(e.target.value)} 
@@ -52,20 +53,13 @@ export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemove
                 </select>
                 <select 
                     value={selectedValue} 
-                    onChange={(e) => setSelectedValue(e.target.value)} 
+                    onChange={(e) => handleValueChange(e.target.value)} 
                     disabled={!selectedKey} 
                     className="p-2 bg-slate-50 border border-slate-300 rounded-md text-slate-800 w-full text-base disabled:opacity-50 disabled:cursor-not-allowed focus:ring-1 focus:ring-sky-500 font-sans"
                 >
                     <option value="">Select Value...</option>
                     {availableValues.map(val => <option key={val} value={val}>{val}</option>)}
                 </select>
-                <button 
-                    onClick={handleAddClick} 
-                    disabled={!selectedKey || !selectedValue} 
-                    className="p-2 bg-sky-600 text-white font-semibold rounded-md hover:bg-sky-700 transition duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed text-base font-sans"
-                >
-                    Add Filter
-                </button>
             </div>
             {activeFilters.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 items-center pt-2">
@@ -83,7 +77,10 @@ export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemove
 };
 
 export const SearchOptions = ({ language, setLanguage, proximity, setProximity, searchType, setSearchType }) => {
-    const languageOptions = ['hindi', 'gujarati', 'both'];
+    const languageOptions = [
+        { value: 'hindi', label: 'Hindi', disabled: false },
+        { value: 'gujarati', label: 'Gujarati', disabled: true }
+    ];
     const proximityOptions = [
         { label: 'Exact Phrase', value: 0 },
         { label: 'Near (10)', value: 10 },
@@ -97,16 +94,20 @@ export const SearchOptions = ({ language, setLanguage, proximity, setProximity, 
                 <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Language</h3>
                 <div className="flex gap-4">
                     {languageOptions.map(lang => (
-                        <label key={lang} className="flex items-center gap-1.5 text-slate-700 capitalize text-base">
+                        <label key={lang.value} className={`flex items-center gap-1.5 text-base ${lang.disabled ? 'text-slate-400 cursor-not-allowed' : 'text-slate-700 cursor-pointer'}`}>
                             <input 
                                 type="radio" 
                                 name="language" 
-                                value={lang} 
-                                checked={language === lang} 
+                                value={lang.value} 
+                                checked={language === lang.value} 
                                 onChange={(e) => setLanguage(e.target.value)} 
-                                className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500" 
+                                disabled={lang.disabled}
+                                className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed" 
                             />
-                            {lang}
+                            <span className="capitalize">
+                                {lang.label}
+                                {lang.disabled && <span className="ml-1 text-xs text-slate-400">(Coming soon)</span>}
+                            </span>
                         </label>
                     ))}
                 </div>
