@@ -24,6 +24,8 @@ pyyaml==6.0.1                # For parsing YAML configuration files
 python-dotenv==1.0.1         # For managing environment variables from .env files
 psutil==5.9.8                # For process and system monitoring
 protobuf~=4.25.3             # Protocol buffers, common dependency for ML libraries
+requests==2.32.3             # HTTP library for API calls
+sib-api-v3-sdk==7.6.0        # Brevo (SendinBlue) Python SDK for email services
 
 ## Testing & Development
 pytest==8.2.2                # A framework for writing and running tests

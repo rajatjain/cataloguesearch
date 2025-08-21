@@ -42,6 +42,11 @@ services:
       - PYTHONPATH=/app
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
+      # Feedback/Email Configuration
+      - BREVO_API_KEY=${BREVO_API_KEY}
+      - RECAPTCHA_SECRET_KEY=${RECAPTCHA_SECRET_KEY}
+      - FEEDBACK_FROM_EMAIL=${FEEDBACK_FROM_EMAIL}
+      - FEEDBACK_TO_EMAIL=${FEEDBACK_TO_EMAIL}
       - HOME=/app/data
       - BASE_DIR=/app
     volumes:
@@ -62,7 +67,12 @@ services:
 
   cataloguesearch-frontend:
     image: jain9rajat/cataloguesearch:frontend
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
     container_name: cataloguesearch-frontend
+    environment:
+      - REACT_APP_RECAPTCHA_SITE_KEY=${REACT_APP_RECAPTCHA_SITE_KEY}
     ports:
       - "80:80"
       - "443:443"

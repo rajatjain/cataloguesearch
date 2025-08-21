@@ -27,6 +27,10 @@ COPY --from=build /app/build /usr/share/nginx/html
 # Copy nginx configuration
 COPY docker/frontend/nginx.conf /etc/nginx/nginx.conf
 
+# Copy and make entrypoint script executable
+COPY docker/frontend/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Expose port 80
 EXPOSE 80
 
@@ -34,5 +38,6 @@ EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost/ || exit 1
 
-# Start nginx
+# Use entrypoint script
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
