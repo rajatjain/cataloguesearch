@@ -2,6 +2,7 @@ services:
   opensearch:
     image: jain9rajat/cataloguesearch:opensearch
     container_name: opensearch-node
+    platform: linux/amd64
     environment:
       - cluster.name=opensearch-cluster
       - node.name=opensearch-node
@@ -35,6 +36,7 @@ services:
   cataloguesearch-api:
     image: jain9rajat/cataloguesearch:api
     container_name: cataloguesearch-api
+    platform: linux/amd64
     environment:
       - OPENSEARCH_HOST=opensearch
       - OPENSEARCH_PORT=9200
@@ -70,6 +72,9 @@ services:
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
+      args:
+        - REACT_APP_RECAPTCHA_SITE_KEY=${REACT_APP_RECAPTCHA_SITE_KEY}
+    platform: linux/amd64
     container_name: cataloguesearch-frontend
     environment:
       - REACT_APP_RECAPTCHA_SITE_KEY=${REACT_APP_RECAPTCHA_SITE_KEY}
