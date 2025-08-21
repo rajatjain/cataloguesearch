@@ -36,7 +36,7 @@ export const Navigation = ({ currentPage, setCurrentPage }) => {
                         <img
                             src="/images/swalakshya_wide.png"
                             alt="Swalakshya Logo"
-                            className="h-[3rem] w-auto"
+                            className="h-[2.5rem] w-auto"
                             onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/40x40/f1f5f9/475569?text=S' }}
                         />
                     </div>

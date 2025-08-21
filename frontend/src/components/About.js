@@ -2,153 +2,127 @@ import React from 'react';
 
 const About = () => {
     return (
-        <div className="max-w-4xl mx-auto p-6 bg-white">
-            <h1 className="text-3xl font-bold text-gray-900 mb-6">Aagam Khoj - User Guide</h1>
+        <div className="max-w-[1080px] mx-auto p-6">
+            <h1 className="text-3xl font-bold text-gray-900 mb-6">Aagam Khoj</h1>
             
-            <h2 className="text-2xl font-semibold text-gray-800 mb-4">Overview</h2>
             <p className="mb-8 text-gray-700 leading-relaxed">
-                Aagam Khoj is a comprehensive digital catalog and search platform for thousands of Pravachans (spiritual discourses) delivered by Pujya Gurudev Shri Kanji Swami. The platform makes these teachings easily discoverable and accessible through advanced search capabilities.
+                Aagam Khoj is an AI-powered search platform for thousands of spiritual discourses (Pravachans) delivered by Pujya Gurudev Shri Kanji Swami. It enables users to ask Tattva-related questions in Hindi, Gujarati, or English and receive answers directly from Gurudev's Pravachans.
             </p>
-
-            <hr className="my-8 border-gray-300" />
             
-            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Core Features</h2>
             
-            <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-                <span className="mr-2">🔍</span>Search Capabilities
-            </h3>
+            <h2 className="text-2xl font-semibold text-gray-800 mb-4">Background</h2>
+            <p className="mb-4 text-gray-700 leading-relaxed">
+                Gurudev Shri Kanji Swami delivered tens of thousands of Pravachans throughout his lifetime, with over 9,500 publicly available today on vitragvani.com. Many spiritual seekers (Mumukshus) begin their day by listening to them. Beyond the original scriptures by our Acharyas, Muniraaj, and Gyaani Vidvaan, his Pravachans are a unique source that comprehensively discuss the core spiritual concepts of Jain Philosophy (द्रव्यानुयोग / आध्यात्म).
+            </p>
             
-            <h4 className="text-lg font-medium text-gray-700 mb-3">Keyword Search</h4>
-            <p className="mb-2 text-gray-700">Find Pravachans containing specific terms or phrases.</p>
+            <p className="mb-4 text-gray-700 leading-relaxed">
+                His Pravachans are delivered in an accessible language and delve into fundamental topics of Jain Spirituality, such as:
+            </p>
             <ul className="mb-4 ml-6 text-gray-700 list-disc">
-                <li className="mb-1">Direct keyword matching across all documents</li>
-                <li className="mb-1">Example: <code className="bg-gray-100 px-2 py-1 rounded">"कुंदकुन्दाचार्य विदेह"</code></li>
+                <li className="mb-1">Dravya-Gun-Paryay</li>
+                <li className="mb-1">Nischay - Vyavhar</li>
+                <li className="mb-1">Nimitt - Upadan</li>
+                <li className="mb-1">Krambaddh Paryay</li>
+                <li className="mb-1">Way to attain self-experience (आत्मानुभूति)</li>
             </ul>
             
-            <h4 className="text-lg font-medium text-gray-700 mb-3">Semantic Search</h4>
-            <p className="mb-2 text-gray-700">Discover relevant Pravachans through natural language questions.</p>
-            <ul className="mb-6 ml-6 text-gray-700 list-disc">
-                <li className="mb-1">AI-powered understanding of context and meaning</li>
-                <li className="mb-1">Get answers to philosophical and spiritual questions</li>
-                <li className="mb-1">Example: <code className="bg-gray-100 px-2 py-1 rounded">"सम्यक् एकान्त क्या है?"</code></li>
-            </ul>
+            <p className="mb-8 text-gray-700 leading-relaxed">
+                The importance of these Pravachans is underscored by the fact that most have been transcribed word-for-word into PDFs in both Gujarati and Hindi. This facilitates understanding for spiritual seekers (मुमुक्षु) who listen to the audio Pravachans. Together with the audio files, these Pravachan Scriptures (प्रवचन शास्त्र) are a vital source of spiritual knowledge.
+            </p>
             
-            <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-                <span className="mr-2">📁</span>Document Management
-            </h3>
             
-            <h4 className="text-lg font-medium text-gray-700 mb-3">PDF Access</h4>
-            <ul className="mb-4 ml-6 text-gray-700 list-disc">
-                <li className="mb-1">View original source documents directly</li>
-                <li className="mb-1">Each search result includes a PDF viewer icon</li>
-                <li className="mb-1">Maintain reference to authentic sources</li>
-            </ul>
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Why Aagam Khoj?</h2>
+            <p className="mb-4 text-gray-700 leading-relaxed">
+                Aagam Khoj was developed to help spiritual seekers (मुमुक्षु) easily navigate and search through Gurudevshri's vast collection of Pravachans, aiding their spiritual study (स्वाध्याय). It is designed for spiritual seekers, researchers, and Jain Scholars (विद्वान) alike.
+            </p>
             
-            <h4 className="text-lg font-medium text-gray-700 mb-3">Similar Content Discovery</h4>
-            <ul className="mb-6 ml-6 text-gray-700 list-disc">
-                <li className="mb-1">"More like this" feature for each result</li>
-                <li className="mb-1">Find related Pravachans based on content similarity</li>
-                <li className="mb-1">Explore interconnected teachings</li>
-            </ul>
-            
-            <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-                <span className="mr-2">🎯</span>Search Refinement
-            </h3>
-            
-            <h4 className="text-lg font-medium text-gray-700 mb-3">Filters</h4>
-            <ul className="mb-4 ml-6 text-gray-700 list-disc">
-                <li className="mb-1">Narrow searches to specific Pravachan categories</li>
-                <li className="mb-1">Apply multiple filters simultaneously</li>
-                <li className="mb-1">Customize search scope</li>
-            </ul>
-            
-            <h4 className="text-lg font-medium text-gray-700 mb-3">Relevance Options</h4>
             <ul className="mb-8 ml-6 text-gray-700 list-disc">
-                <li className="mb-1"><strong>Quick Search</strong> (Default): Faster results with good accuracy</li>
-                <li className="mb-1"><strong>Better Relevance</strong>: Enhanced semantic search for more precise results</li>
+                <li className="mb-4">
+                    <strong>Spiritual Seekers:</strong> This portal allows spiritual seekers to find answers to common questions by posing them in Hindi, English, or Gujarati. Aagam Khoj uses AI to provide relevant answers directly from Gurudev's Pravachans. For instance, a user can ask, <strong>"दृष्टि के विषय और ज्ञान के विषय में क्या अन्तर है?"</strong> and Aagam Khoj will provide references from Gurudev's entire catalog that address this question. Users can also search using specific keywords, such as <strong>"महात्मा गाँधी"</strong> to find all references where Gurudev mentioned Mahatma Gandhi.
+                </li>
+                <li className="mb-4">
+                    <strong>Jain Scholars and Researchers:</strong> Gurudev's words are considered a definitive authority on Jain Spirituality. Jain Scholars and researchers frequently reference Gurudev's Pravachans to support their arguments. They also study his Pravachan Shastra for research, to learn about events in Gurudev's life, or to understand the examples he used to explain concepts.
+                </li>
             </ul>
             
-            <hr className="my-8 border-gray-300" />
             
-            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Usage Guidelines</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">How Does Aagam Khoj Work?</h2>
+            <p className="mb-4 text-gray-700 leading-relaxed">
+                Aagam Khoj employs OCR technology to convert all PDF files into text files. This text is then indexed into a search-engine system (called OpenSearch). When a user enters a query, Aagam Khoj performs two operations:
+            </p>
             
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">Writing Effective Search Queries</h3>
+            <ul className="mb-8 ml-6 text-gray-700 list-disc">
+                <li className="mb-2"><strong>Keyword Search:</strong> Matches all references containing the input keywords.</li>
+                <li className="mb-2"><strong>Semantic Search:</strong> Uses AI to find all relevant references that semantically match the answer to the input query.</li>
+            </ul>
             
-            <h4 className="text-lg font-medium text-gray-700 mb-3">Language Support</h4>
             
-            <div className="mb-4">
-                <h5 className="font-semibold text-gray-700 mb-2">Hindi (Recommended)</h5>
-                <p className="mb-2 text-gray-700">Native script queries work best</p>
-                <div className="mb-3">
-                    <p className="mb-1 text-gray-700">Examples:</p>
-                    <ul className="ml-6 text-gray-700 list-disc">
-                        <li className="mb-1"><code className="bg-gray-100 px-2 py-1 rounded">"कुंदकुन्दाचार्य विदेह"</code> - Keyword search</li>
-                        <li className="mb-1"><code className="bg-gray-100 px-2 py-1 rounded">"सम्यक् एकान्त क्या है?"</code> - Question-based search</li>
-                        <li className="mb-1"><code className="bg-gray-100 px-2 py-1 rounded">"दृष्टि के विषय और ज्ञान के विषय में क्या फ़र्क़ है?"</code> - Complex queries</li>
-                    </ul>
-                </div>
-            </div>
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Why Use Artificial Intelligence?</h2>
+            <p className="mb-4 text-gray-700 leading-relaxed">
+                A crucial question arises: Should artificial technology be used with such important content? Gurudev's Pravachans are akin to our Teerthankar's Vaani—how can AI be used to interpret their words?
+            </p>
+            <p className="mb-8 text-gray-700 leading-relaxed">
+                The short answer is that AI is not used to interpret Gurudev's words or his intention. Instead, AI serves merely as a tool to identify references that <em>possibly</em> match the input questions, providing direct references from Gurudev's Pravachans. Aagam Khoj does not generate answers; it provides word-for-word references from Gurudev's Pravachans themselves.
+            </p>
             
-            <div className="mb-4">
-                <h5 className="font-semibold text-gray-700 mb-2">English</h5>
-                <p className="mb-2 text-gray-700">Fully supported for questions and searches</p>
-                <div className="mb-3">
-                    <p className="mb-1 text-gray-700">Examples:</p>
-                    <ul className="ml-6 text-gray-700 list-disc">
-                        <li className="mb-1"><code className="bg-gray-100 px-2 py-1 rounded">"What is Samyak Ekant?"</code></li>
-                        <li className="mb-1"><code className="bg-gray-100 px-2 py-1 rounded">"When did Kundkund Acharya go to Videh Kshetra?"</code></li>
-                    </ul>
-                </div>
-            </div>
             
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
-                <p className="font-semibold text-yellow-800 mb-2">⚠️ Avoid: Hindi words written in English script</p>
-                <ul className="ml-6 text-yellow-700 list-disc">
-                    <li className="mb-1">❌ <code className="bg-yellow-100 px-2 py-1 rounded">"Kanji Swami kaun hai?"</code> - Will not give desired results</li>
-                    <li className="mb-1">✅ Use either: <code className="bg-green-100 px-2 py-1 rounded">"कांजी स्वामी कौन हैं?"</code> or <code className="bg-green-100 px-2 py-1 rounded">"Who is Kanji Swami?"</code></li>
-                </ul>
-            </div>
-
-            <hr className="my-8 border-gray-300" />
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">User Guide</h2>
+            <p className="mb-6 text-gray-700 leading-relaxed">
+                Users begin by entering their question or keywords in the search bar and clicking "Search." Aagam Khoj then provides relevant answers. Users should keep the following tips in mind for more effective searches:
+            </p>
             
-            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Quick Start Guide</h2>
-            
-            <ol className="mb-8 ml-6 text-gray-700 list-decimal">
-                <li className="mb-3">
-                    <strong>Basic Search</strong>
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">Tips for Effective Searches</h3>
+            <ul className="mb-6 ml-6 text-gray-700 list-disc">
+                <li className="mb-2">Write questions in the native language (Hindi or Gujarati).</li>
+                <li className="mb-2">
+                    When asking a question or searching for a phrase, add a punctuation mark like "?" or "।".
                     <ul className="ml-6 mt-1 list-disc">
-                        <li className="mb-1">Enter keywords or questions in the search bar</li>
-                        <li className="mb-1">Press Enter or click Search</li>
+                        <li className="mb-1">✅ "कुन्दकुन्दाचार्य विदेह क्षेत्र कब गए थे?"</li>
+                        <li className="mb-1">❌ "कुन्दकुन्दाचार्य विदेह क्षेत्र कब गए थे"</li>
                     </ul>
                 </li>
-                <li className="mb-3">
-                    <strong>Apply Filters</strong>
+                <li className="mb-2">
+                    If using English script, type the question in English rather than Hinglish.
                     <ul className="ml-6 mt-1 list-disc">
-                        <li className="mb-1">Click "Filters" below the search bar</li>
-                        <li className="mb-1">Select categories to narrow results</li>
-                        <li className="mb-1">Choose relevance option if needed</li>
+                        <li className="mb-1">✅ "When did Kundkundacharya write Samaysar?"</li>
+                        <li className="mb-1">❌ "Kundkundacharya ne Samaysar kab likha?"</li>
                     </ul>
                 </li>
-                <li className="mb-3">
-                    <strong>Review Results</strong>
-                    <ul className="ml-6 mt-1 list-disc">
-                        <li className="mb-1">Click on any result to view details</li>
-                        <li className="mb-1">Use PDF icon to see original document</li>
-                        <li className="mb-1">Click "More like this" for similar content</li>
-                    </ul>
-                </li>
-                <li className="mb-3">
-                    <strong>Refine Your Search</strong>
-                    <ul className="ml-6 mt-1 list-disc">
-                        <li className="mb-1">Modify query based on initial results</li>
-                        <li className="mb-1">Adjust filters as needed</li>
-                        <li className="mb-1">Switch between quick and better relevance modes</li>
-                    </ul>
-                </li>
-            </ol>
+                <li className="mb-2">Use "Filters" to narrow your search by a specific Granth, Anuyog, or Year.</li>
+            </ul>
             
-            <hr className="my-8 border-gray-300" />
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">Interacting with Search Results</h3>
+            <ul className="mb-8 ml-6 text-gray-700 list-disc">
+                <li className="mb-2">Each search result includes a "View PDF" icon, which directly opens the original Pravachan Shastra at the correct page number.</li>
+                <li className="mb-2">Click "Expand" to view the text surrounding the search result.</li>
+                <li className="mb-2">Click "More like this" to find documents similar in intent to a particular search result.</li>
+                <li className="mb-2">
+                    For AI-powered (Semantic Search) results, two options are available:
+                    <ul className="ml-6 mt-1 list-disc">
+                        <li className="mb-1">Faster speed, but lesser relevance</li>
+                        <li className="mb-1">Better relevance, but slower speed</li>
+                        <li className="mb-1">Choose the option that best suits your needs.</li>
+                    </ul>
+                </li>
+            </ul>
             
+            
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Feedback</h2>
+            <p className="mb-8 text-gray-700 leading-relaxed">
+                For any issues, bugs, questions, feedback, or suggestions, please use the "Feedback" link.
+            </p>
+            
+            
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Swa Lakshya (स्व-लक्ष्य)</h2>
+            <p className="mb-4 text-gray-700 leading-relaxed">
+                The sole purpose of this portal is to assist spiritual seekers (मुमुक्षु) in better understanding Jain Tattva. The author sincerely apologizes for any mistakes or shortcomings in this effort and will strive their best to correct them.
+            </p>
+            <p className="mb-4 text-gray-700 leading-relaxed">
+                May all souls understand the true nature of their soul, achieve completeness within themselves, and attain Moksha.
+            </p>
+            <p className="text-gray-700 font-semibold">
+                Jai Jinendra 🙏
+            </p>
         </div>
     );
 };
