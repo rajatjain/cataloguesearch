@@ -169,6 +169,40 @@ export default function App() {
         setIsLoading(false);
     }, [query, activeFilters, language, proximity, searchType]);
 
+    const handleSwitchToRelevanceSearch = useCallback(async () => {
+        setSearchType('relevance'); // Set for future searches
+
+        if (!query.trim()) {
+            return;
+        }
+        setIsLoading(true);
+        setKeywordPage(1);
+        setVectorPage(1);
+        setSimilarDocumentsData(null);
+        setSourceDocForSimilarity(null);
+
+        const requestPayload = {
+            query,
+            allow_typos: false,
+            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
+            language: language,
+            proximity_distance: proximity,
+            page_number: 1,
+            page_size: PAGE_SIZE,
+            enable_reranking: true // Explicitly enable for this search
+        };
+
+        const data = await api.search(requestPayload);
+        setSearchData(data);
+
+        if (data.results && data.results.length > 0) {
+            setActiveTab('keyword');
+        } else {
+            setActiveTab('vector');
+        }
+        setIsLoading(false);
+    }, [query, activeFilters, language, proximity]);
+
     const handleFindSimilar = async (sourceDoc) => {
         setIsLoading(true); 
         setSourceDocForSimilarity(sourceDoc); 
@@ -393,17 +427,29 @@ export default function App() {
                                     )}
                                     {activeTab === 'vector' && (
                                         searchData?.vector_results.length > 0 ? (
-                                            <ResultsList 
-                                                results={paginatedVectorResults} 
-                                                totalResults={searchData.total_vector_results} 
-                                                pageSize={PAGE_SIZE} 
-                                                currentPage={vectorPage} 
-                                                onPageChange={handlePageChange} 
-                                                resultType="vector" 
-                                                onFindSimilar={handleFindSimilar} 
-                                                onExpand={handleExpand} 
-                                                searchType={searchType} 
-                                            />
+                                            <>
+                                                {searchType === 'speed' && (
+                                                    <div className="bg-sky-100 border border-sky-300 text-sky-800 text-sm rounded-md p-3 mb-4 flex items-center justify-between">
+                                                        <span>
+                                                            Search with slower, but better relevance. (note that this is a beta feature).
+                                                        </span>
+                                                        <button onClick={handleSwitchToRelevanceSearch} className="font-semibold underline hover:text-sky-900 whitespace-nowrap ml-4 transition-colors">
+                                                            Enable and Re-run Search
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                <ResultsList 
+                                                    results={paginatedVectorResults} 
+                                                    totalResults={searchData.total_vector_results} 
+                                                    pageSize={PAGE_SIZE} 
+                                                    currentPage={vectorPage} 
+                                                    onPageChange={handlePageChange} 
+                                                    resultType="vector" 
+                                                    onFindSimilar={handleFindSimilar} 
+                                                    onExpand={handleExpand} 
+                                                    searchType={searchType} 
+                                                />
+                                            </>
                                         ) : searchData && (
                                             <div className="text-center py-8 text-base text-slate-500 bg-white rounded-b-md border-t-0">
                                                 No results found. Try a different query.

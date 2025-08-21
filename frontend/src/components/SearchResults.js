@@ -243,13 +243,6 @@ export const ResultsList = ({ results, totalResults, pageSize, currentPage, onPa
     
     return (
         <div className="bg-white p-3 md:p-4 rounded-b-md">
-            {searchType === 'speed' && resultType === 'vector' && (
-                <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg mb-4">
-                    <p className="text-sm text-blue-800">
-                        For more accurate relevance, select the "Better Relevance" option under "Filters" and try again (note that this is in beta).
-                    </p>
-                </div>
-            )}
             <div className="text-sm text-slate-500 mb-3">Showing {results.length} of {totalResults} results.</div>
             <div className="space-y-3">
                 {results.map((result, index) => (
