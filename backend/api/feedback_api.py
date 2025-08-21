@@ -44,7 +44,6 @@ def verify_recaptcha(token: str, remote_ip: str = None) -> bool:
 def send_feedback_email(feedback_data: dict) -> bool:
     """Send feedback email using Brevo API"""
     brevo_api_key = os.getenv('BREVO_API_KEY')
-    log_handle.info(f"Brevo API key: {brevo_api_key}")
     if not brevo_api_key:
         log_handle.error("BREVO_API_KEY not configured")
         return False

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 
 // Import components
 import { Navigation, Header } from './components/Navigation';
@@ -6,6 +7,7 @@ import { SearchBar, MetadataFilters, SearchOptions } from './components/SearchIn
 import { ResultsList, SuggestionsCard, Tabs, SimilarSourceInfoCard } from './components/SearchResults';
 import { ExpandModal, WelcomeModal } from './components/Modals';
 import { FeedbackForm } from './components/Feedback';
+import About from './components/About';
 import { Spinner, ChevronUpIcon, ChevronDownIcon, ExpandIcon } from './components/SharedComponents';
 
 // Import API service
@@ -87,8 +89,40 @@ const TipsModal = ({ onClose }) => {
 
 
 // --- MAIN APP COMPONENT ---
-export default function App() {
-    const [currentPage, setCurrentPage] = useState('home');
+const AppContent = () => {
+    const location = useLocation();
+    const navigate = useNavigate();
+    
+    // State to track current page selection
+    const [currentPageState, setCurrentPageState] = useState(() => {
+        const path = location.pathname;
+        if (path === '/about') return 'about';
+        if (path === '/feedback') return 'feedback';
+        return 'home'; // Default to 'home' for root path
+    });
+    
+    // Update state when URL changes (browser navigation)
+    useEffect(() => {
+        const path = location.pathname;
+        if (path === '/about') {
+            setCurrentPageState('about');
+        } else if (path === '/feedback') {
+            setCurrentPageState('feedback');
+        }
+        // For root path, don't override the current selection between home/aagam-khoj
+    }, [location.pathname]);
+    
+    const currentPage = currentPageState;
+    const setCurrentPage = (page) => {
+        setCurrentPageState(page);
+        const routes = {
+            'home': '/',
+            'aagam-khoj': '/',
+            'about': '/about',
+            'feedback': '/feedback'
+        };
+        navigate(routes[page] || '/');
+    };
     const [query, setQuery] = useState('');
     const [activeFilters, setActiveFilters] = useState([]);
     const [language, setLanguage] = useState('hindi');
@@ -495,6 +529,12 @@ export default function App() {
                             <FeedbackForm onReturnToAagamKhoj={() => setCurrentPage('home')} />
                         </main>
                     )}
+
+                    {currentPage === 'about' && (
+                        <main>
+                            <About />
+                        </main>
+                    )}
                 </div>
             </div>
             
@@ -525,5 +565,18 @@ export default function App() {
                 </button>
             )}
         </div>
+    );
+};
+
+// Main App wrapper with Router
+export default function App() {
+    return (
+        <Router>
+            <Routes>
+                <Route path="/" element={<AppContent />} />
+                <Route path="/about" element={<AppContent />} />
+                <Route path="/feedback" element={<AppContent />} />
+            </Routes>
+        </Router>
     );
 }
