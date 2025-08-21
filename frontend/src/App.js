@@ -880,6 +880,33 @@ export default function App() {
                     )}
                 </div>
             </div>
+            
+            {/* Mobile Navigation Buttons - Only visible on mobile */}
+            {currentPage !== 'feedback' && (
+                <button
+                    onClick={() => setCurrentPage('feedback')}
+                    className="md:hidden fixed bottom-6 right-6 bg-sky-600 text-white p-3 rounded-full shadow-lg hover:bg-sky-700 transition-colors duration-200 z-50"
+                    aria-label="Feedback"
+                >
+                    {/* Email icon for feedback */}
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                </button>
+            )}
+            
+            {currentPage !== 'home' && currentPage !== 'aagam-khoj' && (
+                <button
+                    onClick={() => setCurrentPage('home')}
+                    className="md:hidden fixed bottom-6 left-6 bg-slate-600 text-white p-3 rounded-full shadow-lg hover:bg-slate-700 transition-colors duration-200 z-50"
+                    aria-label="Home"
+                >
+                    {/* Home icon */}
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                </button>
+            )}
         </div>
     );
 }
