@@ -30,7 +30,7 @@ export const ResultCard = ({ result, onFindSimilar, onExpand, isFirst }) => {
                         <PdfIcon />View PDF
                     </a>
                 )}
-                {result.bookmarks && <span className="truncate max-w-xs">Details: {result.bookmarks}</span>}
+
                 <div className="ml-auto flex items-center gap-3 text-sm">
                     <button onClick={() => onExpand(result.document_id)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center">
                         <ExpandIcon />Expand

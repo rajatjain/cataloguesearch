@@ -6,7 +6,7 @@ import { SearchBar, MetadataFilters, SearchOptions } from './components/SearchIn
 import { ResultsList, SuggestionsCard, Tabs, SimilarSourceInfoCard } from './components/SearchResults';
 import { ExpandModal, WelcomeModal } from './components/Modals';
 import { FeedbackForm } from './components/Feedback';
-import { Spinner, ChevronUpIcon, ChevronDownIcon } from './components/SharedComponents';
+import { Spinner, ChevronUpIcon, ChevronDownIcon, ExpandIcon } from './components/SharedComponents';
 
 // Import API service
 import { api } from './services/api';
@@ -360,9 +360,10 @@ export default function App() {
                                     <div>
                                         <button
                                             onClick={() => setShowTipsModal(true)}
-                                            className="text-sky-700 font-semibold hover:text-sky-800 text-sm"
+                                            className="flex items-center text-sky-700 font-semibold hover:text-sky-800 text-sm"
                                             aria-label="Show search tips"
                                         >
+                                            <ExpandIcon />
                                             Tips for writing good queries
                                         </button>
                                     </div>
