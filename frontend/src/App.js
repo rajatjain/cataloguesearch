@@ -321,15 +321,12 @@ export default function App() {
                                         >
                                             {showFilters ? <ChevronUpIcon /> : <ChevronDownIcon />}
                                             {showFilters ? 'Hide Filters' : 'Show Filters'}
-                                            <span className="ml-2 bg-slate-200 text-slate-600 text-sm font-bold px-1.5 py-0.5 rounded-full">
-                                                {activeFilters.length}
-                                            </span>
                                         </button>
                                     </div>
                                     <div>
                                         <button
                                             onClick={() => setShowTipsModal(true)}
-                                            className="text-sm text-sky-600 hover:text-sky-800 hover:underline focus:outline-none focus:ring-2 focus:ring-sky-500 rounded"
+                                            className="text-sky-700 font-semibold hover:text-sky-800 text-sm"
                                             aria-label="Show search tips"
                                         >
                                             Tips for writing good queries
