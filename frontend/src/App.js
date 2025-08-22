@@ -315,6 +315,9 @@ const AppContent = () => {
     };
 
     const handlePageChange = (page) => {
+        // Scroll to top when changing pages
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        
         switch (activeTab) {
             case 'keyword': 
                 handleSearch(page); 
