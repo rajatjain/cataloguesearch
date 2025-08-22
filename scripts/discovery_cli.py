@@ -209,6 +209,9 @@ def run_discovery_once(config: Config, crawl=False, index=False, dry_run=False):
         hh, rem = divmod(total_secs, 3600)
         mm, ss = divmod(rem, 60)
         log_handle.info(f"Discovery completed in {hh:02}:{mm:02}:{ss:02}")
+        
+        if dry_run:
+            log_handle.warning("DRY RUN was enabled. No documents were actually indexed. Set --dry-run=false to actually index documents.")
     except Exception as e:
         traceback.print_exc()
         logging.error(f"Discovery failed: {e}")
@@ -308,8 +311,8 @@ def main():
                         help="Crawl the PDF dir for new files")
     parser.add_argument("--index", action='store_true',
                         help="Create the index for files not yet indexed.")
-    parser.add_argument("--dry-run", action='store_true',
-                        help="Show what would be indexed without actually indexing or updating state.")
+    parser.add_argument("--dry-run", type=bool, default=True,
+                        help="Show what would be indexed without actually indexing or updating state. Use --dry-run=false to disable.")
     parser.add_argument('--cleanup', type=str, metavar='PATH',
                         help='Clean up all data for a specific PDF file or directory.')
 
