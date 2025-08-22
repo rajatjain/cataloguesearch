@@ -17,7 +17,7 @@ if [[ "$ENV" != "local" && "$ENV" != "prod" ]]; then
 fi
 
 # Validate action
-VALID_ACTIONS=("up" "down" "build" "logs" "restart" "build-api" "restart-api" "build-frontend" "restart-frontend" "push" "push-api" "push-frontend")
+VALID_ACTIONS=("up" "down" "build" "logs" "restart" "build-api" "restart-api" "build-frontend" "restart-frontend" "restart-svc" "push" "push-api" "push-frontend")
 if ! [[ " ${VALID_ACTIONS[*]} " =~ " ${ACTION} " ]]; then
     echo "Error: Action must be one of: ${VALID_ACTIONS[*]}"
     echo "Usage: $0 [local|prod] [action]"
@@ -78,6 +78,33 @@ case $ACTION in
         docker-compose --env-file "$ENV_FILE" build cataloguesearch-frontend
         docker-compose --env-file "$ENV_FILE" up -d --no-deps cataloguesearch-frontend
         echo "Frontend service restarted. Available at: http://localhost:3000"
+        ;;
+    "restart-svc")
+        echo "Rebuilding and restarting frontend and backend services..."
+        
+        # Stop services first to free up resources
+        echo "Stopping services..."
+        docker-compose --env-file "$ENV_FILE" stop cataloguesearch-api cataloguesearch-frontend
+        
+        # Build images
+        echo "Building API service..."
+        docker-compose --env-file "$ENV_FILE" build cataloguesearch-api
+        echo "Building frontend service..."
+        docker-compose --env-file "$ENV_FILE" build cataloguesearch-frontend
+        
+        # Start API first, then frontend
+        echo "Starting API service..."
+        docker-compose --env-file "$ENV_FILE" up -d --no-deps cataloguesearch-api
+        echo "Waiting for API to stabilize..."
+        sleep 5
+        
+        echo "Starting frontend service..."
+        docker-compose --env-file "$ENV_FILE" up -d --no-deps cataloguesearch-frontend
+        
+        echo ""
+        echo "Frontend and backend services restarted successfully!"
+        echo "Frontend available at: http://localhost:3000"
+        echo "API available at: http://localhost:8000"
         ;;
     "logs")
         docker-compose --env-file "$ENV_FILE" logs -f
