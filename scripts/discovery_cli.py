@@ -311,8 +311,10 @@ def main():
                         help="Crawl the PDF dir for new files")
     parser.add_argument("--index", action='store_true',
                         help="Create the index for files not yet indexed.")
-    parser.add_argument("--dry-run", type=bool, default=True,
-                        help="Show what would be indexed without actually indexing or updating state. Use --dry-run=false to disable.")
+    parser.add_argument("--dry-run", action='store_true', default=True,
+                        help="Show what would be indexed without actually indexing or updating state.")
+    parser.add_argument("--no-dry-run", dest='dry_run', action='store_false',
+                        help="Actually index documents (disable dry run mode).")
     parser.add_argument('--cleanup', type=str, metavar='PATH',
                         help='Clean up all data for a specific PDF file or directory.')
 
