@@ -181,7 +181,7 @@ class DiscoveryDaemon:
             logging.info("Discovery daemon stopped")
 
 
-def run_discovery_once(config: Config, crawl=False, index=False):
+def run_discovery_once(config: Config, crawl=False, index=False, dry_run=False):
     """Run discovery once"""
     try:
         start = datetime.now()
@@ -197,7 +197,7 @@ def run_discovery_once(config: Config, crawl=False, index=False):
         create_indices_if_not_exists(config, client)
 
         # Run discovery
-        discovery.crawl(crawl, index)
+        discovery.crawl(crawl, index, dry_run)
 
         # Update metadata cache after discovery
         logging.info("Updating metadata cache...")
@@ -308,6 +308,8 @@ def main():
                         help="Crawl the PDF dir for new files")
     parser.add_argument("--index", action='store_true',
                         help="Create the index for files not yet indexed.")
+    parser.add_argument("--dry-run", action='store_true',
+                        help="Show what would be indexed without actually indexing or updating state.")
     parser.add_argument('--cleanup', type=str, metavar='PATH',
                         help='Clean up all data for a specific PDF file or directory.')
 
@@ -341,7 +343,7 @@ def main():
             daemon = DiscoveryDaemon(config)
             daemon.start()
         else:
-            run_discovery_once(config, args.crawl, args.index)
+            run_discovery_once(config, args.crawl, args.index, args.dry_run)
 
 
 if __name__ == '__main__':

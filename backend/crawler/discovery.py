@@ -226,7 +226,7 @@ class SingleFileProcessor:
             }
         )
 
-    def index(self):
+    def index(self, dry_run=False):
         relative_path = os.path.relpath(self._file_path, self._base_pdf_folder)
         document_id = str(uuid.uuid5(uuid.NAMESPACE_URL, relative_path))
         log_handle.info(f"Indexing PDF: {self._file_path} ID: {document_id}")
@@ -314,6 +314,11 @@ class SingleFileProcessor:
         page_text_paths = sorted(page_text_paths)
         
         bookmarks = self._pdf_processor.fetch_bookmarks(self._file_path)
+        
+        if dry_run:
+            log_handle.info(f"[DRY RUN] Would index document to OpenSearch and save state for {self._file_path}")
+            return
+        
         self._indexing_module.index_document(
             document_id, relative_path, page_text_paths, file_metadata, bookmarks,
             reindex_metadata_only=False
@@ -374,7 +379,7 @@ class Discovery:
         log_handle.info(f"DiscoveryModule initialized for base folder: {self.base_pdf_folder}")
 
 
-    def crawl(self, process=False, index=False):
+    def crawl(self, process=False, index=False, dry_run=False):
         """
         Scans the base PDF folder, identifies new or changed files/configs,
         and triggers indexing or re-indexing.
@@ -407,8 +412,11 @@ class Discovery:
                     single_file_processor.process()
 
                 if index:
-                    log_handle.info(f"Indexing file {file_name}")
-                    single_file_processor.index()
+                    if dry_run:
+                        log_handle.info(f"[DRY RUN] Would index file {file_name}")
+                    else:
+                        log_handle.info(f"Indexing file {file_name}")
+                    single_file_processor.index(dry_run)
 
         self._index_state.garbage_collect()
 
