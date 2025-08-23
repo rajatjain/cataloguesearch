@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from backend.common import language_detector, embedding_models
 from backend.common.embedding_models import get_embedding_model_factory
+from backend.common.opensearch import delete_documents_by_filename
 
 from backend.config import Config
 
@@ -51,6 +52,14 @@ class IndexGenerator:
             return
 
         # --- Full Re-indexing Logic ---
+        # Delete all existing documents for this original_filename before reindexing
+        log_handle.info(f"Deleting existing documents for {original_filename} before reindexing")
+        try:
+            delete_documents_by_filename(self._config, original_filename)
+        except Exception as e:
+            log_handle.error(f"Failed to delete existing documents for {original_filename}: {e}")
+            # Continue with indexing even if deletion fails, as it's a safety measure
+            
         # 1. Get paragraphs from text files
         paras = self._get_paras(page_text_paths)
 
