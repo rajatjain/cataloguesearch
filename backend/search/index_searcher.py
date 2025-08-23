@@ -31,10 +31,8 @@ class IndexSearcher:
         log_handle.info(f"Initialized IndexSearcher for index: {self._index_name}")
 
         self._text_fields = {
-            "english": "text_content",
             "hindi": "text_content_hindi",
             "gujarati": "text_content_gujarati",
-            "en": "text_content",
             "hi": "text_content_hindi",
             "gu": "text_content_gujarati",
         }
@@ -84,10 +82,10 @@ class IndexSearcher:
         exclude_words are terms to exclude from results.
         """
         # TODO(rajatjain): Remove the code for fuzzy matches. Now the code handles typing suggestions.
-        query_field = self._text_fields.get(detected_language, 'text_content')
+        query_field = self._text_fields.get(detected_language)
         if not query_field:
-            log_handle.warning(f"Detected language '{detected_language}' not supported. Defaulting to English field.")
-            query_field = 'text_content'
+            log_handle.warning(f"Detected language '{detected_language}' not supported. Defaulting to Hindi field.")
+            query_field = 'text_content_hindi'
 
         # Determine which analyzer to use for highlighting
         analyzer_name = None
@@ -221,7 +219,7 @@ class IndexSearcher:
                     content_snippet = "...".join(highlighted_fragment)
             elif not is_lexical:
                 # For vector search, we might just take a snippet of the content
-                field = self._text_fields.get(language or 'hi')
+                field = self._text_fields.get(language or 'hi', 'text_content_hindi')
                 content_snippet = source.get(field)
 
             metadata = source.get(self._metadata_prefix, {})
@@ -295,7 +293,7 @@ class IndexSearcher:
                 log_handle.info(f"Vector search executed (no reranking). Total hits: {total_hits}")
                 return self._extract_results(hits, is_lexical=False, language=language), total_hits
 
-            text_field = self._text_fields.get(language, "hi")
+            text_field = self._text_fields.get(language, "text_content_hindi")
             log_handle.info(f"Performing reranking on {len(hits)} documents for query: '{keywords}'")
 
             # Create pairs of [query, document_text] for the reranker
@@ -325,7 +323,7 @@ class IndexSearcher:
             end_index = start_index + page_size
             paginated_hits = reranked_hits[start_index:end_index]
 
-            return self._extract_results(paginated_hits, is_lexical=False, language=language), total_hits
+            return self._extract_results(paginated_hits, is_lexical=False, language=language), len(paginated_hits)
         except Exception as e:
             log_handle.error(f"Error during vector search: {e}", exc_info=True)
             return [], 0
