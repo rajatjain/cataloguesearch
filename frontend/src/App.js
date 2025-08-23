@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from
 
 // Import components
 import { Navigation, Header } from './components/Navigation';
-import { SearchBar, MetadataFilters, SearchOptions } from './components/SearchInterface';
+import { SearchBar, MetadataFilters, AdvancedSearch, SearchOptions } from './components/SearchInterface';
 import { ResultsList, SuggestionsCard, Tabs, SimilarSourceInfoCard } from './components/SearchResults';
 import { ExpandModal, WelcomeModal } from './components/Modals';
 import { FeedbackForm } from './components/Feedback';
@@ -132,7 +132,8 @@ const AppContent = () => {
     const [query, setQuery] = useState('');
     const [activeFilters, setActiveFilters] = useState([]);
     const [language, setLanguage] = useState('hindi');
-    const [proximity, setProximity] = useState(20);
+    const [exactMatch, setExactMatch] = useState(false);
+    const [excludeWords, setExcludeWords] = useState('');
     const [searchType, setSearchType] = useState('speed');
     const [showFilters, setShowFilters] = useState(false);
     const [metadata, setMetadata] = useState({});
@@ -189,10 +190,10 @@ const AppContent = () => {
         
         const requestPayload = { 
             query, 
-            allow_typos: false, 
+            exact_match: exactMatch,
+            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0), 
             categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}), 
             language: language, 
-            proximity_distance: proximity, 
             page_number: page, 
             page_size: PAGE_SIZE, 
             enable_reranking: searchType === 'relevance' 
@@ -207,7 +208,7 @@ const AppContent = () => {
             setActiveTab('vector'); 
         }
         setIsLoading(false);
-    }, [query, activeFilters, language, proximity, searchType]);
+    }, [query, activeFilters, language, exactMatch, excludeWords, searchType]);
 
     const handleSwitchToRelevanceSearch = useCallback(async () => {
         setSearchType('relevance'); // Set for future searches
@@ -223,10 +224,10 @@ const AppContent = () => {
 
         const requestPayload = {
             query,
-            allow_typos: false,
+            exact_match: exactMatch,
+            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
             categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
             language: language,
-            proximity_distance: proximity,
             page_number: 1,
             page_size: PAGE_SIZE,
             enable_reranking: true // Explicitly enable for this search
@@ -241,7 +242,7 @@ const AppContent = () => {
             setActiveTab('vector');
         }
         setIsLoading(false);
-    }, [query, activeFilters, language, proximity]);
+    }, [query, activeFilters, language, exactMatch, excludeWords]);
 
     const handleFindSimilar = async (sourceDoc) => {
         setIsLoading(true); 
@@ -294,10 +295,10 @@ const AppContent = () => {
         
         const requestPayload = { 
             query: newQuery, 
-            allow_typos: false, 
+            exact_match: exactMatch,
+            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0), 
             categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}), 
             language: language, 
-            proximity_distance: proximity, 
             page_number: 1, 
             page_size: PAGE_SIZE, 
             enable_reranking: searchType === 'relevance' 
@@ -415,18 +416,24 @@ const AppContent = () => {
                                 {/* Filters section that shows/hides */}
                                 {showFilters && (
                                     <div className="mt-4 border-t border-slate-200 pt-4">
-                                        <div className="space-y-3">
-                                            <MetadataFilters
-                                                metadata={metadata}
-                                                activeFilters={activeFilters}
-                                                onAddFilter={addFilter}
-                                                onRemoveFilter={removeFilter}
-                                            />
+                                        <div className="space-y-4">
+                                            <div className="flex gap-8">
+                                                <MetadataFilters
+                                                    metadata={metadata}
+                                                    activeFilters={activeFilters}
+                                                    onAddFilter={addFilter}
+                                                    onRemoveFilter={removeFilter}
+                                                />
+                                                <AdvancedSearch
+                                                    exactMatch={exactMatch}
+                                                    setExactMatch={setExactMatch}
+                                                    excludeWords={excludeWords}
+                                                    setExcludeWords={setExcludeWords}
+                                                />
+                                            </div>
                                             <SearchOptions
                                                 language={language}
                                                 setLanguage={setLanguage}
-                                                proximity={proximity}
-                                                setProximity={setProximity}
                                                 searchType={searchType}
                                                 setSearchType={setSearchType}
                                             />
