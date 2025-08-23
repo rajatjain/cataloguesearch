@@ -122,9 +122,37 @@ const AppContent = () => {
         // For root path, don't override the current selection between home/aagam-khoj
     }, [location.pathname]);
     
+    // Reset function to clear all search state
+    const resetSearchState = () => {
+        setQuery('');
+        setActiveFilters([]);
+        setLanguage('hindi');
+        setExactMatch(false);
+        setExcludeWords('');
+        setSearchType('speed');
+        setShowFilters(false);
+        setSearchData(null);
+        setIsLoading(false);
+        setActiveTab('keyword');
+        setKeywordPage(1);
+        setVectorPage(1);
+        setSimilarDocsPage(1);
+        setSimilarDocumentsData(null);
+        setSourceDocForSimilarity(null);
+        setModalData(null);
+        setIsContextLoading(false);
+        setShowTipsModal(false);
+    };
+
     const currentPage = currentPageState;
     const setCurrentPage = (page) => {
         setCurrentPageState(page);
+        
+        // Reset search state when navigating to Home or Aagam Khoj
+        if (page === 'home' || page === 'aagam-khoj') {
+            resetSearchState();
+        }
+        
         const routes = {
             'home': '/',
             'aagam-khoj': '/',
