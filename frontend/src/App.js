@@ -8,6 +8,7 @@ import { ResultsList, SuggestionsCard, Tabs, SimilarSourceInfoCard } from './com
 import { ExpandModal, WelcomeModal } from './components/Modals';
 import { FeedbackForm } from './components/Feedback';
 import About from './components/About';
+import WhatsNew from './components/WhatsNew';
 import { Spinner, ChevronUpIcon, ChevronDownIcon, ExpandIcon } from './components/SharedComponents';
 
 // Import API service
@@ -104,6 +105,7 @@ const AppContent = () => {
         const path = location.pathname;
         if (path === '/about') return 'about';
         if (path === '/feedback') return 'feedback';
+        if (path === '/whats-new') return 'whats-new';
         return 'home'; // Default to 'home' for root path
     });
     
@@ -114,6 +116,8 @@ const AppContent = () => {
             setCurrentPageState('about');
         } else if (path === '/feedback') {
             setCurrentPageState('feedback');
+        } else if (path === '/whats-new') {
+            setCurrentPageState('whats-new');
         }
         // For root path, don't override the current selection between home/aagam-khoj
     }, [location.pathname]);
@@ -125,7 +129,8 @@ const AppContent = () => {
             'home': '/',
             'aagam-khoj': '/',
             'about': '/about',
-            'feedback': '/feedback'
+            'feedback': '/feedback',
+            'whats-new': '/whats-new'
         };
         navigate(routes[page] || '/');
     };
@@ -551,6 +556,12 @@ const AppContent = () => {
                             <About />
                         </main>
                     )}
+
+                    {currentPage === 'whats-new' && (
+                        <main>
+                            <WhatsNew />
+                        </main>
+                    )}
                 </div>
             </div>
             
@@ -592,6 +603,7 @@ export default function App() {
                 <Route path="/" element={<AppContent />} />
                 <Route path="/about" element={<AppContent />} />
                 <Route path="/feedback" element={<AppContent />} />
+                <Route path="/whats-new" element={<AppContent />} />
             </Routes>
         </Router>
     );
