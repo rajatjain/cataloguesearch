@@ -54,7 +54,8 @@ def test_language_detection_test_data_files():
                 "doc_%s" % lang, files)
             assert len(chunks) > 0
             for chunk in chunks:
-                chunk_test = chunk["text_content"]
+                # Use embedding_text since text_content field is no longer indexed
+                chunk_test = chunk.get("embedding_text", chunk.get("text_content", ""))
                 language = LanguageDetector.detect_language(chunk_test)
                 log_handle.info(f"detected language: {language} for chunk: {chunk_test[:50]}...")
                 assert language == lang, f"Detected language {language} for chunk: {chunk_test[:50]}..."

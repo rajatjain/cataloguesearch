@@ -79,9 +79,6 @@ search_index:
         type: integer
       chunk_id:
         type: keyword
-      text_content:
-        type: text
-        analyzer: standard
       text_content_hindi:
         type: text
         analyzer: hindi_analyzer

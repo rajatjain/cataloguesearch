@@ -4,7 +4,7 @@ import { SimilarIcon, ExpandIcon, PdfIcon } from './SharedComponents';
 // --- SEARCH RESULTS COMPONENTS ---
 export const ResultCard = ({ result, onFindSimilar, onExpand, isFirst }) => {
     const getHighlightedHTML = () => {
-        const content = result.content_snippet || result.text_content_hindi || '';
+        const content = result.content_snippet || '';
         // CORRECTED: The highlight class is now consistently `bg-sky-200` for all results to ensure visibility.
         return { __html: content.replace(/<em>/g, `<mark class="bg-sky-200 text-slate-800 px-1 rounded">`).replace(/<\/em>/g, '</mark>') };
     };
@@ -220,7 +220,7 @@ export const SimilarSourceInfoCard = ({ sourceDoc }) => {
     if (!sourceDoc) return null;
     
     const getHighlightedHTML = () => {
-        const content = sourceDoc.content_snippet || sourceDoc.text_content_hindi || '';
+        const content = sourceDoc.content_snippet || '';
         return { __html: content.replace(/<em>/g, '<mark class="bg-sky-100 text-sky-900 px-1 rounded">').replace(/<\/em>/g, '</mark>') };
     };
     

@@ -154,11 +154,15 @@ def test_index_document_full_indexing(indexing_module):
         assert bookmarks[source["page_number"]] == source['bookmarks']
         assert 'timestamp_indexed' in source
 
-        if "page one content" in source['text_content']:
+        # Check content in appropriate language-specific fields
+        hindi_content = source.get('text_content_hindi', '')
+        gujarati_content = source.get('text_content_gujarati', '')
+        
+        if "page one content" in hindi_content:  # English content defaults to Hindi field
             found_page_one = True
-        if "यह पृष्ठ दो की सामग्री है।" in source['text_content'] or "हिंदी पाठ" in source['text_content']:
+        if "यह पृष्ठ दो की सामग्री है।" in hindi_content or "हिंदी पाठ" in hindi_content:
             found_page_two = True
-        if "આ પાના ત્રણની સામગ્રી છે." in source['text_content'] or "ગુજરાતી લખાણ" in source['text_content']:
+        if "આ પાના ત્રણની સામગ્રી છે." in gujarati_content or "ગુજરાતી લખાણ" in gujarati_content:
             found_page_three = True
 
     assert found_page_one
@@ -194,7 +198,10 @@ def test_index_document_metadata_only_reindex(indexing_module):
     assert len(initial_hits) > 0
     initial_timestamps = {hit['_id']: hit['_source']['timestamp_indexed'] for hit in initial_hits}
     initial_vector_embeddings = {hit['_id']: hit['_source']['vector_embedding'] for hit in initial_hits}
-    initial_text_contents = {hit['_id']: hit['_source']['text_content'] for hit in initial_hits}
+    initial_text_contents = {hit['_id']: {
+        'hindi': hit['_source'].get('text_content_hindi', ''),
+        'gujarati': hit['_source'].get('text_content_gujarati', '')
+    } for hit in initial_hits}
 
 
     # Now, perform metadata-only re-index
@@ -218,7 +225,9 @@ def test_index_document_metadata_only_reindex(indexing_module):
         assert source["bookmarks"] == updated_bookmarks[source["page_number"]]
         assert source['timestamp_indexed'] != initial_timestamps[chunk_id] # Timestamp should be updated
         assert source['vector_embedding'] == initial_vector_embeddings[chunk_id] # Embedding should NOT change
-        assert source['text_content'] == initial_text_contents[chunk_id] # Text content should NOT change
+        # Text content should NOT change
+        assert source.get('text_content_hindi', '') == initial_text_contents[chunk_id]['hindi']
+        assert source.get('text_content_gujarati', '') == initial_text_contents[chunk_id]['gujarati']
 
     # Search by metadata and ensure that we receive the docs.
     query = {

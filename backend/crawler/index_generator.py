@@ -32,7 +32,6 @@ class IndexGenerator:
 
         self._index_keys_per_lang = {
             "hi": "text_content_hindi",
-            "en": "text_content",
             "gu": "text_content_gujarati"
         }
 
@@ -128,7 +127,6 @@ class IndexGenerator:
                 "original_filename": original_filename,
                 "page_number": page_num,
                 "paragraph_id": i,
-                "text_content": para_text,
                 "embedding_text": para_text,
                 "metadata": metadata,
                 "bookmarks": bookmarks.get(page_num),
@@ -138,11 +136,10 @@ class IndexGenerator:
             language = metadata.get("language") or language_detector.LanguageDetector.detect_language(para_text)
             chunk["language"] = language
 
-            lang_key = self._index_keys_per_lang.get(language, "text_content")
+            # Default to Hindi for unsupported languages or English text
+            lang_key = self._index_keys_per_lang.get(language, self._index_keys_per_lang["hi"])
             chunk[lang_key] = para_text
-            if language == "hi+gu":
-                chunk[self._index_keys_per_lang["gu"]] = para_text
-
+            
             chunks.append(chunk)
         return chunks
 
