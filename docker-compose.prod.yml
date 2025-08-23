@@ -2,7 +2,7 @@ services:
   opensearch:
     image: jain9rajat/cataloguesearch:opensearch
     platform: linux/amd64
-    contai
+    container_name: opensearch-node
     environment:
       - cluster.name=opensearch-cluster
       - node.name=opensearch-node
@@ -27,7 +27,7 @@ services:
       - "9200:9200"
       - "9600:9600"
     networks:
-      - opensearch-net
+      - app-net
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 30s
@@ -53,6 +53,8 @@ services:
       - FEEDBACK_TO_EMAIL=${FEEDBACK_TO_EMAIL}
       - HOME=/app/data
       - BASE_DIR=/app
+      # Indic NLP Resources
+      - INDIC_RESOURCES_PATH=/app/indic_nlp_resources
     volumes:
       - api-data:/app/data
       - api-logs:/app/logs

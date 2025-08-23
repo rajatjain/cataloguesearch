@@ -59,10 +59,6 @@ services:
       - FEEDBACK_TO_EMAIL=${FEEDBACK_TO_EMAIL}
       - HOME=/app/data
       - BASE_DIR=/app
-      - OPENSEARCH_HOST=opensearch
-      # GCS Configuration
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gcs-key.json
-      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-opensearch-snapshots}
       # Indic NLP Resources
       - INDIC_RESOURCES_PATH=/app/indic_nlp_resources
     volumes:
@@ -70,7 +66,6 @@ services:
       - cataloguesearch-logs:/app/logs
       - ./configs/config.yaml:/app/configs/config.yaml:ro
       - ./configs/opensearch-config.yaml:/app/configs/opensearch-config.yaml:ro
-      - ${GCS_SERVICE_ACCOUNT_KEY_PATH:-./credentials/gcs-key.json}:/app/credentials/gcs-key.json:ro
     ports:
       - "8000:8000"
     networks:
