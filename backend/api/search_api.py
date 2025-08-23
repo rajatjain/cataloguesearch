@@ -132,7 +132,8 @@ class SearchRequest(BaseModel):
     """
     query: str = Field(..., example="Bangalore city history")
     language: str = Field(..., description="Language of the query.", example="hindi")
-    proximity_distance: int = Field(30, ge=0, description="Max word distance for proximity search. Use 0 for exact phrase.")
+    exact_match: bool = Field(False, description="Use exact phrase matching instead of regular match.")
+    exclude_words: List[str] = Field([], description="List of words to exclude from search results.")
     categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
     page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
     page_number: int = Field(1, ge=1, description="Page number for pagination.")
@@ -148,7 +149,8 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
     embedding_model = request.app.state.embedding_model
     
     keywords = request_data.query
-    proximity_distance = request_data.proximity_distance
+    exact_match = request_data.exact_match
+    exclude_words = request_data.exclude_words
     categories = request_data.categories
     page_size = request_data.page_size
     page_number = request_data.page_number
@@ -158,14 +160,17 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
     try:
 
         log_handle.info(f"Received search request: keywords='{keywords}', "
-                        f"proximity_distance={proximity_distance}, "
+                        f"exact_match={exact_match}, exclude_words={exclude_words}, "
                         f"categories={categories}, page={page_number}, size={page_size}, "
                         f"language={language}, enable_reranking={enable_reranking}")
 
+        # Check if advanced options are used (exact match or exclude words)
+        has_advanced_options = exact_match or (exclude_words and len(exclude_words) > 0)
+
         lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
             keywords=keywords,
-            proximity_distance=proximity_distance,
-            allow_typos=False,
+            exact_match=exact_match,
+            exclude_words=exclude_words,
             categories=categories,
             detected_language=language,
             page_size=page_size,
@@ -197,23 +202,30 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
             log_handle.info(f"No lexical results found for lexical query '{keywords}'. Returning {len(suggestions)} suggestions.")
             return JSONResponse(content=response, status_code=200)
 
-        query_embedding = embedding_model.get_embedding(keywords)
-        if not query_embedding:
-            log_handle.warning("Could not generate embedding for query. Vector search skipped.")
+        # Skip vector search if advanced options are used (exact match or exclude words)
+        if has_advanced_options:
+            log_handle.info("Advanced options detected (exact_match or exclude_words). Skipping vector search.")
             vector_results = []
+            vector_total_hits = 0
         else:
-            vector_results, vector_total_hits = index_searcher.perform_vector_search(
-                keywords=keywords,
-                embedding=query_embedding,
-                categories=categories,
-                page_size=20,
-                page_number=1,
-                language=language,
-                rerank=enable_reranking
-            )
-            log_handle.info(
-                f"Vector search returned {len(vector_results)} "
-                f"results (total: {vector_total_hits}) with reranking={'enabled' if enable_reranking else 'disabled'}.")
+            query_embedding = embedding_model.get_embedding(keywords)
+            if not query_embedding:
+                log_handle.warning("Could not generate embedding for query. Vector search skipped.")
+                vector_results = []
+                vector_total_hits = 0
+            else:
+                vector_results, vector_total_hits = index_searcher.perform_vector_search(
+                    keywords=keywords,
+                    embedding=query_embedding,
+                    categories=categories,
+                    page_size=20,
+                    page_number=1,
+                    language=language,
+                    rerank=enable_reranking
+                )
+                log_handle.info(
+                    f"Vector search returned {len(vector_results)} "
+                    f"results (total: {vector_total_hits}) with reranking={'enabled' if enable_reranking else 'disabled'}.")
 
         response = {
             "total_results": lexical_total_hits,
@@ -221,7 +233,7 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
             "page_number": page_number,
             "results": lexical_results,
             "vector_results": vector_results,
-            "total_vector_results": len(vector_results)
+            "total_vector_results": vector_total_hits
         }
 
         log_handle.info(f"Search response: {json_dumps(response)}")

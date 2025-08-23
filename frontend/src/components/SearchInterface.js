@@ -40,7 +40,7 @@ export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemove
     };
     
     return (
-        <div className="space-y-3">
+        <div className="w-1/2 space-y-3">
             <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Filter by Category</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <select 
@@ -76,20 +76,84 @@ export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemove
     );
 };
 
-export const SearchOptions = ({ language, setLanguage, proximity, setProximity, searchType, setSearchType }) => {
+export const AdvancedSearch = ({ exactMatch, setExactMatch, excludeWords, setExcludeWords }) => {
+    const [showExactMatchTooltip, setShowExactMatchTooltip] = useState(false);
+    const [showExcludeWordsTooltip, setShowExcludeWordsTooltip] = useState(false);
+
+    return (
+        <div className="w-1/2 space-y-3">
+            <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Advanced Search</h3>
+            <div className="space-y-3">
+                <div className="relative">
+                    <label className="flex items-center gap-2 text-slate-700">
+                        <input
+                            type="checkbox"
+                            checked={exactMatch}
+                            onChange={(e) => setExactMatch(e.target.checked)}
+                            className="form-checkbox h-4 w-4 text-sky-600 focus:ring-sky-500 rounded"
+                        />
+                        <span className="text-base font-medium">Exact Phrase Match</span>
+                        <button
+                            type="button"
+                            className="text-slate-400 hover:text-slate-600 cursor-help ml-1 transition-colors"
+                            onMouseEnter={() => setShowExactMatchTooltip(true)}
+                            onMouseLeave={() => setShowExactMatchTooltip(false)}
+                            onClick={() => setShowExactMatchTooltip(!showExactMatchTooltip)}
+                        >
+                            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                            </svg>
+                        </button>
+                    </label>
+                    {showExactMatchTooltip && (
+                        <div className="absolute left-0 top-full mt-1 bg-slate-800 text-white text-xs rounded px-2 py-1 z-10 whitespace-nowrap">
+                            Search for the exact phrase rather than individual words
+                        </div>
+                    )}
+                </div>
+                <div>
+                    <div className="relative">
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                            Exclude Words
+                            <button
+                                type="button"
+                                className="text-slate-400 hover:text-slate-600 cursor-help ml-1 transition-colors"
+                                onMouseEnter={() => setShowExcludeWordsTooltip(true)}
+                                onMouseLeave={() => setShowExcludeWordsTooltip(false)}
+                                onClick={() => setShowExcludeWordsTooltip(!showExcludeWordsTooltip)}
+                            >
+                                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                                </svg>
+                            </button>
+                        </label>
+                        {showExcludeWordsTooltip && (
+                            <div className="absolute left-0 top-full mt-1 bg-slate-800 text-white text-xs rounded px-2 py-1 z-10 whitespace-nowrap">
+                                Enter words separated by commas to exclude from results
+                            </div>
+                        )}
+                    </div>
+                    <input
+                        type="text"
+                        value={excludeWords}
+                        onChange={(e) => setExcludeWords(e.target.value)}
+                        placeholder="word1, word2, word3..."
+                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded-md text-slate-800 text-base focus:ring-1 focus:ring-sky-500 font-sans"
+                    />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export const SearchOptions = ({ language, setLanguage, searchType, setSearchType }) => {
     const languageOptions = [
         { value: 'hindi', label: 'Hindi', disabled: false },
         { value: 'gujarati', label: 'Gujarati', disabled: true }
     ];
-    const proximityOptions = [
-        { label: 'Exact Phrase', value: 0 },
-        { label: 'Near (10)', value: 10 },
-        { label: 'Medium (20)', value: 20 },
-        { label: 'Far (30)', value: 30 }
-    ];
     
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-slate-200">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-200">
              <div>
                 <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Language</h3>
                 <div className="flex gap-4">
@@ -108,24 +172,6 @@ export const SearchOptions = ({ language, setLanguage, proximity, setProximity, 
                                 {lang.label}
                                 {lang.disabled && <span className="ml-1 text-xs text-slate-400">(Coming soon)</span>}
                             </span>
-                        </label>
-                    ))}
-                </div>
-             </div>
-             <div>
-                <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Proximity</h3>
-                <div className="flex flex-wrap gap-3">
-                    {proximityOptions.map(opt => (
-                        <label key={opt.value} className="flex items-center gap-1.5 text-base text-slate-700">
-                            <input
-                                type="radio"
-                                name="proximity"
-                                value={opt.value}
-                                checked={proximity === opt.value}
-                                onChange={() => setProximity(opt.value)}
-                                className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500"
-                            />
-                            {opt.label}
                         </label>
                     ))}
                 </div>

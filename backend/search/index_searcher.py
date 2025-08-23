@@ -76,20 +76,18 @@ class IndexSearcher:
         return filters
 
     def _build_lexical_query(
-            self, keywords: str, proximity_distance: int, allow_typos: bool,
+            self, keywords: str, exact_match: bool, exclude_words: List[str],
             categories: Dict[str, List[str]], detected_language: str) -> Dict[str, Any]:
         """
         Builds the OpenSearch DSL query for lexical search.
-        When proximity_distance is 0, performs exact phrase match.
-        allow_typos determines if fuzzy matching is allowed.
+        exact_match determines if exact phrase match is used.
+        exclude_words are terms to exclude from results.
         """
         # TODO(rajatjain): Remove the code for fuzzy matches. Now the code handles typing suggestions.
         query_field = self._text_fields.get(detected_language, 'text_content')
         if not query_field:
             log_handle.warning(f"Detected language '{detected_language}' not supported. Defaulting to English field.")
             query_field = 'text_content'
-
-        is_exact_phrase = proximity_distance == 0
 
         # Determine which analyzer to use for highlighting
         analyzer_name = None
@@ -99,131 +97,62 @@ class IndexSearcher:
             analyzer_name = "gujarati_analyzer"
 
         log_handle.verbose(f"Lexical search targeting field: {query_field} for language: {detected_language}, "
-                           f"exact_phrase: {is_exact_phrase}, allow_typos: {allow_typos}")
+                           f"exact_match: {exact_match}, exclude_words: {exclude_words}")
 
-        # Build the main query based on allow_typos and proximity
-        if allow_typos:
-            if is_exact_phrase:
-                # Fuzzy exact phrase match - prioritize exact matches strongly
-                main_query = {
-                    "bool": {
-                        "should": [
-                            {
-                                "match_phrase": {
-                                    query_field: {
-                                        "query": keywords,
-                                        "slop": 0,
-                                        "boost": 10  # Very high boost for exact matches
-                                    }
-                                }
-                            },
-                            {
-                                "match": {
-                                    query_field: {
-                                        "query": keywords,
-                                        "fuzziness": "AUTO",
-                                        "operator": "and",
-                                        "boost": 1  # Standard boost for fuzzy fallback
-                                    }
-                                }
-                            }
-                        ],
-                        "minimum_should_match": 1
-                    }
-                }
-            else:
-                # Fuzzy proximity match
-                main_query = {
-                    "bool": {
-                        "should": [
-                            {
-                                "match_phrase": {
-                                    query_field: {
-                                        "query": keywords,
-                                        "slop": proximity_distance,
-                                        "boost": 2
-                                    }
-                                }
-                            },
-                            {
-                                "match": {
-                                    query_field: {
-                                        "query": keywords,
-                                        "fuzziness": "AUTO",
-                                        "operator": "and"
-                                    }
-                                }
-                            }
-                        ],
-                        "minimum_should_match": 1
-                    }
-                }
-        else:  # strict
-            # Strict phrase match (with or without proximity)
+        # Build the main query based on exact_match
+        if exact_match:
+            # Exact phrase match
             main_query = {
                 "match_phrase": {
                     query_field: {
+                        "query": keywords
+                    }
+                }
+            }
+        else:
+            # Regular match with all terms
+            main_query = {
+                "match": {
+                    query_field: {
                         "query": keywords,
-                        "slop": proximity_distance
+                        "operator": "and"
                     }
                 }
             }
 
         # Build highlight configuration
-        if is_exact_phrase and not allow_typos:
-            # For exact phrase without typos, highlight the entire phrase together
-            highlight_config = {
-                "fields": {
-                    query_field: {
-                        "pre_tags": ["<em>"],
-                        "post_tags": ["</em>"],
-                        "number_of_fragments": 0,
-                        "type": "unified",
-                        "highlight_query": {
-                            "match_phrase": {
-                                query_field: {
-                                    "query": keywords,
-                                    "slop": 0
-                                }
-                            }
-                        }
-                    }
+        highlight_config = {
+            "fields": {
+                query_field: {
+                    "pre_tags": ["<em>"],
+                    "post_tags": ["</em>"],
+                    "number_of_fragments": 0,
+                    "type": "unified",
+                    "highlight_query": main_query
                 }
             }
-        else:
-            # For proximity/fuzzy search
-            if allow_typos:
-                # For fuzzy search, use the main query for highlighting
-                highlight_config = {
-                    "fields": {
-                        query_field: {
-                            "pre_tags": ["<em>"],
-                            "post_tags": ["</em>"],
-                            "number_of_fragments": 0,
-                            "type": "unified",
-                            "highlight_query": main_query
-                        }
-                    }
-                }
-            else:
-                # For strict proximity search, simple highlighting
-                highlight_config = {
-                    "fields": {
-                        query_field: {
-                            "pre_tags": ["<em>"],
-                            "post_tags": ["</em>"],
-                            "number_of_fragments": 0,
-                            "type": "unified"
-                        }
-                    }
-                }
+        }
 
         # Build the final query body
+        bool_query = {
+            "must": [main_query]
+        }
+        
+        # Add exclude words as must_not clauses
+        if exclude_words:
+            must_not_clauses = []
+            for word in exclude_words:
+                must_not_clauses.append({
+                    "match": {
+                        query_field: word
+                    }
+                })
+            bool_query["must_not"] = must_not_clauses
+            log_handle.debug(f"Added {len(exclude_words)} exclude words to lexical query.")
+        
         query_body = {
             "query": {
-                "bool": {
-                    "must": [main_query]
-                }
+                "bool": bool_query
             },
             "highlight": highlight_config,
             "track_total_hits": 1000
@@ -317,11 +246,11 @@ class IndexSearcher:
         return extracted
 
     def perform_lexical_search(
-            self, keywords: str, proximity_distance: int, allow_typos: bool,
+            self, keywords: str, exact_match: bool, exclude_words: List[str],
             categories: Dict[str, List[str]], detected_language: str,
             page_size: int, page_number: int) -> Tuple[List[Dict[str, Any]], int]:
-        query_body = self._build_lexical_query(keywords, proximity_distance,
-                                               allow_typos, categories, detected_language)
+        query_body = self._build_lexical_query(keywords, exact_match,
+                                               exclude_words, categories, detected_language)
         from_ = (page_number - 1) * page_size
         log_handle.verbose(f"Lexical query: {json_dumps(query_body)}")
         try:

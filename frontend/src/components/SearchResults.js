@@ -156,7 +156,7 @@ export const Tabs = ({ activeTab, setActiveTab, searchData, similarDocumentsData
                     <span className="text-sm font-normal bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{keywordCount}</span>
                 </button>
             )}
-            {!hasSuggestions && (
+            {!hasSuggestions && vectorCount > 0 && (
                 <button 
                     onClick={() => setActiveTab('vector')} 
                     className={`${tabStyle} ${activeTab === 'vector' ? activeTabStyle : inactiveTabStyle}`}
