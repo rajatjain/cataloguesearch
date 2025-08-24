@@ -20,55 +20,136 @@ if [ ! -d "$SNAPSHOTS_PATH" ]; then
     exit 1
 fi
 
+# Check permissions on snapshots folder
+echo "Checking permissions on snapshots folder..."
+if [ ! -r "$SNAPSHOTS_PATH" ]; then
+    echo "Error: Cannot read snapshots folder '$SNAPSHOTS_PATH'"
+    echo "Fix permissions with: sudo chown -R 1000:1000 '$SNAPSHOTS_PATH'"
+    exit 1
+fi
+
+# Check if snapshots directory is owned by user 1000 (opensearch container user)
+OWNER_UID=$(stat -c '%u' "$SNAPSHOTS_PATH" 2>/dev/null || stat -f '%u' "$SNAPSHOTS_PATH" 2>/dev/null)
+if [ "$OWNER_UID" != "1000" ]; then
+    echo "Error: Snapshots folder '$SNAPSHOTS_PATH' is not owned by user 1000 (current owner: $OWNER_UID)"
+    echo "Fix permissions with: sudo chown -R 1000:1000 '$SNAPSHOTS_PATH'"
+    exit 1
+fi
+echo "Permissions check passed - snapshots directory is owned by user 1000"
+
+# Check for required snapshot files
+REQUIRED_FILES=("index-1" "index.latest" "indices")
+for file in "${REQUIRED_FILES[@]}"; do
+    if [ ! -e "$SNAPSHOTS_PATH/$file" ]; then
+        echo "Error: Required snapshot file '$file' not found in '$SNAPSHOTS_PATH'"
+        exit 1
+    fi
+done
+
+# Check if any .dat files exist
+if ! ls "$SNAPSHOTS_PATH"/*.dat 1> /dev/null 2>&1; then
+    echo "Error: No snapshot .dat files found in '$SNAPSHOTS_PATH'"
+    echo "This doesn't appear to be a valid OpenSearch snapshot directory"
+    exit 1
+fi
+
 echo "Starting OpenSearch snapshot management..."
 
-# Step 1: Delete existing snapshots
-echo "Step 1: Deleting existing snapshots..."
-
-echo "Deleting cataloguesearch_prod snapshot..."
-curl -X DELETE "localhost:9200/_snapshot/local_backup/cataloguesearch_prod" || echo "cataloguesearch_prod snapshot may not exist, continuing..."
-
-echo "Deleting cataloguesearch_prod_metadata snapshot..."
-curl -X DELETE "localhost:9200/_snapshot/local_backup/cataloguesearch_prod_metadata" || echo "cataloguesearch_prod_metadata snapshot may not exist, continuing..."
-
-# Step 2: Copy snapshots folder to opensearch-node:/tmp
-echo "Step 2: Copying snapshots folder to opensearch-node:/tmp..."
+# Step 1: Copy snapshots folder to opensearch-node:/tmp
+echo "Step 1: Copying snapshots folder to opensearch-node:/tmp..."
 docker cp "$SNAPSHOTS_PATH/." opensearch-node:/tmp/snapshots/
 
-# Step 3: Create/update snapshot repository
-echo "Step 3: Creating snapshot repository..."
-curl -X PUT "localhost:9200/_snapshot/local_backup" -H 'Content-Type: application/json' -d'{
-  "type": "fs",
-  "settings": {
-    "location": "/tmp/snapshots"
-  }
-}' || echo "Repository may already exist, continuing..."
+# Fix permissions inside the container
+echo "Fixing permissions inside container..."
+docker exec -u root opensearch-node chown -R opensearch:opensearch /tmp/snapshots/
+
+# Step 2: Check if repository exists, create only if needed
+echo "Step 2: Checking snapshot repository..."
+REPO_EXISTS=$(curl -s "localhost:9200/_snapshot/local_backup" | grep -o '"local_backup"' || echo "")
+
+if [ -z "$REPO_EXISTS" ]; then
+    echo "Repository doesn't exist, creating new one..."
+    REPO_RESPONSE=$(curl -s -X PUT "localhost:9200/_snapshot/local_backup" -H 'Content-Type: application/json' -d'{
+      "type": "fs",
+      "settings": {
+        "location": "/tmp/snapshots"
+      }
+    }')
+    
+    if echo "$REPO_RESPONSE" | grep -q '"acknowledged":true'; then
+        echo "Repository created successfully"
+    else
+        echo "Error creating repository: $REPO_RESPONSE"
+        exit 1
+    fi
+else
+    echo "Repository already exists, skipping creation"
+fi
+
+# Step 3: Verify snapshots are visible before restoring
+echo "Step 3: Verifying snapshots are accessible..."
+SNAPSHOTS_LIST=$(curl -s "localhost:9200/_snapshot/local_backup/_all")
+
+if echo "$SNAPSHOTS_LIST" | grep -q '"snapshots" : \[ \]'; then
+    echo "Error: No snapshots found in repository. Check if files copied correctly."
+    exit 1
+fi
+
+if ! echo "$SNAPSHOTS_LIST" | grep -q '"cataloguesearch_prod"'; then
+    echo "Error: cataloguesearch_prod snapshot not found in repository"
+    exit 1
+fi
+
+if ! echo "$SNAPSHOTS_LIST" | grep -q '"cataloguesearch_prod_metadata"'; then
+    echo "Error: cataloguesearch_prod_metadata snapshot not found in repository"
+    exit 1
+fi
+
+echo "Both required snapshots found in repository"
 
 # Step 4: Delete existing indices (if they exist)
 echo "Step 4: Deleting existing indices..."
 
 echo "Deleting cataloguesearch_prod index..."
-curl -X DELETE "localhost:9200/cataloguesearch_prod" || echo "cataloguesearch_prod index may not exist, continuing..."
+curl -s -X DELETE "localhost:9200/cataloguesearch_prod" > /dev/null || echo "cataloguesearch_prod index may not exist, continuing..."
 
 echo "Deleting cataloguesearch_prod_metadata index..."
-curl -X DELETE "localhost:9200/cataloguesearch_prod_metadata" || echo "cataloguesearch_prod_metadata index may not exist, continuing..."
+curl -s -X DELETE "localhost:9200/cataloguesearch_prod_metadata" > /dev/null || echo "cataloguesearch_prod_metadata index may not exist, continuing..."
 
-# Step 5: Restore the snapshot
+# Step 5: Restore the snapshots with error checking
 echo "Step 5: Restoring snapshots..."
 
 echo "Restoring cataloguesearch_prod..."
-curl -X POST "localhost:9200/_snapshot/local_backup/cataloguesearch_prod/_restore" -H 'Content-Type: application/json' -d'{
+RESTORE_RESPONSE=$(curl -s -X POST "localhost:9200/_snapshot/local_backup/cataloguesearch_prod/_restore" -H 'Content-Type: application/json' -d'{
   "indices": "cataloguesearch_prod",
   "ignore_unavailable": true,
   "include_global_state": false
-}'
+}')
+
+if echo "$RESTORE_RESPONSE" | grep -q '"accepted":true'; then
+    echo "cataloguesearch_prod restore initiated successfully"
+elif echo "$RESTORE_RESPONSE" | grep -q "error"; then
+    echo "Error restoring cataloguesearch_prod: $RESTORE_RESPONSE"
+    exit 1
+else
+    echo "Unexpected response from cataloguesearch_prod restore: $RESTORE_RESPONSE"
+fi
 
 echo "Restoring cataloguesearch_prod_metadata..."
-curl -X POST "localhost:9200/_snapshot/local_backup/cataloguesearch_prod_metadata/_restore" -H 'Content-Type: application/json' -d'{
+RESTORE_RESPONSE=$(curl -s -X POST "localhost:9200/_snapshot/local_backup/cataloguesearch_prod_metadata/_restore" -H 'Content-Type: application/json' -d'{
   "indices": "cataloguesearch_prod_metadata",
   "ignore_unavailable": true,
   "include_global_state": false
-}'
+}')
+
+if echo "$RESTORE_RESPONSE" | grep -q '"accepted":true'; then
+    echo "cataloguesearch_prod_metadata restore initiated successfully"
+elif echo "$RESTORE_RESPONSE" | grep -q "error"; then
+    echo "Error restoring cataloguesearch_prod_metadata: $RESTORE_RESPONSE"
+    exit 1
+else
+    echo "Unexpected response from cataloguesearch_prod_metadata restore: $RESTORE_RESPONSE"
+fi
 
 # Step 6: Print curl commands to check restoration status
 echo ""

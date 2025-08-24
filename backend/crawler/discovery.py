@@ -379,10 +379,50 @@ class Discovery:
         log_handle.info(f"DiscoveryModule initialized for base folder: {self.base_pdf_folder}")
 
 
+    def _get_directories_to_crawl(self):
+        """
+        Recursively builds a list of directories to crawl.
+        Skips directories containing a '_ignore' file and their subdirectories.
+        
+        Returns:
+            list: List of directory paths to crawl
+        """
+        directories_to_crawl = []
+        
+        def _recurse_directory(directory_path):
+            """Recursively traverse directory and collect paths to crawl"""
+            # Check if this directory should be ignored
+            ignore_file_path = os.path.join(directory_path, "_ignore")
+            if os.path.exists(ignore_file_path):
+                log_handle.info(f"Ignoring directory {directory_path} due to _ignore file")
+                return  # Skip this directory and all its subdirectories
+            
+            # Add current directory to crawl list
+            directories_to_crawl.append(directory_path)
+            
+            # Recursively process subdirectories
+            try:
+                for item in os.listdir(directory_path):
+                    # Skip directories that start with a dot (like .git, .vscode, etc.)
+                    if item.startswith('.'):
+                        continue
+                    item_path = os.path.join(directory_path, item)
+                    if os.path.isdir(item_path):
+                        _recurse_directory(item_path)
+            except (OSError, PermissionError) as e:
+                log_handle.warning(f"Cannot access directory {directory_path}: {e}")
+        
+        # Start recursion from base folder
+        _recurse_directory(self.base_pdf_folder)
+        
+        return directories_to_crawl
+
     def crawl(self, process=False, index=False, dry_run=False):
         """
         Scans the base PDF folder, identifies new or changed files/configs,
         and triggers indexing or re-indexing.
+        
+        Uses recursive directory traversal with _ignore file support.
         """
         current_scan_time = datetime.now().isoformat()
         log_handle.info(f"Starting scan process... at {current_scan_time}")
@@ -392,12 +432,22 @@ class Discovery:
         if not process and not index:
             return
 
-        for root, _, files in os.walk(self.base_pdf_folder):
+        # First, recursively create list of directories to crawl
+        directories_to_crawl = self._get_directories_to_crawl()
+        log_handle.info(f"Found {len(directories_to_crawl)} directories to crawl")
+        
+        # Second, crawl each directory for PDF files
+        for directory in directories_to_crawl:
+            try:
+                files = os.listdir(directory)
+            except (OSError, PermissionError) as e:
+                log_handle.warning(f"Cannot access directory {directory}: {e}")
+                continue
+                
             for file_name in files:
                 if not file_name.lower().endswith(".pdf"):
-                    log_handle.verbose(f"Skipping file {file_name} (not a PDF)")
                     continue
-                pdf_file_path = os.path.abspath(os.path.join(root, file_name))
+                pdf_file_path = os.path.abspath(os.path.join(directory, file_name))
 
                 single_file_processor = SingleFileProcessor(
                     config=self._config,
