@@ -20,22 +20,14 @@ if [ ! -d "$SNAPSHOTS_PATH" ]; then
     exit 1
 fi
 
-# Check permissions on snapshots folder
-echo "Checking permissions on snapshots folder..."
+# Check if snapshots folder is readable (skip ownership checks for prod VM)
+echo "Checking snapshots folder accessibility..."
 if [ ! -r "$SNAPSHOTS_PATH" ]; then
     echo "Error: Cannot read snapshots folder '$SNAPSHOTS_PATH'"
-    echo "Fix permissions with: sudo chown -R 1000:1000 '$SNAPSHOTS_PATH'"
+    echo "Make sure the folder is readable"
     exit 1
 fi
-
-# Check if snapshots directory is owned by user 1000 (opensearch container user)
-OWNER_UID=$(stat -c '%u' "$SNAPSHOTS_PATH" 2>/dev/null || stat -f '%u' "$SNAPSHOTS_PATH" 2>/dev/null)
-if [ "$OWNER_UID" != "1000" ]; then
-    echo "Error: Snapshots folder '$SNAPSHOTS_PATH' is not owned by user 1000 (current owner: $OWNER_UID)"
-    echo "Fix permissions with: sudo chown -R 1000:1000 '$SNAPSHOTS_PATH'"
-    exit 1
-fi
-echo "Permissions check passed - snapshots directory is owned by user 1000"
+echo "Snapshots folder is accessible"
 
 # Check for required snapshot files
 REQUIRED_FILES=("index-1" "index.latest" "indices")
@@ -55,39 +47,42 @@ fi
 
 echo "Starting OpenSearch snapshot management..."
 
-# Step 1: Copy snapshots folder to opensearch-node:/tmp
-echo "Step 1: Copying snapshots folder to opensearch-node:/tmp..."
-docker cp "$SNAPSHOTS_PATH/." opensearch-node:/tmp/snapshots/
+# Step 1: Clear existing snapshots in container and prepare directory
+echo "Step 1: Preparing container snapshots directory..."
+docker exec -u root opensearch-node rm -rf /tmp/snapshots_restore 2>/dev/null || true
+docker exec -u root opensearch-node mkdir -p /tmp/snapshots_restore
 
-# Fix permissions inside the container
-echo "Fixing permissions inside container..."
-docker exec -u root opensearch-node chown -R opensearch:opensearch /tmp/snapshots/
+# Step 2: Copy snapshots folder to container
+echo "Step 2: Copying snapshots to container..."
+docker cp "$SNAPSHOTS_PATH/." opensearch-node:/tmp/snapshots_restore/
 
-# Step 2: Check if repository exists, create only if needed
-echo "Step 2: Checking snapshot repository..."
-REPO_EXISTS=$(curl -s "localhost:9200/_snapshot/local_backup" | grep -o '"local_backup"' || echo "")
+# Step 3: Fix permissions inside the container
+echo "Step 3: Fixing permissions inside container..."
+docker exec -u root opensearch-node chown -R opensearch:opensearch /tmp/snapshots_restore/
+docker exec -u root opensearch-node chmod -R 775 /tmp/snapshots_restore/
 
-if [ -z "$REPO_EXISTS" ]; then
-    echo "Repository doesn't exist, creating new one..."
-    REPO_RESPONSE=$(curl -s -X PUT "localhost:9200/_snapshot/local_backup" -H 'Content-Type: application/json' -d'{
-      "type": "fs",
-      "settings": {
-        "location": "/tmp/snapshots"
-      }
-    }')
-    
-    if echo "$REPO_RESPONSE" | grep -q '"acknowledged":true'; then
-        echo "Repository created successfully"
-    else
-        echo "Error creating repository: $REPO_RESPONSE"
-        exit 1
-    fi
+# Step 4: Delete existing repository if it exists
+echo "Step 4: Removing existing repository (if any)..."
+curl -s -X DELETE "localhost:9200/_snapshot/local_backup" > /dev/null 2>&1 || echo "No existing repository to delete"
+
+# Step 5: Create new repository
+echo "Step 5: Creating new snapshot repository..."
+REPO_RESPONSE=$(curl -s -X PUT "localhost:9200/_snapshot/local_backup" -H 'Content-Type: application/json' -d'{
+  "type": "fs",
+  "settings": {
+    "location": "/tmp/snapshots_restore"
+  }
+}')
+
+if echo "$REPO_RESPONSE" | grep -q '"acknowledged":true'; then
+    echo "Repository created successfully"
 else
-    echo "Repository already exists, skipping creation"
+    echo "Error creating repository: $REPO_RESPONSE"
+    exit 1
 fi
 
-# Step 3: Verify snapshots are visible before restoring
-echo "Step 3: Verifying snapshots are accessible..."
+# Step 6: Verify snapshots are visible before restoring
+echo "Step 6: Verifying snapshots are accessible..."
 SNAPSHOTS_LIST=$(curl -s "localhost:9200/_snapshot/local_backup/_all")
 
 if echo "$SNAPSHOTS_LIST" | grep -q '"snapshots" : \[ \]'; then
@@ -107,8 +102,8 @@ fi
 
 echo "Both required snapshots found in repository"
 
-# Step 4: Delete existing indices (if they exist)
-echo "Step 4: Deleting existing indices..."
+# Step 7: Delete existing indices (if they exist)
+echo "Step 7: Deleting existing indices..."
 
 echo "Deleting cataloguesearch_prod index..."
 curl -s -X DELETE "localhost:9200/cataloguesearch_prod" > /dev/null || echo "cataloguesearch_prod index may not exist, continuing..."
@@ -116,8 +111,8 @@ curl -s -X DELETE "localhost:9200/cataloguesearch_prod" > /dev/null || echo "cat
 echo "Deleting cataloguesearch_prod_metadata index..."
 curl -s -X DELETE "localhost:9200/cataloguesearch_prod_metadata" > /dev/null || echo "cataloguesearch_prod_metadata index may not exist, continuing..."
 
-# Step 5: Restore the snapshots with error checking
-echo "Step 5: Restoring snapshots..."
+# Step 8: Restore the snapshots with error checking
+echo "Step 8: Restoring snapshots..."
 
 echo "Restoring cataloguesearch_prod..."
 RESTORE_RESPONSE=$(curl -s -X POST "localhost:9200/_snapshot/local_backup/cataloguesearch_prod/_restore" -H 'Content-Type: application/json' -d'{

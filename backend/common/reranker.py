@@ -13,20 +13,27 @@ class ONNXReranker:
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         log_handle.info("Reranker model loaded successfully.")
 
-    def predict(self, sentence_pairs: list[list[str]], batch_size: int = 4):
+    def predict(self, sentence_pairs: list[list[str]], batch_size: int = 4,
+                timeout_seconds: int = 40):
         """Reranks a list of sentence pairs and returns their scores."""
         start_time = time.time()
         all_scores = []
         
         with torch.no_grad():
             for i in range(0, len(sentence_pairs), batch_size):
+                # Check for timeout
+                if time.time() - start_time > timeout_seconds:
+                    log_handle.warning(f"Reranking timed out after {timeout_seconds} seconds. "
+                                       f"Returning {len(all_scores)} results out of {len(sentence_pairs)}.")
+                    break
+
                 batch = sentence_pairs[i:i + batch_size]
                 inputs = self.tokenizer(
                     batch,
                     padding=True,
                     truncation=True,
                     return_tensors="pt",
-                    max_length=512,
+                    max_length=1500,
                 )
                 outputs = self.model(**inputs)
                 batch_scores = torch.sigmoid(outputs.logits.squeeze()).cpu().numpy()

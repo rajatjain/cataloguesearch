@@ -77,8 +77,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/metadata"]
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 90s # Give the container ample time to load models before starting healthchecks
+      retries: 10
+      start_period: 300s # Give the container ample time to load models before starting healthchecks
     restart: ${RESTART_POLICY:-no}
 
   cataloguesearch-frontend:
