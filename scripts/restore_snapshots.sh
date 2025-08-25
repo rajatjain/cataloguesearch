@@ -1,29 +1,24 @@
 #!/bin/bash
 
-# Script to manage OpenSearch snapshots on VM instance
-# Usage: ./restore_snapshots.sh <snapshots_folder_path>
+# Script to restore OpenSearch snapshots using bind-mounted directory
+# Usage: ./restore_snapshots.sh (run from cataloguesearch project root)
 
 set -e  # Exit on any error
 
-# Check if snapshots folder path is provided
-if [ $# -ne 1 ]; then
-    echo "Usage: $0 <snapshots_folder_path>"
-    echo "Example: $0 /local/path/to/snapshots"
+SNAPSHOTS_DIR="./snapshots"
+
+# Check that we're in the right directory and snapshots folder exists
+if [ ! -d "$SNAPSHOTS_DIR" ]; then
+    echo "Error: './snapshots' directory not found"
+    echo "Make sure you're running this script from the cataloguesearch project root"
+    echo "and that the snapshots directory exists with your snapshot files"
     exit 1
 fi
 
-SNAPSHOTS_PATH="$1"
-
-# Validate that the snapshots folder exists
-if [ ! -d "$SNAPSHOTS_PATH" ]; then
-    echo "Error: Snapshots folder '$SNAPSHOTS_PATH' does not exist"
-    exit 1
-fi
-
-# Check if snapshots folder is readable (skip ownership checks for prod VM)
+# Check if snapshots folder is readable
 echo "Checking snapshots folder accessibility..."
-if [ ! -r "$SNAPSHOTS_PATH" ]; then
-    echo "Error: Cannot read snapshots folder '$SNAPSHOTS_PATH'"
+if [ ! -r "$SNAPSHOTS_DIR" ]; then
+    echo "Error: Cannot read snapshots folder '$SNAPSHOTS_DIR'"
     echo "Make sure the folder is readable"
     exit 1
 fi
@@ -32,87 +27,137 @@ echo "Snapshots folder is accessible"
 # Check for required snapshot files
 REQUIRED_FILES=("index-1" "index.latest" "indices")
 for file in "${REQUIRED_FILES[@]}"; do
-    if [ ! -e "$SNAPSHOTS_PATH/$file" ]; then
-        echo "Error: Required snapshot file '$file' not found in '$SNAPSHOTS_PATH'"
+    if [ ! -e "$SNAPSHOTS_DIR/$file" ]; then
+        echo "Error: Required snapshot file '$file' not found in '$SNAPSHOTS_DIR'"
         exit 1
     fi
 done
 
 # Check if any .dat files exist
-if ! ls "$SNAPSHOTS_PATH"/*.dat 1> /dev/null 2>&1; then
-    echo "Error: No snapshot .dat files found in '$SNAPSHOTS_PATH'"
+if ! ls "$SNAPSHOTS_DIR"/*.dat 1> /dev/null 2>&1; then
+    echo "Error: No snapshot .dat files found in '$SNAPSHOTS_DIR'"
     echo "This doesn't appear to be a valid OpenSearch snapshot directory"
     exit 1
 fi
 
+echo "✅ Valid snapshots directory found with required files"
+
 echo "Starting OpenSearch snapshot management..."
 
-# Step 1: Clear existing snapshots in container and prepare directory
-echo "Step 1: Preparing container snapshots directory..."
-docker exec -u root opensearch-node rm -rf /tmp/snapshots_restore 2>/dev/null || true
-docker exec -u root opensearch-node mkdir -p /tmp/snapshots_restore
+# Function to wait for user confirmation
+wait_for_confirmation() {
+    local step_name="$1"
+    echo ""
+    echo "=========================================="
+    echo "Executing step: $step_name"
+    echo "Should I continue? (y/N)"
+    echo "=========================================="
+    read -r response
+    if [[ ! "$response" =~ ^[Yy]$ ]]; then
+        echo "Aborted by user."
+        exit 0
+    fi
+}
 
-# Step 2: Copy snapshots folder to container
-echo "Step 2: Copying snapshots to container..."
-docker cp "$SNAPSHOTS_PATH/." opensearch-node:/tmp/snapshots_restore/
+# Function to check command success
+check_status() {
+    local step_name="$1"
+    local exit_code=$2
+    if [ $exit_code -eq 0 ]; then
+        echo "✅ SUCCESS: $step_name completed successfully"
+        echo "Press any key to continue..."
+        read -r
+    else
+        echo "❌ FAILED: $step_name failed with exit code $exit_code"
+        echo "Do you want to continue anyway? (y/N)"
+        read -r response
+        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+            echo "Aborted due to failure."
+            exit 1
+        fi
+    fi
+}
 
-# Step 3: Fix permissions inside the container
-echo "Step 3: Fixing permissions inside container..."
-docker exec -u root opensearch-node chown -R opensearch:opensearch /tmp/snapshots_restore/
-docker exec -u root opensearch-node chmod -R 775 /tmp/snapshots_restore/
+# Step 1: Restart OpenSearch container to ensure bind mount is refreshed
+wait_for_confirmation "Step 1: Restarting OpenSearch container"
+echo "Restarting opensearch-node container to refresh bind mount..."
+docker restart opensearch-node
+echo "Waiting for OpenSearch to be ready..."
+sleep 10
+# Wait for OpenSearch to be accessible
+until curl -s "localhost:9200/_cluster/health" > /dev/null; do
+    echo "Waiting for OpenSearch to start..."
+    sleep 5
+done
+echo "OpenSearch is ready"
+check_status "Step 1: Restarting OpenSearch container" 0
 
-# Step 4: Delete existing repository if it exists
-echo "Step 4: Removing existing repository (if any)..."
+# Step 2: Fix permissions in the bind-mounted directory
+wait_for_confirmation "Step 2: Fixing permissions in container"
+echo "Setting ownership and permissions on bind-mounted snapshots..."
+echo "Current directory contents:"
+docker exec opensearch-node ls -la /tmp/snapshots/
+docker exec -u root opensearch-node chown -R opensearch:opensearch /tmp/snapshots/
+CHOWN_EXIT=$?
+docker exec -u root opensearch-node chmod -R 775 /tmp/snapshots/
+CHMOD_EXIT=$?
+echo "After permission fix:"
+docker exec opensearch-node ls -la /tmp/snapshots/
+check_status "Step 2: Fixing permissions in container" $((CHOWN_EXIT + CHMOD_EXIT))
+
+# Step 3: Delete existing repository if it exists
+wait_for_confirmation "Step 3: Removing existing repository (if any)"
+echo "Deleting any existing repository..."
 curl -s -X DELETE "localhost:9200/_snapshot/local_backup" > /dev/null 2>&1 || echo "No existing repository to delete"
+check_status "Step 3: Removing existing repository" 0
 
-# Step 5: Create new repository
-echo "Step 5: Creating new snapshot repository..."
+# Step 4: Create new repository
+wait_for_confirmation "Step 4: Creating new snapshot repository"
+echo "Creating repository pointing to /tmp/snapshots..."
 REPO_RESPONSE=$(curl -s -X PUT "localhost:9200/_snapshot/local_backup" -H 'Content-Type: application/json' -d'{
   "type": "fs",
   "settings": {
-    "location": "/tmp/snapshots_restore"
+    "location": "/tmp/snapshots"
   }
 }')
 
 if echo "$REPO_RESPONSE" | grep -q '"acknowledged":true'; then
     echo "Repository created successfully"
+    check_status "Step 4: Creating new snapshot repository" 0
 else
     echo "Error creating repository: $REPO_RESPONSE"
-    exit 1
+    check_status "Step 4: Creating new snapshot repository" 1
 fi
 
-# Step 6: Verify snapshots are visible before restoring
-echo "Step 6: Verifying snapshots are accessible..."
+# Step 5: Verify snapshots are visible before restoring
+wait_for_confirmation "Step 5: Verifying snapshots are accessible"
+echo "Checking if snapshots are visible in repository..."
 SNAPSHOTS_LIST=$(curl -s "localhost:9200/_snapshot/local_backup/_all")
 
 if echo "$SNAPSHOTS_LIST" | grep -q '"snapshots" : \[ \]'; then
     echo "Error: No snapshots found in repository. Check if files copied correctly."
-    exit 1
-fi
-
-if ! echo "$SNAPSHOTS_LIST" | grep -q '"cataloguesearch_prod"'; then
+    check_status "Step 5: Verifying snapshots are accessible" 1
+elif ! echo "$SNAPSHOTS_LIST" | grep -q '"cataloguesearch_prod"'; then
     echo "Error: cataloguesearch_prod snapshot not found in repository"
-    exit 1
-fi
-
-if ! echo "$SNAPSHOTS_LIST" | grep -q '"cataloguesearch_prod_metadata"'; then
+    check_status "Step 5: Verifying snapshots are accessible" 1
+elif ! echo "$SNAPSHOTS_LIST" | grep -q '"cataloguesearch_prod_metadata"'; then
     echo "Error: cataloguesearch_prod_metadata snapshot not found in repository"
-    exit 1
+    check_status "Step 5: Verifying snapshots are accessible" 1
+else
+    echo "Both required snapshots found in repository"
+    check_status "Step 5: Verifying snapshots are accessible" 0
 fi
 
-echo "Both required snapshots found in repository"
-
-# Step 7: Delete existing indices (if they exist)
-echo "Step 7: Deleting existing indices..."
-
-echo "Deleting cataloguesearch_prod index..."
+# Step 6: Delete existing indices (if they exist)
+wait_for_confirmation "Step 6: Deleting existing indices"
+echo "Deleting any existing indices..."
 curl -s -X DELETE "localhost:9200/cataloguesearch_prod" > /dev/null || echo "cataloguesearch_prod index may not exist, continuing..."
-
-echo "Deleting cataloguesearch_prod_metadata index..."
 curl -s -X DELETE "localhost:9200/cataloguesearch_prod_metadata" > /dev/null || echo "cataloguesearch_prod_metadata index may not exist, continuing..."
+check_status "Step 6: Deleting existing indices" 0
 
-# Step 8: Restore the snapshots with error checking
-echo "Step 8: Restoring snapshots..."
+# Step 7: Restore the snapshots with error checking
+wait_for_confirmation "Step 7: Restoring snapshots"
+echo "Initiating restoration of both indices..."
 
 echo "Restoring cataloguesearch_prod..."
 RESTORE_RESPONSE=$(curl -s -X POST "localhost:9200/_snapshot/local_backup/cataloguesearch_prod/_restore" -H 'Content-Type: application/json' -d'{
@@ -123,11 +168,13 @@ RESTORE_RESPONSE=$(curl -s -X POST "localhost:9200/_snapshot/local_backup/catalo
 
 if echo "$RESTORE_RESPONSE" | grep -q '"accepted":true'; then
     echo "cataloguesearch_prod restore initiated successfully"
+    RESTORE1_SUCCESS=0
 elif echo "$RESTORE_RESPONSE" | grep -q "error"; then
     echo "Error restoring cataloguesearch_prod: $RESTORE_RESPONSE"
-    exit 1
+    RESTORE1_SUCCESS=1
 else
     echo "Unexpected response from cataloguesearch_prod restore: $RESTORE_RESPONSE"
+    RESTORE1_SUCCESS=1
 fi
 
 echo "Restoring cataloguesearch_prod_metadata..."
@@ -139,14 +186,18 @@ RESTORE_RESPONSE=$(curl -s -X POST "localhost:9200/_snapshot/local_backup/catalo
 
 if echo "$RESTORE_RESPONSE" | grep -q '"accepted":true'; then
     echo "cataloguesearch_prod_metadata restore initiated successfully"
+    RESTORE2_SUCCESS=0
 elif echo "$RESTORE_RESPONSE" | grep -q "error"; then
     echo "Error restoring cataloguesearch_prod_metadata: $RESTORE_RESPONSE"
-    exit 1
+    RESTORE2_SUCCESS=1
 else
     echo "Unexpected response from cataloguesearch_prod_metadata restore: $RESTORE_RESPONSE"
+    RESTORE2_SUCCESS=1
 fi
 
-# Step 6: Print curl commands to check restoration status
+check_status "Step 7: Restoring snapshots" $((RESTORE1_SUCCESS + RESTORE2_SUCCESS))
+
+# Print curl commands to check restoration status
 echo ""
 echo "=========================================="
 echo "Restoration initiated!"
