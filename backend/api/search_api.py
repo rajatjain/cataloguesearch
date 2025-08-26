@@ -157,58 +157,59 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
     enable_reranking = request_data.enable_reranking
     language = request_data.language
 
-    try:
+    has_advanced_options = exact_match or (exclude_words and len(exclude_words) > 0)
+    is_lexical_query = (index_searcher.is_lexical_query(keywords) or
+                        has_advanced_options)
 
+    try:
         log_handle.info(f"Received search request: keywords='{keywords}', "
                         f"exact_match={exact_match}, exclude_words={exclude_words}, "
                         f"categories={categories}, page={page_number}, size={page_size}, "
                         f"language={language}, enable_reranking={enable_reranking}")
 
-        # Check if advanced options are used (exact match or exclude words)
-        has_advanced_options = exact_match or (exclude_words and len(exclude_words) > 0)
-
-        lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
-            keywords=keywords,
-            exact_match=exact_match,
-            exclude_words=exclude_words,
-            categories=categories,
-            detected_language=language,
-            page_size=page_size,
-            page_number=page_number
-        )
-        log_handle.info(f"Lexical search returned {len(lexical_results)} results (total: {lexical_total_hits}).")
-
-        is_lexical_query = index_searcher.is_lexical_query(keywords)
-        # Check if lexical search returned 0 results and query is lexical
-        if lexical_total_hits == 0 and is_lexical_query:
-            # Get spelling suggestions
-            suggestions = index_searcher.get_spelling_suggestions(
-                index_name=request.app.state.config.OPENSEARCH_INDEX_NAME,
-                text=keywords,
-                min_score=0.6,
-                num_suggestions=3
+        if is_lexical_query:
+            # For lexical queries: only perform lexical search
+            lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
+                keywords=keywords,
+                exact_match=exact_match,
+                exclude_words=exclude_words,
+                categories=categories,
+                detected_language=language,
+                page_size=page_size,
+                page_number=page_number
             )
+            log_handle.info(f"Lexical search returned {len(lexical_results)} results (total: {lexical_total_hits}).")
             
-            # Return early with suggestions, skip vector search
-            response = {
-                "total_results": 0,
-                "page_size": page_size,
-                "page_number": page_number,
-                "results": [],
-                "vector_results": [],
-                "total_vector_results": 0,
-                "suggestions": suggestions
-            }
+            # If no lexical results, get spelling suggestions
+            if lexical_total_hits == 0:
+                suggestions = index_searcher.get_spelling_suggestions(
+                    index_name=request.app.state.config.OPENSEARCH_INDEX_NAME,
+                    text=keywords,
+                    min_score=0.6,
+                    num_suggestions=3
+                )
+                
+                response = {
+                    "total_results": 0,
+                    "page_size": page_size,
+                    "page_number": page_number,
+                    "results": [],
+                    "vector_results": [],
+                    "total_vector_results": 0,
+                    "suggestions": suggestions
+                }
+                
+                log_handle.info(f"No lexical results found for lexical query '{keywords}'. Returning {len(suggestions)} suggestions.")
+                return JSONResponse(content=response, status_code=200)
             
-            log_handle.info(f"No lexical results found for lexical query '{keywords}'. Returning {len(suggestions)} suggestions.")
-            return JSONResponse(content=response, status_code=200)
-
-        # Skip vector search if advanced options are used (exact match or exclude words)
-        if has_advanced_options:
-            log_handle.info("Advanced options detected (exact_match or exclude_words). Skipping vector search.")
+            # Skip vector search for lexical queries
             vector_results = []
             vector_total_hits = 0
         else:
+            # For non-lexical queries: only perform vector search
+            lexical_results = []
+            lexical_total_hits = 0
+            
             query_embedding = embedding_model.get_embedding(keywords)
             if not query_embedding:
                 log_handle.warning("Could not generate embedding for query. Vector search skipped.")
@@ -219,18 +220,14 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                     keywords=keywords,
                     embedding=query_embedding,
                     categories=categories,
-                    page_size=20,
-                    page_number=1,
+                    page_size=page_size,
+                    page_number=page_number,
                     language=language,
                     rerank=enable_reranking
                 )
                 log_handle.info(
                     f"Vector search returned {len(vector_results)} "
                     f"results (total: {vector_total_hits}) with reranking={'enabled' if enable_reranking else 'disabled'}.")
-
-        if not is_lexical_query:
-            lexical_results = []
-            lexical_total_hits = 0
 
         response = {
             "total_results": lexical_total_hits,
