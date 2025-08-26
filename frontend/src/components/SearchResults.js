@@ -1,8 +1,10 @@
-import React from 'react';
-import { SimilarIcon, ExpandIcon, PdfIcon } from './SharedComponents';
+import React, { useState } from 'react';
+import { SimilarIcon, ExpandIcon, PdfIcon, ShareIcon } from './SharedComponents';
+import ShareModal from './ShareModal';
 
 // --- SEARCH RESULTS COMPONENTS ---
-export const ResultCard = ({ result, onFindSimilar, onExpand, isFirst }) => {
+export const ResultCard = ({ result, onFindSimilar, onExpand, isFirst, query, currentFilters, language, searchType }) => {
+    const [showShareModal, setShowShareModal] = useState(false);
     const getHighlightedHTML = () => {
         const content = result.content_snippet || '';
         // CORRECTED: The highlight class is now consistently `bg-sky-200` for all results to ensure visibility.
@@ -32,6 +34,9 @@ export const ResultCard = ({ result, onFindSimilar, onExpand, isFirst }) => {
                 )}
 
                 <div className="ml-auto flex items-center gap-3 text-sm">
+                    <button onClick={() => setShowShareModal(true)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center">
+                        <ShareIcon />Share
+                    </button>
                     <button onClick={() => onExpand(result.document_id)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center">
                         <ExpandIcon />Expand
                     </button>
@@ -43,6 +48,17 @@ export const ResultCard = ({ result, onFindSimilar, onExpand, isFirst }) => {
             <div className={`${isFirst ? 'text-lg' : 'text-base'} text-slate-700 leading-relaxed font-sans`}>
                 <p className="whitespace-pre-wrap" dangerouslySetInnerHTML={getHighlightedHTML()} />
             </div>
+            
+            {showShareModal && (
+                <ShareModal 
+                    result={result}
+                    query={query}
+                    currentFilters={currentFilters}
+                    language={language}
+                    searchType={searchType}
+                    onClose={() => setShowShareModal(false)}
+                />
+            )}
         </div>
     );
 };
@@ -238,7 +254,7 @@ export const SimilarSourceInfoCard = ({ sourceDoc }) => {
     );
 };
 
-export const ResultsList = ({ results, totalResults, pageSize, currentPage, onPageChange, resultType, onFindSimilar, onExpand, searchType }) => {
+export const ResultsList = ({ results, totalResults, pageSize, currentPage, onPageChange, resultType, onFindSimilar, onExpand, searchType, query, currentFilters, language }) => {
     const totalPages = Math.ceil(totalResults / pageSize);
     
     return (
@@ -252,6 +268,10 @@ export const ResultsList = ({ results, totalResults, pageSize, currentPage, onPa
                         onFindSimilar={onFindSimilar}
                         onExpand={onExpand}
                         isFirst={currentPage === 1 && index === 0}
+                        query={query}
+                        currentFilters={currentFilters}
+                        language={language}
+                        searchType={searchType}
                     />
                 ))}
             </div>

@@ -529,7 +529,10 @@ const AppContent = () => {
                                             resultType="keyword" 
                                             onFindSimilar={handleFindSimilar} 
                                             onExpand={handleExpand} 
-                                            searchType={searchType} 
+                                            searchType={searchType}
+                                            query={query}
+                                            currentFilters={activeFilters}
+                                            language={language} 
                                         />
                                     )}
                                     {activeTab === 'vector' && (
@@ -554,7 +557,10 @@ const AppContent = () => {
                                                     resultType="vector" 
                                                     onFindSimilar={handleFindSimilar} 
                                                     onExpand={handleExpand} 
-                                                    searchType={searchType} 
+                                                    searchType={searchType}
+                                                    query={query}
+                                                    currentFilters={activeFilters}
+                                                    language={language} 
                                                 />
                                             </>
                                         ) : searchData && (
@@ -576,7 +582,10 @@ const AppContent = () => {
                                                     resultType="similar" 
                                                     onFindSimilar={handleFindSimilar} 
                                                     onExpand={handleExpand} 
-                                                    searchType={searchType} 
+                                                    searchType={searchType}
+                                                    query={query}
+                                                    currentFilters={activeFilters}
+                                                    language={language} 
                                                 />
                                             ) : (
                                                 <div className="text-center py-8 text-base text-slate-500">
