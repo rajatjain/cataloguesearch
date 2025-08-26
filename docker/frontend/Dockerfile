@@ -12,14 +12,20 @@ ARG REACT_APP_RECAPTCHA_SITE_KEY
 # Set as environment variable for build
 ENV REACT_APP_RECAPTCHA_SITE_KEY=${REACT_APP_RECAPTCHA_SITE_KEY}
 
-# Copy package files
+# Copy package files first for better dependency caching
 COPY frontend/package*.json ./
 
 # Install all dependencies (including dev dependencies for build)
+# This layer will be cached unless package.json changes
 RUN npm install
 
-# Copy source code
-COPY frontend/ .
+# Copy static assets and config files (rarely change)
+COPY frontend/public/ ./public/
+COPY frontend/tailwind.config.js* ./
+COPY frontend/postcss.config.js* ./
+
+# Copy source code last (most frequently changed)
+COPY frontend/src/ ./src/
 
 # Build the application
 RUN npm run build

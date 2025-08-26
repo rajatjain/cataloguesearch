@@ -41,18 +41,19 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/pytho
   COPY --from=builder /usr/local/bin/pip* /usr/local/bin/
   COPY --from=builder /usr/local/bin/uvicorn* /usr/local/bin/
 
-# Copy Indic NLP resources from the local directory into the image
+# Copy static resources first (rarely change)
 COPY indic_nlp_resources /app/indic_nlp_resources
-COPY backend/ ./backend/
-COPY configs/ ./configs/
-COPY utils/ ./utils/
+COPY models/bge-reranker-base-onnx /app/models/bge-reranker-base-onnx
 
 # Copy and set up entrypoint script
 COPY docker/api/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Note: ONNX models should be mounted at runtime, not baked into the image
-COPY models/bge-reranker-base-onnx /app/models/bge-reranker-base-onnx
+# Copy frequently changing directories last for better layer caching
+# This ensures that changes to backend/configs/utils don't invalidate earlier layers
+COPY utils/ ./utils/
+COPY configs/ ./configs/
+COPY backend/ ./backend/
 
 # Set environment variables
 ENV PYTHONPATH=/app

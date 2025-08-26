@@ -178,8 +178,9 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
         )
         log_handle.info(f"Lexical search returned {len(lexical_results)} results (total: {lexical_total_hits}).")
 
+        is_lexical_query = index_searcher.is_lexical_query(keywords)
         # Check if lexical search returned 0 results and query is lexical
-        if lexical_total_hits == 0 and index_searcher.is_lexical_query(keywords):
+        if lexical_total_hits == 0 and is_lexical_query:
             # Get spelling suggestions
             suggestions = index_searcher.get_spelling_suggestions(
                 index_name=request.app.state.config.OPENSEARCH_INDEX_NAME,
@@ -226,6 +227,10 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                 log_handle.info(
                     f"Vector search returned {len(vector_results)} "
                     f"results (total: {vector_total_hits}) with reranking={'enabled' if enable_reranking else 'disabled'}.")
+
+        if not is_lexical_query:
+            lexical_results = []
+            lexical_total_hits = 0
 
         response = {
             "total_results": lexical_total_hits,
