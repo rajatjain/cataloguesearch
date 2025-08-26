@@ -20,63 +20,7 @@ The deployment architecture consists of four main services working together:
 
 This section describes how to build and run the entire application stack on your local machine for development and testing.
 
-### Option 1: Using Colima (Recommended for macOS)
-
-Colima provides a faster, lighter alternative to Docker Desktop on macOS.
-
-#### Setup Colima from Scratch
-
-```bash
-# Install Colima via Homebrew
-brew install colima
-
-# Start Colima with adequate resources
-colima start --cpu 4 --memory 8
-
-# Configure Docker to use Colima socket
-export DOCKER_HOST="unix:///Users/$USER/.colima/default/docker.sock"
-
-# Add to shell profile for persistence (choose your shell)
-echo 'export DOCKER_HOST="unix:///Users/$USER/.colima/default/docker.sock"' >> ~/.zshrc
-# OR for bash users:
-# echo 'export DOCKER_HOST="unix:///Users/$USER/.colima/default/docker.sock"' >> ~/.bashrc
-
-# Reload shell configuration
-source ~/.zshrc  # or ~/.bashrc
-```
-
-#### Verify Colima Setup
-
-```bash
-# Check Colima status
-colima status
-
-# Test Docker connection
-docker ps
-
-# Should show empty container list if working correctly
-```
-
-#### Building and Running with Colima
-
-```bash
-# Build all service images (api, frontend, opensearch)
-docker-compose --env-file .env.local build
-
-# Or build specific service
-docker-compose --env-file .env.local build cataloguesearch-api
-
-# Start all services
-docker-compose --env-file .env.local up -d
-
-# View logs
-docker-compose --env-file .env.local logs -f
-
-# Stop services
-docker-compose --env-file .env.local down
-```
-
-### Option 2: Using docker-run.sh Script
+### Building the Docker Images
 
 The `docker-run.sh` script simplifies building the images. The API image will be built with the ONNX models included for immediate use.
 
@@ -88,7 +32,7 @@ The `docker-run.sh` script simplifies building the images. The API image will be
 ./docker-run.sh local build-api
 ```
 
-#### Starting Local Containers
+### Starting Local Containers
 
 To start all services, use the `up` command. This will also build any images that don't already exist.
 
@@ -97,65 +41,19 @@ To start all services, use the `up` command. This will also build any images tha
 ./docker-run.sh local up
 ```
 
-### Accessing Services
-
 Once running, you can access the services:
 -   **Frontend**: `http://localhost:3000`
 -   **API**: `http://localhost:8000`
 -   **OpenSearch**: `http://localhost:9200`
 
-### Managing Services
+To view logs or stop the services:
 
 ```bash
 # View logs for all running containers
-docker-compose --env-file .env.local logs -f
-# OR using script:
 ./docker-run.sh local logs
 
 # Stop and remove all containers
-docker-compose --env-file .env.local down
-# OR using script:
 ./docker-run.sh local down
-```
-
-### Colima Management Commands
-
-```bash
-# Stop Colima (saves resources when not developing)
-colima stop
-
-# Start Colima again
-colima start
-
-# Restart Colima with different resources
-colima stop
-colima start --cpu 6 --memory 12
-
-# Check Colima resource usage
-colima status
-
-# Clean up Docker images/containers
-docker system prune -a
-```
-
-### Troubleshooting Colima
-
-If builds are slow or hanging:
-1. Ensure `.dockerignore` exists to exclude unnecessary files
-2. Increase Colima resources: `colima stop && colima start --cpu 6 --memory 12`
-3. Clear Docker cache: `docker system prune -a`
-4. Check available disk space: `df -h`
-
-If Docker commands fail with "connection refused":
-```bash
-# Check if Colima is running
-colima status
-
-# Restart if needed
-colima restart
-
-# Verify Docker socket path
-echo $DOCKER_HOST
 ```
 
 ## Configuration
