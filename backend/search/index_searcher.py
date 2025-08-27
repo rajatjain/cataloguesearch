@@ -272,7 +272,7 @@ class IndexSearcher:
             self, keywords: str, embedding: List[float], categories: Dict[str, List[str]],
             page_size: int, page_number: int, language: str, rerank: bool = True, rerank_top_k: int = 40) \
             -> Tuple[List[Dict[str, Any]], int]:
-        initial_fetch_size = rerank_top_k if rerank else page_size
+        initial_fetch_size = rerank_top_k
         from_ = 0 if rerank else (page_number - 1) * page_size
 
         query_body = self._build_vector_query(embedding, categories, initial_fetch_size)
@@ -323,7 +323,7 @@ class IndexSearcher:
             end_index = start_index + page_size
             paginated_hits = reranked_hits[start_index:end_index]
 
-            return self._extract_results(paginated_hits, is_lexical=False, language=language), len(paginated_hits)
+            return self._extract_results(paginated_hits, is_lexical=False, language=language), total_hits
         except Exception as e:
             log_handle.error(f"Error during vector search: {e}", exc_info=True)
             return [], 0

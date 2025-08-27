@@ -243,6 +243,29 @@ const AppContent = () => {
         setIsLoading(false);
     }, [query, activeFilters, language, exactMatch, excludeWords, searchType]);
 
+    const handleVectorSearch = useCallback(async (page = 1) => {
+        if (!query.trim()) {
+            return;
+        }
+        setIsLoading(true);
+        setVectorPage(page);
+
+        const requestPayload = {
+            query,
+            exact_match: exactMatch,
+            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
+            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
+            language: language,
+            page_number: page,
+            page_size: PAGE_SIZE,
+            enable_reranking: searchType === 'relevance'
+        };
+
+        const data = await api.search(requestPayload);
+        setSearchData(data);
+        setIsLoading(false);
+    }, [query, activeFilters, language, exactMatch, excludeWords, searchType]);
+
     const handleSwitchToRelevanceSearch = useCallback(async () => {
         setSearchType('relevance'); // Set for future searches
 
@@ -357,7 +380,7 @@ const AppContent = () => {
                 handleSearch(page); 
                 break;
             case 'vector': 
-                setVectorPage(page); 
+                handleVectorSearch(page);
                 break;
             case 'similar': 
                 setSimilarDocsPage(page); 
@@ -506,7 +529,10 @@ const AppContent = () => {
                                             resultType="keyword" 
                                             onFindSimilar={handleFindSimilar} 
                                             onExpand={handleExpand} 
-                                            searchType={searchType} 
+                                            searchType={searchType}
+                                            query={query}
+                                            currentFilters={activeFilters}
+                                            language={language} 
                                         />
                                     )}
                                     {activeTab === 'vector' && (
@@ -523,7 +549,7 @@ const AppContent = () => {
                                                     </div>
                                                 )}
                                                 <ResultsList 
-                                                    results={paginatedVectorResults} 
+                                                    results={searchData.vector_results} 
                                                     totalResults={searchData.total_vector_results} 
                                                     pageSize={PAGE_SIZE} 
                                                     currentPage={vectorPage} 
@@ -531,7 +557,10 @@ const AppContent = () => {
                                                     resultType="vector" 
                                                     onFindSimilar={handleFindSimilar} 
                                                     onExpand={handleExpand} 
-                                                    searchType={searchType} 
+                                                    searchType={searchType}
+                                                    query={query}
+                                                    currentFilters={activeFilters}
+                                                    language={language} 
                                                 />
                                             </>
                                         ) : searchData && (
@@ -553,7 +582,10 @@ const AppContent = () => {
                                                     resultType="similar" 
                                                     onFindSimilar={handleFindSimilar} 
                                                     onExpand={handleExpand} 
-                                                    searchType={searchType} 
+                                                    searchType={searchType}
+                                                    query={query}
+                                                    currentFilters={activeFilters}
+                                                    language={language} 
                                                 />
                                             ) : (
                                                 <div className="text-center py-8 text-base text-slate-500">

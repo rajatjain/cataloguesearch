@@ -1,9 +1,16 @@
 #!/bin/bash
 
 # Script to restore OpenSearch snapshots using bind-mounted directory
-# Usage: ./restore_snapshots.sh (run from cataloguesearch project root)
+# Usage: ./restore_snapshots.sh [--use-podman] (run from cataloguesearch project root)
 
 set -e  # Exit on any error
+
+# Default to docker, but allow podman via flag
+CONTAINER_CMD="docker"
+if [[ "$1" == "--use-podman" ]]; then
+    CONTAINER_CMD="podman"
+    echo "Using podman instead of docker"
+fi
 
 SNAPSHOTS_DIR="./snapshots"
 
@@ -81,7 +88,7 @@ check_status() {
 # Step 1: Restart OpenSearch container to ensure bind mount is refreshed
 wait_for_confirmation "Step 1: Restarting OpenSearch container"
 echo "Restarting opensearch-node container to refresh bind mount..."
-docker restart opensearch-node
+$CONTAINER_CMD restart opensearch-node
 echo "Waiting for OpenSearch to be ready..."
 sleep 10
 # Wait for OpenSearch to be accessible
@@ -96,13 +103,13 @@ check_status "Step 1: Restarting OpenSearch container" 0
 wait_for_confirmation "Step 2: Fixing permissions in container"
 echo "Setting ownership and permissions on bind-mounted snapshots..."
 echo "Current directory contents:"
-docker exec opensearch-node ls -la /tmp/snapshots/
-docker exec -u root opensearch-node chown -R opensearch:opensearch /tmp/snapshots/
+$CONTAINER_CMD exec opensearch-node ls -la /tmp/snapshots/
+$CONTAINER_CMD exec -u root opensearch-node chown -R opensearch:opensearch /tmp/snapshots/
 CHOWN_EXIT=$?
-docker exec -u root opensearch-node chmod -R 775 /tmp/snapshots/
+$CONTAINER_CMD exec -u root opensearch-node chmod -R 775 /tmp/snapshots/
 CHMOD_EXIT=$?
 echo "After permission fix:"
-docker exec opensearch-node ls -la /tmp/snapshots/
+$CONTAINER_CMD exec opensearch-node ls -la /tmp/snapshots/
 check_status "Step 2: Fixing permissions in container" $((CHOWN_EXIT + CHMOD_EXIT))
 
 # Step 3: Delete existing repository if it exists

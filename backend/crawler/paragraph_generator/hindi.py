@@ -45,7 +45,7 @@ class HindiParagraphGenerator(BaseParagraphGenerator):
 
         # Join multiple lines into a single line with spaces
         # BUT do not join lines that start with "श्रोता:" or "पूज्य गुरुदेवश्री:" or "मुमुक्षु:"
-        cleaned_text = re.sub(r'\n(?!श्रोता:|पूज्य गुरुदेवश्री:|मुमुक्षु:|शंका:|प्रश्न:|समाधान:)', ' ', cleaned_text)
+        cleaned_text = re.sub(r'\n(?!श्रोता:|पूज्य गुरुदेवश्री:|मुमुक्षु:|शंका:|प्रश्न:|समाधान:|उत्तर:)', ' ', cleaned_text)
 
         # Clean up any potential multiple spaces that might have been created
         cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
