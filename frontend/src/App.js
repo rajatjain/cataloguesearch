@@ -395,7 +395,6 @@ const AppContent = () => {
         return results.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
     };
 
-    const paginatedVectorResults = getPaginatedResults(searchData?.vector_results, vectorPage);
     const paginatedSimilarResults = getPaginatedResults(similarDocumentsData?.results, similarDocsPage);
 
     const showSearchInterface = currentPage === 'home' || currentPage === 'aagam-khoj';

@@ -48,7 +48,7 @@ const WhatsNew = () => {
 
     return (
         <div className="max-w-4xl mx-auto">
-            <div className="text-center py-12">
+            <div className="text-center mb-8">
                 <h1 className="text-4xl font-bold text-slate-800 mb-4">What's New?</h1>
                 <p className="text-lg text-slate-600 max-w-2xl mx-auto">
                     Stay updated with the latest improvements, new content, and features added to Aagam-Khoj.
