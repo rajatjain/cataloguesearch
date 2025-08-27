@@ -1,12 +1,8 @@
 import logging
 import os.path
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from opensearchpy import OpenSearch, helpers
 from datetime import datetime, timezone
 
-from tqdm import tqdm
-
-from backend.common import language_detector, embedding_models
 from backend.common.embedding_models import get_embedding_model_factory
 from backend.common.opensearch import delete_documents_by_filename
 
@@ -133,7 +129,7 @@ class IndexGenerator:
                 "timestamp_indexed": timestamp,
             }
 
-            language = metadata.get("language") or language_detector.LanguageDetector.detect_language(para_text)
+            language = metadata.get("language", "hi")
             chunk["language"] = language
 
             # Default to Hindi for unsupported languages or English text
