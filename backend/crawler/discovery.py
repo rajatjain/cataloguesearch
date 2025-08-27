@@ -99,7 +99,8 @@ class SingleFileProcessor:
             "header_prefix": [],
             "header_regex": [],
             "page_list": [],
-            "typo_list": []
+            "typo_list": [],
+            "crop": {}
         }
 
         # Merge scan_config.json from each folder, starting from base directory
@@ -117,6 +118,10 @@ class SingleFileProcessor:
                     scan_meta["header_regex"].extend(default_config.get("header_regex", []))
                     scan_meta["page_list"].extend(default_config.get("page_list", []))
                     scan_meta["typo_list"].extend(default_config.get("typo_list", []))
+                    
+                    # Update crop settings from default config
+                    if "crop" in default_config:
+                        scan_meta["crop"].update(default_config["crop"])
 
                 except (json.JSONDecodeError, IOError) as e:
                     log_handle.warning(f"Could not read or parse {scan_config_path}: {e}")
@@ -134,6 +139,10 @@ class SingleFileProcessor:
                 scan_meta["end_page"] = file_config.get("end_page", num_pages)
             if file_config.get("page_list"):
                 scan_meta["page_list"].extend(file_config.get("page_list"))
+            
+            # Update crop settings from file-specific config (overrides defaults)
+            if "crop" in file_config:
+                scan_meta["crop"].update(file_config["crop"])
 
         return scan_meta
 

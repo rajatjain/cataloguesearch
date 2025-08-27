@@ -87,6 +87,17 @@ class PDFProcessor:
         if not page_list:
             return []
 
+        # Check for cropping configuration once at the beginning
+        crop_config = None
+        if "crop" in scan_config:
+            crop_config = scan_config["crop"]
+            top_percent = crop_config.get("top", 0)
+            bottom_percent = crop_config.get("bottom", 0)
+            if top_percent > 0 or bottom_percent > 0:
+                log_handle.info(f"Cropping enabled: {top_percent}% from top, {bottom_percent}% from bottom")
+            else:
+                crop_config = None  # No actual cropping needed
+
         images = []
         # Keep track of the page numbers for the images we successfully create
         page_numbers_for_images = []
@@ -108,6 +119,16 @@ class PDFProcessor:
 
                 pix = page.get_pixmap(dpi=350)
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                
+                # Apply cropping if enabled
+                if crop_config:
+                    width, height = img.size
+                    top_crop = int(height * top_percent / 100)
+                    bottom_crop = int(height * bottom_percent / 100)
+                    
+                    # Crop the image (left, top, right, bottom)
+                    img = img.crop((0, top_crop, width, height - bottom_crop))
+                    
                 images.append(img)
                 page_numbers_for_images.append(page_num)
 
