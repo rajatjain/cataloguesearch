@@ -123,7 +123,7 @@ def test_crawl(initialise):
     # create temp dir
     doc_ids = setup()
 
-    index_state = IndexState(config.SQLITE_DB_PATH)
+    index_state = MockIndexState(config.SQLITE_DB_PATH)
 
     discovery = Discovery(
         config,
@@ -200,12 +200,12 @@ def validate(old_state, new_state, changed_keys,
     for doc_id, vals in new_state.items():
         if doc_id in changed_keys:
             assert vals["last_indexed_timestamp"] != old_state[doc_id]["last_indexed_timestamp"]
-            assert check_file_changed == (vals["file_checksum"] != old_state[doc_id]["file_checksum"])
             assert check_config_changed == (vals["config_hash"] != old_state[doc_id]["config_hash"])
+            assert vals["ocr_checksum"] == old_state[doc_id]["ocr_checksum"]
         else:
             assert vals["last_indexed_timestamp"] == old_state[doc_id]["last_indexed_timestamp"]
-            assert vals["file_checksum"] == old_state[doc_id]["file_checksum"]
             assert vals["config_hash"] == old_state[doc_id]["config_hash"]
+            assert vals["ocr_checksum"] == old_state[doc_id]["ocr_checksum"]
 
 def add_bookmark_to_pdf(pdf_path, bookmark_name, page_number):
     doc = None

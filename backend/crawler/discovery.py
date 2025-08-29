@@ -227,8 +227,8 @@ class SingleFileProcessor:
             {
                 "file_path": self._file_path,
                 "last_indexed_timestamp": self._scan_time,
-                "file_checksum": "",  # Not needed for OCR-only processing
-                "config_hash": "",  # Not needed for OCR-only processing
+                "file_checksum": "",
+                "config_hash": "",
                 "ocr_checksum": current_ocr_checksum
             }
         )
@@ -335,9 +335,9 @@ class SingleFileProcessor:
         self._save_state(document_id, {
             "file_path": self._file_path,
             "last_indexed_timestamp": self._scan_time,
-            "file_checksum": "",  # Not needed - using ocr_checksum instead
+            "file_checksum": "",
             "config_hash": current_config_hash,
-            "index_checksum": "",  # Not needed - using ocr_checksum instead
+            "index_checksum": "",
             "ocr_checksum": current_ocr_checksum
         })
         log_handle.info(f"Completed indexing of {self._file_path}")
