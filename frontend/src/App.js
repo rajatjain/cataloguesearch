@@ -9,6 +9,7 @@ import { ExpandModal, WelcomeModal } from './components/Modals';
 import { FeedbackForm } from './components/Feedback';
 import About from './components/About';
 import WhatsNew from './components/WhatsNew';
+import UsageGuide from './components/UsageGuide';
 import { Spinner, ChevronUpIcon, ChevronDownIcon, ExpandIcon } from './components/SharedComponents';
 
 // Import API service
@@ -88,6 +89,32 @@ const TipsModal = ({ onClose }) => {
                             </div>
                         </div>
                     </div>
+                    
+                    {/* Link to Typing Guide */}
+                    <div className="mt-6 pt-4 border-t border-slate-200">
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                            <div className="flex items-start">
+                                <svg className="w-5 h-5 text-amber-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                                <div>
+                                    <h4 className="font-semibold text-amber-800 mb-1">Need help typing in Hindi/Gujarati?</h4>
+                                    <p className="text-amber-700 text-sm mb-3">
+                                        Learn how to set up Hindi and Gujarati typing on your device for better search results.
+                                    </p>
+                                    <button
+                                        onClick={() => {
+                                            onClose();
+                                            window.location.href = '/usage-guide#typing-guide';
+                                        }}
+                                        className="bg-amber-600 text-white text-sm font-semibold py-2 px-4 rounded-md hover:bg-amber-700 transition-colors duration-200"
+                                    >
+                                        View Typing Setup Guide
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -106,6 +133,7 @@ const AppContent = () => {
         if (path === '/about') return 'about';
         if (path === '/feedback') return 'feedback';
         if (path === '/whats-new') return 'whats-new';
+        if (path === '/usage-guide') return 'usage-guide';
         return 'home'; // Default to 'home' for root path
     });
     
@@ -118,6 +146,8 @@ const AppContent = () => {
             setCurrentPageState('feedback');
         } else if (path === '/whats-new') {
             setCurrentPageState('whats-new');
+        } else if (path === '/usage-guide') {
+            setCurrentPageState('usage-guide');
         }
         // For root path, don't override the current selection between home/aagam-khoj
     }, [location.pathname]);
@@ -148,17 +178,17 @@ const AppContent = () => {
     const setCurrentPage = (page) => {
         setCurrentPageState(page);
         
-        // Reset search state when navigating to Home or Aagam Khoj
-        if (page === 'home' || page === 'aagam-khoj') {
+        // Reset search state when navigating to Home
+        if (page === 'home') {
             resetSearchState();
         }
         
         const routes = {
             'home': '/',
-            'aagam-khoj': '/',
             'about': '/about',
             'feedback': '/feedback',
-            'whats-new': '/whats-new'
+            'whats-new': '/whats-new',
+            'usage-guide': '/usage-guide'
         };
         navigate(routes[page] || '/');
     };
@@ -397,7 +427,7 @@ const AppContent = () => {
 
     const paginatedSimilarResults = getPaginatedResults(similarDocumentsData?.results, similarDocsPage);
 
-    const showSearchInterface = currentPage === 'home' || currentPage === 'aagam-khoj';
+    const showSearchInterface = currentPage === 'home';
 
     return (
         <div className="bg-slate-50 text-slate-900 min-h-screen font-sans">
@@ -621,6 +651,12 @@ const AppContent = () => {
                             <WhatsNew />
                         </main>
                     )}
+
+                    {currentPage === 'usage-guide' && (
+                        <main>
+                            <UsageGuide />
+                        </main>
+                    )}
                 </div>
             </div>
             
@@ -638,7 +674,7 @@ const AppContent = () => {
                 </button>
             )}
             
-            {currentPage !== 'home' && currentPage !== 'aagam-khoj' && (
+            {currentPage !== 'home' && (
                 <button
                     onClick={() => setCurrentPage('home')}
                     className="md:hidden fixed bottom-6 left-6 bg-slate-600 text-white p-3 rounded-full shadow-lg hover:bg-slate-700 transition-colors duration-200 z-50"
@@ -663,6 +699,7 @@ export default function App() {
                 <Route path="/about" element={<AppContent />} />
                 <Route path="/feedback" element={<AppContent />} />
                 <Route path="/whats-new" element={<AppContent />} />
+                <Route path="/usage-guide" element={<AppContent />} />
             </Routes>
         </Router>
     );
