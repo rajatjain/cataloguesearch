@@ -3,7 +3,9 @@ import React from 'react';
 const About = () => {
     return (
         <div className="max-w-[1080px] mx-auto p-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-6">Aagam Khoj</h1>
+            <div className="text-center py-6">
+                <h1 className="text-3xl font-bold text-gray-900 mb-6">Aagam Khoj</h1>
+            </div>
             
             <p className="mb-8 text-gray-700 leading-relaxed">
                 Aagam Khoj is an AI-powered search platform for thousands of spiritual discourses (Pravachans) delivered by Pujya Gurudev Shri Kanji Swami. It enables users to ask Tattva-related questions in Hindi, Gujarati, or English and receive answers directly from Gurudev's Pravachans.
@@ -66,53 +68,6 @@ const About = () => {
             </p>
             
             
-            <h2 className="text-2xl font-semibold text-gray-800 mb-6">User Guide</h2>
-            <p className="mb-6 text-gray-700 leading-relaxed">
-                Users begin by entering their question or keywords in the search bar and clicking "Search." Aagam Khoj then provides relevant answers. Users should keep the following tips in mind for more effective searches:
-            </p>
-            
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">Tips for Effective Searches</h3>
-            <ul className="mb-6 ml-6 text-gray-700 list-disc">
-                <li className="mb-2">Write questions in the native language (Hindi or Gujarati).</li>
-                <li className="mb-2">
-                    When asking a question or searching for a phrase, add a punctuation mark like "?" or "।".
-                    <ul className="ml-6 mt-1 list-disc">
-                        <li className="mb-1">✅ "कुन्दकुन्दाचार्य विदेह क्षेत्र कब गए थे?"</li>
-                        <li className="mb-1">❌ "कुन्दकुन्दाचार्य विदेह क्षेत्र कब गए थे"</li>
-                    </ul>
-                </li>
-                <li className="mb-2">
-                    If using English script, type the question in English rather than Hinglish.
-                    <ul className="ml-6 mt-1 list-disc">
-                        <li className="mb-1">✅ "When did Kundkundacharya write Samaysar?"</li>
-                        <li className="mb-1">❌ "Kundkundacharya ne Samaysar kab likha?"</li>
-                    </ul>
-                </li>
-                <li className="mb-2">Use "Filters" to narrow your search by a specific Granth, Anuyog, or Year.</li>
-            </ul>
-            
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">Interacting with Search Results</h3>
-            <ul className="mb-8 ml-6 text-gray-700 list-disc">
-                <li className="mb-2">Each search result includes a "View PDF" icon, which directly opens the original Pravachan Shastra at the correct page number.</li>
-                <li className="mb-2">Click "Expand" to view the text surrounding the search result.</li>
-                <li className="mb-2">Click "More like this" to find documents similar in intent to a particular search result.</li>
-                <li className="mb-2">
-                    For AI-powered (Semantic Search) results, two options are available:
-                    <ul className="ml-6 mt-1 list-disc">
-                        <li className="mb-1">Faster speed, but lesser relevance</li>
-                        <li className="mb-1">Better relevance, but slower speed</li>
-                        <li className="mb-1">Choose the option that best suits your needs.</li>
-                    </ul>
-                </li>
-            </ul>
-            
-            
-            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Feedback</h2>
-            <p className="mb-8 text-gray-700 leading-relaxed">
-                For any issues, bugs, questions, feedback, or suggestions, please use the "Feedback" link.
-            </p>
-            
-            
             <h2 className="text-2xl font-semibold text-gray-800 mb-6">Swa Lakshya (स्व-लक्ष्य)</h2>
             <p className="mb-4 text-gray-700 leading-relaxed">
                 The sole purpose of this portal is to assist spiritual seekers (मुमुक्षु) in better understanding Jain Tattva. The author sincerely apologizes for any mistakes or shortcomings in this effort and will strive their best to correct them.
@@ -120,9 +75,29 @@ const About = () => {
             <p className="mb-4 text-gray-700 leading-relaxed">
                 May all souls understand the true nature of their soul, achieve completeness within themselves, and attain Moksha.
             </p>
-            <p className="text-gray-700 font-semibold">
+            <p className="mb-12 text-gray-700 font-semibold">
                 Jai Jinendra 🙏
             </p>
+
+            {/* Call to Action */}
+            <div className="bg-gradient-to-r from-sky-50 to-blue-50 rounded-lg p-8 border border-sky-100">
+                <h3 className="text-xl font-semibold text-slate-800 mb-3">Ready to explore Gurudev's Pravachans?</h3>
+                <p className="text-slate-600 mb-4">
+                    Continue your spiritual journey by getting your through thousands of Pravachans delivered by Pujya Gurudev Shri Kanji Swami.
+                </p>
+                <button 
+                    onClick={() => window.location.href = '/'}
+                    className="bg-sky-600 text-white font-semibold py-2 px-6 rounded-md hover:bg-sky-700 transition-colors duration-200 mr-4"
+                >
+                    Start Searching
+                </button>
+                <button 
+                    onClick={() => window.location.href = '/usage-guide'}
+                    className="bg-slate-600 text-white font-semibold py-2 px-6 rounded-md hover:bg-slate-700 transition-colors duration-200"
+                >
+                    View Usage Guide
+                </button>
+            </div>
         </div>
     );
 };

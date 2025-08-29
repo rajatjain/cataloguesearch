@@ -9,6 +9,7 @@ import { ExpandModal, WelcomeModal } from './components/Modals';
 import { FeedbackForm } from './components/Feedback';
 import About from './components/About';
 import WhatsNew from './components/WhatsNew';
+import UsageGuide from './components/UsageGuide';
 import { Spinner, ChevronUpIcon, ChevronDownIcon, ExpandIcon } from './components/SharedComponents';
 
 // Import API service
@@ -106,6 +107,7 @@ const AppContent = () => {
         if (path === '/about') return 'about';
         if (path === '/feedback') return 'feedback';
         if (path === '/whats-new') return 'whats-new';
+        if (path === '/usage-guide') return 'usage-guide';
         return 'home'; // Default to 'home' for root path
     });
     
@@ -118,6 +120,8 @@ const AppContent = () => {
             setCurrentPageState('feedback');
         } else if (path === '/whats-new') {
             setCurrentPageState('whats-new');
+        } else if (path === '/usage-guide') {
+            setCurrentPageState('usage-guide');
         }
         // For root path, don't override the current selection between home/aagam-khoj
     }, [location.pathname]);
@@ -148,17 +152,17 @@ const AppContent = () => {
     const setCurrentPage = (page) => {
         setCurrentPageState(page);
         
-        // Reset search state when navigating to Home or Aagam Khoj
-        if (page === 'home' || page === 'aagam-khoj') {
+        // Reset search state when navigating to Home
+        if (page === 'home') {
             resetSearchState();
         }
         
         const routes = {
             'home': '/',
-            'aagam-khoj': '/',
             'about': '/about',
             'feedback': '/feedback',
-            'whats-new': '/whats-new'
+            'whats-new': '/whats-new',
+            'usage-guide': '/usage-guide'
         };
         navigate(routes[page] || '/');
     };
@@ -398,7 +402,7 @@ const AppContent = () => {
     const paginatedVectorResults = getPaginatedResults(searchData?.vector_results, vectorPage);
     const paginatedSimilarResults = getPaginatedResults(similarDocumentsData?.results, similarDocsPage);
 
-    const showSearchInterface = currentPage === 'home' || currentPage === 'aagam-khoj';
+    const showSearchInterface = currentPage === 'home';
 
     return (
         <div className="bg-slate-50 text-slate-900 min-h-screen font-sans">
@@ -622,6 +626,12 @@ const AppContent = () => {
                             <WhatsNew />
                         </main>
                     )}
+
+                    {currentPage === 'usage-guide' && (
+                        <main>
+                            <UsageGuide />
+                        </main>
+                    )}
                 </div>
             </div>
             
@@ -639,7 +649,7 @@ const AppContent = () => {
                 </button>
             )}
             
-            {currentPage !== 'home' && currentPage !== 'aagam-khoj' && (
+            {currentPage !== 'home' && (
                 <button
                     onClick={() => setCurrentPage('home')}
                     className="md:hidden fixed bottom-6 left-6 bg-slate-600 text-white p-3 rounded-full shadow-lg hover:bg-slate-700 transition-colors duration-200 z-50"
@@ -664,6 +674,7 @@ export default function App() {
                 <Route path="/about" element={<AppContent />} />
                 <Route path="/feedback" element={<AppContent />} />
                 <Route path="/whats-new" element={<AppContent />} />
+                <Route path="/usage-guide" element={<AppContent />} />
             </Routes>
         </Router>
     );
