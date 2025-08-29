@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import TypingGuide from './TypingGuide';
 
 const UsageGuide = () => {
     const guideSection = [
@@ -85,6 +86,19 @@ const UsageGuide = () => {
         }
     ];
 
+    // Handle hash scrolling when component loads
+    useEffect(() => {
+        const hash = window.location.hash;
+        if (hash) {
+            setTimeout(() => {
+                const element = document.querySelector(hash);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 100); // Small delay to ensure page is fully rendered
+        }
+    }, []);
+
     return (
         <div className="max-w-4xl mx-auto">
             <div className="text-center py-6">
@@ -117,6 +131,9 @@ const UsageGuide = () => {
                     </div>
                 ))}
             </div>
+
+            {/* Typing Guide Section */}
+            <TypingGuide />
 
             {/* Examples Section */}
             <div className="mt-12">

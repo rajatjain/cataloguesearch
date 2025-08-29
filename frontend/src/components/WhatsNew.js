@@ -1,6 +1,29 @@
 import React from 'react';
 
 const WhatsNew = () => {
+    // Helper function to render content with optional links
+    const renderContent = (item) => {
+        if (typeof item === 'string') {
+            return <span className="text-slate-700">{item}</span>;
+        } else if (item.link) {
+            const isExternalLink = item.link.startsWith('http') || item.link.startsWith('//');
+            return (
+                <span className="text-slate-700">
+                    {item.text}{' '}
+                    <a 
+                        href={item.link} 
+                        target={isExternalLink ? "_blank" : "_self"}
+                        rel={isExternalLink ? "noopener noreferrer" : undefined}
+                        className="text-sky-600 hover:text-sky-800 underline font-medium"
+                    >
+                        {item.linkText || 'Learn more'}
+                    </a>
+                </span>
+            );
+        }
+        return <span className="text-slate-700">{item.text}</span>;
+    };
+
     const updates = [
         {
             date: "August 29, 2025",
@@ -13,6 +36,11 @@ const WhatsNew = () => {
             newFeatures: [
                 "\"Share icon\" to share Pravachan snippets",
                 "Fixing pagination issues in semantic search",
+                {
+                    text: "Usage Guide: Tips to install hindi/gujarati keyboard",
+                    link: "/usage-guide#typing-guide",
+                    linkText: "View Guide"
+                },
                 "Minor UI improvements"
             ]
         },
@@ -37,7 +65,11 @@ const WhatsNew = () => {
                 "Total Indexed Pravachans: ~1500"
             ],
             newFeatures: [
-                "Website launched! https://www.swalakshya.me/",
+                {
+                    text: "Website Launched!",
+                    link: "https://www.swalakshya.me/",
+                    linkText: "https://www.swalakshya.me/"
+                },
                 "Directly open and view the original PDF file along with the search results.",
                 "\"Did you mean?\": Spell Check functionality",
                 "Similar document discovery functionality", 
@@ -91,7 +123,7 @@ const WhatsNew = () => {
                                         {update.newContent.map((item, itemIndex) => (
                                             <li key={itemIndex} className="flex items-start">
                                                 <span className="flex-shrink-0 w-2 h-2 bg-green-500 rounded-full mt-2 mr-3"></span>
-                                                <span className="text-slate-700">{item}</span>
+                                                {renderContent(item)}
                                             </li>
                                         ))}
                                     </ul>
@@ -109,7 +141,7 @@ const WhatsNew = () => {
                                         {update.newFeatures.map((feature, featureIndex) => (
                                             <li key={featureIndex} className="flex items-start">
                                                 <span className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3"></span>
-                                                <span className="text-slate-700">{feature}</span>
+                                                {renderContent(feature)}
                                             </li>
                                         ))}
                                     </ul>
