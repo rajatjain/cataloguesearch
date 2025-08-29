@@ -1,16 +1,21 @@
+"""OpenSearch client and configuration management.
+
+This module provides functions to manage OpenSearch connections, configurations,
+and operations including index management, metadata retrieval, and document operations.
+"""
 import logging
 import os
 import traceback
 
 import yaml
-from opensearchpy import OpenSearch, ConnectionError, helpers
-from backend.config import Config  # Adjust the import path as needed
+from opensearchpy import OpenSearch
+from backend.config import Config
 from backend.common.embedding_models import get_embedding_model_factory
 
-# --- Module-level variables ---
-# This variable will hold our single, cached client instance.
-_client = None
-_opensearch_settings = None
+# Module-level variables for singleton pattern
+# These variables hold cached client instance and settings
+_CLIENT = None
+_OPENSEARCH_SETTINGS = None
 
 log_handle = logging.getLogger(__name__)
 
@@ -25,7 +30,7 @@ def get_opensearch_config(config: Config) -> dict:
     Returns:
         A dictionary containing the OpenSearch configuration settings.
     """
-    global _opensearch_settings
+    global _OPENSEARCH_SETTINGS  # pylint: disable=global-statement
     opensearch_config_path = config.OPENSEARCH_CONFIG_PATH
     if not opensearch_config_path or not os.path.exists(opensearch_config_path):
         log_handle.critical(
@@ -33,33 +38,37 @@ def get_opensearch_config(config: Config) -> dict:
         raise FileNotFoundError(
             f"OpenSearch config file not found: {opensearch_config_path}")
 
-    if not _opensearch_settings:
+    if not _OPENSEARCH_SETTINGS:
         log_handle.info(f"Loading OpenSearch config from {opensearch_config_path}")
         with open(opensearch_config_path, 'r', encoding='utf-8') as f:
             full_config = yaml.safe_load(f)
-        
+
         # Extract the search_index configuration
-        _opensearch_settings = full_config.get('search_index', {})
-        if not _opensearch_settings:
-            log_handle.critical(f"search_index configuration not found in {opensearch_config_path}")
-            raise ValueError(f"search_index configuration not found in {opensearch_config_path}")
-            
+        _OPENSEARCH_SETTINGS = full_config.get('search_index', {})
+        if not _OPENSEARCH_SETTINGS:
+            log_handle.critical(
+                f"search_index configuration not found in {opensearch_config_path}")
+            raise ValueError(
+                f"search_index configuration not found in {opensearch_config_path}")
+
         log_handle.info(f"Loaded OpenSearch config from {opensearch_config_path}")
-        log_handle.info(f"Open Search settings is {_opensearch_settings}")
+        log_handle.info(f"OpenSearch settings: {_OPENSEARCH_SETTINGS}")
 
     # Get embedding dimension from factory pattern
     embedding_model = get_embedding_model_factory(config)
-    
+
     # Ensure mappings structure exists before setting dimension
-    if 'mappings' in _opensearch_settings and \
-       'properties' in _opensearch_settings['mappings'] and \
-       'vector_embedding' in _opensearch_settings['mappings']['properties']:
-        _opensearch_settings['mappings']['properties']['vector_embedding']['dimension'] = \
+    if ('mappings' in _OPENSEARCH_SETTINGS and
+            'properties' in _OPENSEARCH_SETTINGS['mappings'] and
+            'vector_embedding' in _OPENSEARCH_SETTINGS['mappings']['properties']):
+        _OPENSEARCH_SETTINGS['mappings']['properties']['vector_embedding']['dimension'] = \
             embedding_model.get_embedding_dimension()
     else:
-        log_handle.warning("vector_embedding mapping not found in OpenSearch config, skipping dimension update")
+        log_handle.warning(
+            "vector_embedding mapping not found in OpenSearch config, "
+            "skipping dimension update")
 
-    return _opensearch_settings
+    return _OPENSEARCH_SETTINGS
 
 def get_metadata_index_config(config: Config) -> dict:
     """Loads the OpenSearch configuration for the metadata index."""
@@ -72,7 +81,7 @@ def get_metadata_index_config(config: Config) -> dict:
     if not metadata_config:
         log_handle.warning(f"metadata_index configuration not found in {opensearch_config_path}")
         return {}
-    
+
     return metadata_config
 
 def _create_index_if_not_exists(opensearch_client: OpenSearch, index_name: str, index_body: dict):
@@ -112,12 +121,11 @@ def delete_index(config: Config):
     Args:
         config: Config object containing OpenSearch settings
     """
-    global _client
     if not config:
         log_handle.error("Invalid config provided")
         raise ValueError("Config is required")
 
-    client = _client
+    client = _CLIENT
     if not client:
         log_handle.warning("No OpenSearch client available for index deletion")
         return
@@ -135,7 +143,7 @@ def delete_index(config: Config):
                 log_handle.info(f"Index '{index_name}' deleted successfully: {response}")
             else:
                 log_handle.warning(f"Index '{index_name}' does not exist, nothing to delete")
-        except Exception as e:
+        except (ConnectionError, ValueError, OSError) as e:
             log_handle.error(f"Error deleting index '{index_name}': {e}", exc_info=True)
             # Continue to try deleting other indices even if one fails
             continue
@@ -156,11 +164,11 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
     Raises:
         ConnectionError: If a connection to OpenSearch cannot be established on the first call.
     """
-    global _client
-    if _client:
+    global _CLIENT  # pylint: disable=global-statement
+    if _CLIENT:
         if force_clean:
             delete_index(config)
-        return _client
+        return _CLIENT
 
     log_handle.info("OpenSearch client not initialized. Creating a new instance...")
     try:
@@ -182,7 +190,7 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
             )
 
         # Cache the successfully created client in our module-level variable
-        _client = client
+        _CLIENT = client
         log_handle.info("OpenSearch client initialized and cached successfully.")
     except Exception as e:
         traceback.print_exc()
@@ -190,7 +198,7 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
         # Re-raise the exception to let the calling code handle the connection failure.
         raise
 
-    return _client
+    return _CLIENT
 
 
 def get_metadata(config: Config) -> dict[str, list[str]]:
@@ -208,7 +216,8 @@ def get_metadata(config: Config) -> dict[str, list[str]]:
     metadata_index = config.OPENSEARCH_METADATA_INDEX_NAME
 
     if not client.indices.exists(metadata_index):
-        log_handle.warning(f"Metadata index '{metadata_index}' does not exist. Returning empty metadata.")
+        log_handle.warning(
+            f"Metadata index '{metadata_index}' does not exist. Returning empty metadata.")
         return {}
 
     # Query to get all documents from the metadata index.
@@ -234,10 +243,12 @@ def get_metadata(config: Config) -> dict[str, list[str]]:
                 # The values should already be sorted from the indexing process
                 result[key] = values
 
-        log_handle.info(f"Metadata retrieved from '{metadata_index}': {len(result)} unique keys found")
+        log_handle.info(
+            f"Metadata retrieved from '{metadata_index}': {len(result)} unique keys found")
         return result
-    except Exception as e:
-        log_handle.error(f"Error retrieving metadata from index '{metadata_index}': {e}", exc_info=True)
+    except (ConnectionError, ValueError, OSError) as e:
+        log_handle.error(
+            f"Error retrieving metadata from index '{metadata_index}': {e}", exc_info=True)
         return {}
 
 def delete_documents_by_filename(config: Config, original_filename: str):
@@ -261,15 +272,18 @@ def delete_documents_by_filename(config: Config, original_filename: str):
     }
 
     try:
-        log_handle.info(f"Attempting to delete documents with original_filename: {original_filename}")
+        log_handle.info(
+            f"Attempting to delete documents with original_filename: {original_filename}")
         response = client.delete_by_query(
             index=index_name,
-            body=query_body,
-            wait_for_completion=True,  # Make the operation synchronous
-            refresh=True  # Refresh the index to make changes visible immediately
+            body=query_body
         )
+        # Refresh the index to make changes visible immediately
+        client.indices.refresh(index=index_name)
         deleted_count = response.get('deleted', 0)
-        log_handle.info(f"Successfully deleted {deleted_count} documents for '{original_filename}'.")
+        log_handle.info(
+            f"Successfully deleted {deleted_count} documents for '{original_filename}'.")
     except Exception as e:
-        log_handle.error(f"Error deleting documents for '{original_filename}': {e}", exc_info=True)
+        log_handle.error(
+            f"Error deleting documents for '{original_filename}': {e}", exc_info=True)
         raise

@@ -8,7 +8,6 @@ import {
 } from '../utils/shareUtils';
 
 const ShareModal = ({ result, query, currentFilters, language, searchType, onClose }) => {
-    const [shareUrl, setShareUrl] = useState('');
     const [shareData, setShareData] = useState({});
     const [copiedFeedback, setCopiedFeedback] = useState('');
 
@@ -16,7 +15,6 @@ const ShareModal = ({ result, query, currentFilters, language, searchType, onClo
         const url = generateShareURL();
         const data = formatShareContent(query, result, url);
         
-        setShareUrl(url);
         setShareData(data);
         
     }, [result, query]);

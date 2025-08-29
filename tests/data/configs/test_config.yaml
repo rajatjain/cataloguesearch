@@ -1,6 +1,7 @@
 crawler:
   base_pdf_path: "{TEST_DATA_DIR}/pdfs"
   base_text_path: "{TEST_DATA_DIR}/text"
+  base_ocr_path: "{TEST_DATA_DIR}/ocr"
   sqlite_db_path: "{TEST_DATA_DIR}/db/cataloguesearch.db"
 
 index:
@@ -20,9 +21,11 @@ opensearch:
   username: admin
   password: Admin@Password123!
   index_name: cataloguesearch_pytest
+  metadata_index_name: cataloguesearch_pytest_metadata
 
 vector_embeddings:
   embedding_model: BAAI/bge-m3
-  reranking_model: BAAI/bge-reranker-v2-m3
+  reranking_model: BAAI/bge-reranker-base
   # Supported types: base, fp16, quantized_8bit
-  embedding_model_type: quantized_8bit
+  reranker_onnx_path: "{BASE_DIR}/models/bge-reranker-base-onnx"
+  embedding_model_type: fp16

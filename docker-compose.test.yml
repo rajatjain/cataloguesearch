@@ -1,0 +1,45 @@
+services:
+  opensearch-test:
+    image: jain9rajat/cataloguesearch:opensearch
+    build:
+      context: .
+      dockerfile: docker/opensearch/Dockerfile
+    platform: ${DOCKER_ENV:-linux/amd64}
+    container_name: opensearch-test
+    environment:
+      - cluster.name=opensearch-test-cluster
+      - node.name=opensearch-test-node
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=${OPENSEARCH_JAVA_OPTS:-Xms128m -Xmx256m}"
+      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@Password123!}"
+      - plugins.security.disabled=true
+      - network.host=0.0.0.0
+      - path.repo=/tmp/snapshots
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-test-data:/usr/share/opensearch/data
+      - ./snapshots:/tmp/snapshots
+    ports:
+      - "19200:9200"
+      - "19600:9600"
+    networks:
+      - opensearch-test-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: "no"
+
+volumes:
+  opensearch-test-data:
+
+networks:
+  opensearch-test-net:
