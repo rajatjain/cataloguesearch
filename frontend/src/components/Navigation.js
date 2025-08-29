@@ -9,9 +9,9 @@ export const Navigation = ({ currentPage, setCurrentPage }) => {
     
     const menuItems = [
         { id: 'home', label: 'Home', showSearch: true, path: '/' },
-        { id: 'aagam-khoj', label: 'Aagam Khoj', showSearch: true, path: '/' },
-        { id: 'whats-new', label: 'What\'s New?', showSearch: false, path: '/whats-new' },
         { id: 'about', label: 'About', showSearch: false, path: '/about' },
+        { id: 'usage-guide', label: 'Usage Guide', showSearch: false, path: '/usage-guide' },
+        { id: 'whats-new', label: 'What\'s New?', showSearch: false, path: '/whats-new' },
         { id: 'feedback', label: 'Feedback', showSearch: false, path: '/feedback' }
     ];
     
@@ -21,7 +21,7 @@ export const Navigation = ({ currentPage, setCurrentPage }) => {
     };
     
     const isActive = (item) => {
-        if (item.id === 'home' || item.id === 'aagam-khoj') {
+        if (item.id === 'home') {
             return location.pathname === '/' && currentPage === item.id;
         }
         return location.pathname === item.path;
@@ -102,7 +102,7 @@ export const Header = ({ currentPage }) => {
     if (currentPage === 'feedback') {
         return (
             <div className="text-center py-6 mb-4">
-                <div className="bg-slate-100 h-32 md:h-40 flex items-center justify-center mb-8 overflow-hidden">
+                <div className="bg-slate-100 h-32 md:h-40 flex items-center justify-center mb-4 overflow-hidden">
                     <img
                         src="/images/banner.jpg"
                         alt="Swa-Lakshya Banner"
@@ -110,15 +110,32 @@ export const Header = ({ currentPage }) => {
                         onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/1080x160/f1f5f9/475569?text=Aagam+Khoj' }}
                     />
                 </div>
-                <h1 className="text-4xl font-bold text-slate-800 mb-4">Feedback</h1>
-                <div className="max-w-lg mx-auto text-slate-600 space-y-4">
-                    <p>Please provide your feedback and suggestions for improving Aagam-Khoj using the form below.</p>
+                <div className="h-32 md:h-40 flex flex-col items-center justify-center">
+                    <h1 className="text-4xl font-bold text-slate-800 mb-4">Feedback</h1>
+                    <div className="max-w-lg mx-auto text-slate-600 space-y-4">
+                        <p>Please provide your feedback and suggestions for improving Aagam-Khoj using the form below.</p>
+                    </div>
                 </div>
             </div>
         );
     }
 
     if (currentPage === 'whats-new') {
+        return (
+            <div className="text-center py-6 mb-4">
+                <div className="bg-slate-100 h-32 md:h-40 flex items-center justify-center mb-4 overflow-hidden">
+                    <img
+                        src="/images/banner.jpg"
+                        alt="Swa-Lakshya Banner"
+                        className="h-full object-contain"
+                        onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/1080x160/f1f5f9/475569?text=Aagam+Khoj' }}
+                    />
+                </div>
+            </div>
+        );
+    }
+
+    if (currentPage === 'usage-guide') {
         return (
             <div className="text-center py-6 mb-4">
                 <div className="bg-slate-100 h-32 md:h-40 flex items-center justify-center mb-4 overflow-hidden">
