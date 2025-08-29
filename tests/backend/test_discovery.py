@@ -67,6 +67,28 @@ class MockIndexState(IndexState):
             return ""
         return hashlib.sha256(relative_file_path.encode('utf-8')).hexdigest()
 
+class MockPagesPDFProcessor(PDFProcessor):
+    def __init__(self, config: Config):
+        super().__init__(config)
+
+    def _generate_paragraphs(
+            self, pdf_file: str, page_list: list[int], scan_config: dict, language: str) -> \
+        list[tuple[int, list[str]]]:
+        result = []
+        for page_num in page_list:
+            paragraphs = [
+                f"Test paragraph 1 for page {page_num}",
+                f"Test paragraph 2 for page {page_num}",
+                f"Test paragraph 3 for page {page_num}",
+                f"Test paragraph 4 for page {page_num}",
+                f"Test paragraph 5 for page {page_num}",
+                f"Test paragraph 6 for page {page_num}",
+                f"Test paragraph 7 for page {page_num}",
+                f"Test paragraph 8 for page {page_num}"
+            ]
+            result.append((page_num, paragraphs))
+        return result
+
 def test_get_metadata():
     setup()
     config = Config()
@@ -194,6 +216,48 @@ def test_crawl(initialise):
     assert doc_ids["abh"][1] not in state5
     validate(state4, state5, changed_keys=[], check_file_changed=False, check_config_changed=False)
 
+
+def test_pages_crawl(initialise):
+    config = Config()
+    doc_ids = setup()
+
+    index_state = MockIndexState(config.SQLITE_DB_PATH)
+
+    discovery = Discovery(
+        config,
+        MockIndexGenerator(config, None),
+        MockPagesPDFProcessor(config),
+        index_state)
+
+    # Start with scan_config pages [1]
+    config.SCAN_CONFIG = {"pages": [1]}
+    discovery.crawl(process=True, index=True)
+
+    state1 = index_state.load_state()
+    log_handle.info(f"Initial state with pages [1]: {json_dumps(state1)}")
+    assert len(state1) == 7
+
+    # Change scan_config to pages [1, 2] for some specific files by updating their config files
+    files_to_change = [
+        ("%s/a/b/c/bangalore_hindi.pdf" % config.BASE_PDF_PATH, doc_ids["abcbh"][1]),
+        ("%s/a/b/c/bangalore_gujarati.pdf" % config.BASE_PDF_PATH, doc_ids["abcbg"][1]),
+        ("%s/a/b/bangalore_english.pdf" % config.BASE_PDF_PATH, doc_ids["abbeng"][1])
+    ]
+
+    for file_path, doc_id in files_to_change:
+        config_path = file_path.replace(".pdf", "_config.json")
+        config_data = {"pages": [1, 2]}
+        write_config_file(config_path, config_data)
+
+    discovery.crawl(process=True, index=True)
+
+    state2 = index_state.load_state()
+    log_handle.info(f"State after changing pages config for some files: {json_dumps(state2)}")
+
+    # Ensure that only the modified files have their config_checksum changed
+    changed_files = [doc_ids["abcbh"][1], doc_ids["abcbg"][1], doc_ids["abbeng"][1]]
+    
+    validate(state1, state2, changed_files, check_file_changed=False, check_config_changed=True)
 
 def validate(old_state, new_state, changed_keys,
              check_file_changed=False, check_config_changed=True):
