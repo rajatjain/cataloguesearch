@@ -3,6 +3,19 @@ import React from 'react';
 const WhatsNew = () => {
     const updates = [
         {
+            date: "August 29, 2025",
+            newContent: [
+                "Pravachans on Purusharth Siddhi Upay 1966 Series",
+                "Pravachans on Natak Samaysaar 1971 Series",
+                "Pravachans on Yogsaar 1966 Series"
+            ],
+            newFeatures: [
+                "\"Share icon\" to share Pravachan snippets",
+                "Fixing pagination issues in semantic search",
+                "Minor UI improvements"
+            ]
+        },
+        {
             date: "August 24, 2025",
             newContent: [
                 "Pravachans on Parmatma Prakash 1976-77 Series",
