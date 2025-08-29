@@ -3,15 +3,14 @@ import json
 import hashlib
 import sys
 import traceback
+import uuid
+import logging
 from datetime import datetime
 
 import fitz
 
 from backend.crawler.pdf_processor import PDFProcessor
 from backend.utils import json_dumps
-import uuid # For generating unique document IDs
-import logging
-
 from backend.config import Config
 from backend.crawler.index_generator import IndexGenerator
 from backend.crawler.index_state import IndexState
@@ -119,7 +118,7 @@ class SingleFileProcessor:
                     scan_meta["header_regex"].extend(default_config.get("header_regex", []))
                     scan_meta["page_list"].extend(default_config.get("page_list", []))
                     scan_meta["typo_list"].extend(default_config.get("typo_list", []))
-                    
+
                     # Update crop settings from default config
                     if "crop" in default_config:
                         scan_meta["crop"].update(default_config["crop"])
@@ -140,7 +139,7 @@ class SingleFileProcessor:
                 scan_meta["end_page"] = file_config.get("end_page", num_pages)
             if file_config.get("page_list"):
                 scan_meta["page_list"].extend(file_config.get("page_list"))
-            
+
             # Update crop settings from file-specific config (overrides defaults)
             if "crop" in file_config:
                 scan_meta["crop"].update(file_config["crop"])
@@ -178,14 +177,13 @@ class SingleFileProcessor:
         document_id = str(uuid.uuid5(uuid.NAMESPACE_URL, relative_pdf_path))
         log_handle.info(f"Processing PDF for OCR extraction: {self._file_path} (ID: {document_id})")
 
-        output_ocr_dir = "%s/%s" % (
-            self._output_ocr_base_dir, os.path.splitext(relative_pdf_path)[0]
-        )
-        
+        output_ocr_dir = f"{self._output_ocr_base_dir}/{os.path.splitext(relative_pdf_path)[0]}"
+
         scan_config = self._get_scan_config()
         pages_list = self._pdf_processor._get_page_list(scan_config)
-        current_ocr_checksum = self._index_state.calculate_ocr_checksum(relative_pdf_path, pages_list)
-        
+        current_ocr_checksum = self._index_state.calculate_ocr_checksum(
+            relative_pdf_path, pages_list)
+
         last_state = self._index_state.get_state(document_id)
 
         # Check if OCR text files already exist for this OCR configuration
@@ -195,14 +193,14 @@ class SingleFileProcessor:
 
         try:
             os.makedirs(output_ocr_dir, exist_ok=True)
-            
+
             file_metadata = self._get_metadata(scan_config)
             scan_config["language"] = file_metadata.get("language", "hi")
-            
+
             log_handle.info(f"Extracting OCR paragraphs for {self._file_path} to {output_ocr_dir}")
-            
+
             language = scan_config.get("language", "hi")
-            
+
             paragraphs = self._pdf_processor._generate_paragraphs(
                 self._file_path, pages_list, scan_config, language)
 
@@ -216,9 +214,9 @@ class SingleFileProcessor:
                 except IOError as e:
                     traceback.print_exc()
                     log_handle.error(f"Failed to write OCR file {fname}: {e}")
-            
+
             log_handle.info(f"Generated OCR text files for {self._file_path}")
-            
+
         except Exception as e:
             traceback.print_exc()
             log_handle.error(f"Failed to generate OCR text for {self._file_path}: {e}")
@@ -240,30 +238,29 @@ class SingleFileProcessor:
         document_id = str(uuid.uuid5(uuid.NAMESPACE_URL, relative_path))
         log_handle.info(f"Indexing PDF: {self._file_path} ID: {document_id}")
 
-        output_ocr_dir = "%s/%s" % (
-            self._output_ocr_base_dir, os.path.splitext(relative_path)[0]
-        )
-        output_text_dir = "%s/%s" % (
-            self._output_text_base_dir, os.path.splitext(relative_path)[0]
-        )
+        output_ocr_dir = f"{self._output_ocr_base_dir}/{os.path.splitext(relative_path)[0]}"
+        output_text_dir = f"{self._output_text_base_dir}/{os.path.splitext(relative_path)[0]}"
 
         # Check if OCR directory exists
         if not os.path.exists(output_ocr_dir):
-            log_handle.error(f"OCR directory does not exist for {self._file_path}. Run process() first.")
+            log_handle.error(
+                f"OCR directory does not exist for {self._file_path}. Run process() first.")
             return
 
         scan_config = self._get_scan_config()
         pages_list = self._pdf_processor._get_page_list(scan_config)
-        
+
         # Check if all required OCR pages exist
         missing_pages = []
         for page_num in pages_list:
             ocr_file = f"{output_ocr_dir}/page_{page_num:04d}.txt"
             if not os.path.exists(ocr_file):
                 missing_pages.append(page_num)
-        
+
         if missing_pages:
-            log_handle.error(f"Missing OCR files for pages {missing_pages} in {self._file_path}. Run process() first.")
+            log_handle.error(
+                f"Missing OCR files for pages {missing_pages} in {self._file_path}. "
+                f"Run process() first.")
             return
 
         # Calculate current checksums for comparison
@@ -271,11 +268,11 @@ class SingleFileProcessor:
         file_metadata = self._get_metadata(scan_config)
         current_config_hash = self._get_config_hash(file_metadata)
         current_ocr_checksum = self._index_state.calculate_ocr_checksum(relative_path, pages_list)
-        
+
         index_state = self._index_state.get_state(document_id)
-        
+
         # Check if indexing is needed based on config changes or OCR changes
-        if (index_state and 
+        if (index_state and
             index_state.get("config_hash") == current_config_hash and
             index_state.get("ocr_checksum") == current_ocr_checksum):
             log_handle.info(f"No changes detected for {self._file_path}. Not indexing.")
@@ -284,11 +281,11 @@ class SingleFileProcessor:
         try:
             # Create text directory
             os.makedirs(output_text_dir, exist_ok=True)
-            
+
             scan_config["language"] = file_metadata.get("language", "hi")
-            
+
             log_handle.info(f"Processing OCR files to generate final text for {self._file_path}")
-            
+
             # Read OCR files and prepare paragraphs in correct format: List[Tuple[int, List[str]]]
             paragraphs = []
             for page_num in pages_list:
@@ -297,15 +294,15 @@ class SingleFileProcessor:
                     content = f.read()
                     page_paragraphs = content.split('\n----\n') if content.strip() else []
                     paragraphs.append((page_num, page_paragraphs))
-            
+
             # Apply paragraph generation processing
             processed_paragraphs = self._pdf_processor._paragraph_gen.generate_paragraphs(
                 paragraphs, scan_config
             )
-            
+
             # Write processed paragraphs to text directory
             self._pdf_processor._write_paragraphs(output_text_dir, processed_paragraphs)
-            
+
             log_handle.info(f"Generated processed text files for {self._file_path}")
 
         except Exception as e:
@@ -321,18 +318,20 @@ class SingleFileProcessor:
                     continue
                 page_text_paths.append(os.path.join(root, file_name))
         page_text_paths = sorted(page_text_paths)
-        
+
         bookmarks = self._pdf_processor.fetch_bookmarks(self._file_path)
-        
+
         if dry_run:
-            log_handle.info(f"[DRY RUN] Would index document to OpenSearch and save state for {self._file_path}")
+            log_handle.info(
+                f"[DRY RUN] Would index document to OpenSearch and save state for "
+                f"{self._file_path}")
             return
-        
+
         self._indexing_module.index_document(
             document_id, relative_path, page_text_paths, file_metadata, bookmarks,
             reindex_metadata_only=False
         )
-        
+
         self._save_state(document_id, {
             "file_path": self._file_path,
             "last_indexed_timestamp": self._scan_time,
@@ -392,12 +391,12 @@ class Discovery:
         """
         Recursively builds a list of directories to crawl.
         Skips directories containing a '_ignore' file and their subdirectories.
-        
+
         Returns:
             list: List of directory paths to crawl
         """
         directories_to_crawl = []
-        
+
         def _recurse_directory(directory_path):
             """Recursively traverse directory and collect paths to crawl"""
             # Check if this directory should be ignored
@@ -405,10 +404,10 @@ class Discovery:
             if os.path.exists(ignore_file_path):
                 log_handle.info(f"Ignoring directory {directory_path} due to _ignore file")
                 return  # Skip this directory and all its subdirectories
-            
+
             # Add current directory to crawl list
             directories_to_crawl.append(directory_path)
-            
+
             # Recursively process subdirectories
             try:
                 for item in os.listdir(directory_path):
@@ -420,17 +419,17 @@ class Discovery:
                         _recurse_directory(item_path)
             except (OSError, PermissionError) as e:
                 log_handle.warning(f"Cannot access directory {directory_path}: {e}")
-        
+
         # Start recursion from base folder
         _recurse_directory(self.base_pdf_folder)
-        
+
         return directories_to_crawl
 
     def crawl(self, process=False, index=False, dry_run=False):
         """
         Scans the base PDF folder, identifies new or changed files/configs,
         and triggers indexing or re-indexing.
-        
+
         Uses recursive directory traversal with _ignore file support.
         """
         current_scan_time = datetime.now().isoformat()
@@ -444,7 +443,7 @@ class Discovery:
         # First, recursively create list of directories to crawl
         directories_to_crawl = self._get_directories_to_crawl()
         log_handle.info(f"Found {len(directories_to_crawl)} directories to crawl")
-        
+
         # Second, crawl each directory for PDF files
         for directory in directories_to_crawl:
             try:
@@ -452,7 +451,7 @@ class Discovery:
             except (OSError, PermissionError) as e:
                 log_handle.warning(f"Cannot access directory {directory}: {e}")
                 continue
-                
+
             for file_name in files:
                 if not file_name.lower().endswith(".pdf"):
                     continue
@@ -479,6 +478,9 @@ class Discovery:
 
         self._index_state.garbage_collect()
 
-        # TODO(rajatjain): Delete files from OpenSearch index if they no longer exist in the filesystem.
+        # TODO(rajatjain): Delete files from OpenSearch index if they no longer exist in the
+        # filesystem.
 
-        log_handle.info(f"Scan and index process completed. Start: {current_scan_time}, End: {datetime.now().isoformat()}")
+        log_handle.info(
+            f"Scan and index process completed. Start: {current_scan_time}, "
+            f"End: {datetime.now().isoformat()}")
