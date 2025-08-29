@@ -104,6 +104,7 @@ class SingleFileProcessor:
         }
 
         # Merge scan_config.json from each folder, starting from base directory
+        scan_config_data = {}
         for folder in folders:
             scan_config_path = os.path.join(folder, "scan_config.json")
             if os.path.exists(scan_config_path):
@@ -189,9 +190,8 @@ class SingleFileProcessor:
 
         # Check if OCR text files already exist for this OCR configuration
         if last_state and last_state.get("ocr_checksum") == current_ocr_checksum:
-            if os.path.exists(output_ocr_dir) and any(f.endswith('.txt') for f in os.listdir(output_ocr_dir)):
-                log_handle.info(f"OCR text files already exist for {self._file_path}. Skipping.")
-                return
+            log_handle.info(f"OCR text files already exist for {self._file_path}. Skipping.")
+            return
 
         try:
             os.makedirs(output_ocr_dir, exist_ok=True)
