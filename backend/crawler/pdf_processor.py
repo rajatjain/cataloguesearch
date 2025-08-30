@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from backend.config import Config
 from backend.crawler.paragraph_generator.hindi import HindiParagraphGenerator
+from backend.crawler.paragraph_generator.gujarati import GujaratiParagraphGenerator
 
 # Disable tokenizers parallelism to avoid fork conflicts
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -40,7 +41,10 @@ class PDFProcessor:
             "gu": "guj"
         }
         self._config = config
-        self._paragraph_gen = HindiParagraphGenerator(self._config)
+        self._paragraph_generators = {
+            "hi": HindiParagraphGenerator(self._config),
+            "gu": GujaratiParagraphGenerator(self._config)
+        }
 
     def _write_paragraphs(self, output_dir, paragraphs):
         page_paras = {}
@@ -166,11 +170,13 @@ class PDFProcessor:
                      f"{os.path.splitext(os.path.basename(pdf_file))[0]}"
         shutil.rmtree(tmp_folder, ignore_errors=True)
         os.makedirs(tmp_folder)
+        # Select appropriate paragraph generator for normalization
+        paragraph_generator = self._paragraph_generators[language]
         for page_num, paragraphs in extracted_data:
             fname = f"{tmp_folder}/page_{page_num:04d}.txt"
             for i, para in enumerate(paragraphs):
                 # pylint: disable=protected-access
-                paragraphs[i] = self._paragraph_gen._normalize_text(
+                paragraphs[i] = paragraph_generator._normalize_text(
                     para, scan_config.get("typo_list", []))
             content = "\n----\n".join(paragraphs)
             try:
@@ -252,7 +258,9 @@ class PDFProcessor:
         paragraphs = self._generate_paragraphs(
             pdf_path, pages_list, scan_config, language)
 
-        paragraphs = self._paragraph_gen.generate_paragraphs(
+        # Select appropriate paragraph generator based on language
+        paragraph_generator = self._paragraph_generators[language]
+        paragraphs = paragraph_generator.generate_paragraphs(
             paragraphs, scan_config
         )
         self._write_paragraphs(output_dir, paragraphs)
@@ -289,7 +297,7 @@ class PDFProcessor:
 
         except Exception as page_error:
             # Log the error and return an empty result for this page.
-            print(f"An error occurred while processing page {page_num}: {page_error}")
+            log_handle.error(f"An error occurred while processing page {page_num}: {page_error}")
             traceback.print_exc()
             return page_num, []
 

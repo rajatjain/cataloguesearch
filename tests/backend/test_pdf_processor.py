@@ -24,7 +24,9 @@ def test_page_range_processing():
     # Test multiple PDF files
     test_pdf_files = [
         "bangalore_hindi.pdf",
-        "thanjavur_hindi.pdf", 
+        "thanjavur_hindi.pdf",
+        "indore_gujarati.pdf",
+        "jaipur_gujarati.pdf"
     ]
     
     for pdf_file in test_pdf_files:
@@ -60,15 +62,7 @@ def test_page_range_processing():
         
         log_handle.info(f"Process result: {result}")
         log_handle.info(f"Directory contents after processing: {os.listdir(test1_output_path)}")
-        
-        # Check what's in the generated file(s)
-        for file in os.listdir(test1_output_path):
-            if file.endswith('.txt'):
-                file_path = os.path.join(test1_output_path, file)
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    log_handle.info(f"Content of {file}: {len(content)} chars - '{content[:100]}...'")
-        
+
         test1_files = sorted([f for f in os.listdir(test1_output_path) if f.endswith('.txt')])
         expected_test1_files = [f"page_{i:04d}.txt" for i in range(1, total_pages + 1)]
         
@@ -82,7 +76,6 @@ def test_page_range_processing():
         for page_num in range(total_pages):
             page = doc[page_num]
             text = page.get_text()
-            log_handle.info(f"Page {page_num + 1}: {len(text)} chars - '{text[:50]}...' " + ("(empty)" if len(text.strip()) == 0 else "(has text)"))
         doc.close()
         
         # Check if there are missing pages
