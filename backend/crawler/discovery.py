@@ -296,7 +296,9 @@ class SingleFileProcessor:
                     paragraphs.append((page_num, page_paragraphs))
 
             # Apply paragraph generation processing
-            processed_paragraphs = self._pdf_processor._paragraph_gen.generate_paragraphs(
+            language = scan_config.get("language", "hi")
+            paragraph_generator = self._pdf_processor._paragraph_generators[language]
+            processed_paragraphs = paragraph_generator.generate_paragraphs(
                 paragraphs, scan_config
             )
 
