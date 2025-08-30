@@ -2,6 +2,7 @@ import sqlite3
 import logging
 import os
 import json
+import hashlib
 from datetime import datetime
 
 from backend.utils import json_dumps
@@ -42,7 +43,10 @@ class IndexState:
         """Loads the indexed state from the SQLite DB."""
         conn = sqlite3.connect(self.state_db_path)
         c = conn.cursor()
-        c.execute("SELECT document_id, file_path, last_indexed_timestamp, file_checksum, config_hash, index_checksum, ocr_checksum FROM indexed_files_state")
+        c.execute(
+            "SELECT document_id, file_path, last_indexed_timestamp, file_checksum, "
+            "config_hash, index_checksum, ocr_checksum FROM indexed_files_state"
+        )
         rows = c.fetchall()
         conn.close()
         state = {}
@@ -189,23 +193,22 @@ class IndexState:
     def calculate_ocr_checksum(self, relative_file_path: str, ocr_pages: list[int]) -> str:
         """
         Calculates OCR checksum based on relative file path and list of pages OCRed.
-        
+
         Args:
             relative_file_path: Relative path of the PDF file
             ocr_pages: List of page numbers that were OCRed
-            
+
         Returns:
             String representing OCR checksum based on file path and pages
         """
-        import hashlib
-        
+
         # Validate inputs
         if not relative_file_path:
             return ""
-        
+
         if not isinstance(ocr_pages, list):
             return ""
-            
+
         # Validate that all pages are positive integers
         valid_pages = []
         for page in ocr_pages:
@@ -213,14 +216,14 @@ class IndexState:
                 valid_pages.append(page)
             else:
                 log_handle.warning(f"Invalid page number {page} in OCR pages list")
-        
+
         if not valid_pages:
             return ""
-        
+
         # Create checksum from relative path and sorted pages
         pages_str = ",".join(map(str, sorted(valid_pages)))
         checksum_input = f"{relative_file_path}:{pages_str}"
-        
+
         return hashlib.sha256(checksum_input.encode('utf-8')).hexdigest()
 
     def has_metadata_cache(self) -> bool:
