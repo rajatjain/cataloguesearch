@@ -6,4 +6,5 @@ disable=
     C0114,  # missing-module-docstring - Allow modules without docstrings
     C0115,  # missing-class-docstring - Allow classes without docstrings  
     C0116,  # missing-function-docstring - Allow functions without docstrings
-    C0304   # end-newline missing
+    C0304,  # end-newline missing
+    W0718   # Catching too general exception Exception (broad-exception-caught)

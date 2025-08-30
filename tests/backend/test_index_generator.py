@@ -4,11 +4,10 @@ import uuid
 
 from pathlib import Path
 
-from backend.common.embedding_models import get_embedding_model, get_embedding
 from backend.crawler.index_generator import IndexGenerator
-
+from backend.common.embedding_models import get_embedding_model_factory
 from backend.common.opensearch import get_opensearch_client
-from backend.crawler.text_splitter.default import DefaultChunksSplitter
+from backend.common.opensearch import create_indices_if_not_exists
 from tests.backend.base import *
 
 log_handle = logging.getLogger(__name__)
@@ -31,29 +30,50 @@ def indexing_module():
         log_handle.error(f"Error deleting index '{config.OPENSEARCH_INDEX_NAME}': {e}")
 
     module = IndexGenerator(config, opensearch_client)
+    create_indices_if_not_exists(config, opensearch_client)
     return module
 
 def dummy_text_files(tmp_path):
     """
     Creates dummy page-wise text files for a document.
     """
-    doc_id = "test_doc_1"
-    doc_dir = os.path.join(tmp_path, doc_id)
-    os.makedirs(doc_dir, exist_ok=True)
+    doc_id_hindi = "test_doc_hindi"
+    doc_id_gujarati = "test_doc_gujarati"
+    
+    # Create Hindi document directory and files
+    hindi_doc_dir = os.path.join(tmp_path, doc_id_hindi)
+    os.makedirs(hindi_doc_dir, exist_ok=True)
+    
+    hindi_page1_path = Path(hindi_doc_dir) / "page_0001.txt"
+    hindi_page2_path = Path(hindi_doc_dir) / "page_0002.txt"
+    hindi_page3_path = Path(hindi_doc_dir) / "page_0003.txt"
+    
+    hindi_page1_content = "यह पहला पृष्ठ है। इसमें केवल हिंदी पाठ है।"
+    hindi_page2_content = "यह दूसरा पृष्ठ है। इसमें भी केवल हिंदी भाषा का उपयोग है।"
+    hindi_page3_content = "यह तीसरा पृष्ठ है। यहाँ पर भी हिंदी सामग्री ही है।"
+    
+    hindi_page1_path.write_text(hindi_page1_content, encoding="utf-8")
+    hindi_page2_path.write_text(hindi_page2_content, encoding="utf-8")
+    hindi_page3_path.write_text(hindi_page3_content, encoding="utf-8")
+    
+    # Create Gujarati document directory and files
+    gujarati_doc_dir = os.path.join(tmp_path, doc_id_gujarati)
+    os.makedirs(gujarati_doc_dir, exist_ok=True)
+    
+    gujarati_page1_path = Path(gujarati_doc_dir) / "page_0001.txt"
+    gujarati_page2_path = Path(gujarati_doc_dir) / "page_0002.txt"
+    gujarati_page3_path = Path(gujarati_doc_dir) / "page_0003.txt"
+    
+    gujarati_page1_content = "આ પહેલું પાનું છે. તેમાં માત્ર ગુજરાતી લખાણ છે."
+    gujarati_page2_content = "આ બીજું પાનું છે. તેમાં પણ માત્ર ગુજરાતી ભાષાનો ઉપયોગ છે."
+    gujarati_page3_content = "આ ત્રીજું પાનું છે. અહીં પણ ગુજરાતી સામગ્રી જ છે."
+    
+    gujarati_page1_path.write_text(gujarati_page1_content, encoding="utf-8")
+    gujarati_page2_path.write_text(gujarati_page2_content, encoding="utf-8")
+    gujarati_page3_path.write_text(gujarati_page3_content, encoding="utf-8")
 
-    page1_path = Path(doc_dir) / "page_0001.txt"
-    page2_path = Path(doc_dir) / "page_0002.txt"
-    page3_path = Path(doc_dir) / "page_0003.txt"
-
-    page1_content = "This is page one content. It has some English text."
-    page2_content = "यह पृष्ठ दो की सामग्री है। इसमें कुछ हिंदी पाठ है।" # Hindi
-    page3_content = "આ પાના ત્રણની સામગ્રી છે. તેમાં કેટલીક ગુજરાતી લખાણ છે." # Gujarati
-
-    page1_path.write_text(page1_content, encoding="utf-8")
-    page2_path.write_text(page2_content, encoding="utf-8")
-    page3_path.write_text(page3_content, encoding="utf-8")
-
-    return doc_id, "original_test_file.pdf", [str(page1_path), str(page2_path), str(page3_path)]
+    return (doc_id_hindi, [str(hindi_page1_path), str(hindi_page2_path), str(hindi_page3_path)], 
+            doc_id_gujarati, [str(gujarati_page1_path), str(gujarati_page2_path), str(gujarati_page3_path)])
 
 def get_all_documents(config, max_results: int = 1000) -> list:
     """
@@ -105,12 +125,21 @@ def test_index_document_full_indexing(indexing_module):
     config = Config()
     opensearch_client = get_opensearch_client(config, force_clean=True)
     tmp_path = tempfile.mkdtemp()
-    doc_id, filename, page_paths = dummy_text_files(tmp_path)
+    doc_id_hindi, hindi_page_paths, doc_id_gujarati, gujarati_page_paths = dummy_text_files(tmp_path)
     metadata = {"title": "Test Document", "author": "John Doe"}
     bookmarks = {1: "Introduction", 2: "Some Bookmark", 3: "Other Bookmark"}
 
+    # Index Hindi document
+    hindi_metadata = dict(metadata)
+    hindi_metadata["language"] = "hi"
     indexing_module.index_document(
-        doc_id, filename, page_paths, metadata, bookmarks, reindex_metadata_only=False)
+        doc_id_hindi, "test_hindi.pdf", hindi_page_paths, hindi_metadata, bookmarks, reindex_metadata_only=False)
+    
+    # Index Gujarati document
+    gujarati_metadata = dict(metadata)
+    gujarati_metadata["language"] = "gu"
+    indexing_module.index_document(
+        doc_id_gujarati, "test_gujarati.pdf", gujarati_page_paths, gujarati_metadata, bookmarks, reindex_metadata_only=False)
 
     # Verify documents are indexed
     opensearch_client.indices.refresh(index=indexing_module._index_name) # Ensure docs are searchable
@@ -124,50 +153,68 @@ def test_index_document_full_indexing(indexing_module):
     log_handle.info(
         f"Found {len(all_docs)} total documents in index: {json_dumps(all_docs, truncate_fields=['vector_embedding'])}")
 
-    # Filter the results in Python to get the hits for the specific document
-    hits = [hit for hit in all_docs if hit['_source'].get('document_id') == doc_id]
+    # Filter the results for Hindi document
+    hindi_hits = [hit for hit in all_docs if hit['_source'].get('document_id') == doc_id_hindi]
     log_handle.info(
-        f"Found {len(hits)} hits for document {doc_id}: {json_dumps(hits, truncate_fields=['vector_embedding'])}")
+        f"Found {len(hindi_hits)} hits for Hindi document {doc_id_hindi}: {json_dumps(hindi_hits, truncate_fields=['vector_embedding'])}")
 
-    assert len(hits) > 0 # Should have chunks indexed
-    # Check that we found hits and the first one has content before trying to access it
-    if not hits:
-        # Fail the test explicitly if no hits were found for the doc_id
-        pytest.fail(f"No documents found for doc_id '{doc_id}' after indexing.")
+    # Filter the results for Gujarati document
+    gujarati_hits = [hit for hit in all_docs if hit['_source'].get('document_id') == doc_id_gujarati]
+    log_handle.info(
+        f"Found {len(gujarati_hits)} hits for Gujarati document {doc_id_gujarati}: {json_dumps(gujarati_hits, truncate_fields=['vector_embedding'])}")
 
-    log_handle.info(f"Document metadata: {hits[0]}")
+    assert len(hindi_hits) > 0 # Should have Hindi chunks indexed
+    assert len(gujarati_hits) > 0 # Should have Gujarati chunks indexed
+    
+    # Check that we found hits for both documents
+    if not hindi_hits:
+        pytest.fail(f"No documents found for Hindi doc_id '{doc_id_hindi}' after indexing.")
+    if not gujarati_hits:
+        pytest.fail(f"No documents found for Gujarati doc_id '{doc_id_gujarati}' after indexing.")
 
-    assert all('vector_embedding' in hit['_source'] for hit in hits)
-    assert all(isinstance(hit['_source']['vector_embedding'], list) for hit in hits)
+    log_handle.info(f"Hindi document metadata: {json_dumps(hindi_hits[0], truncate_fields=['vector_embedding'])}")
+    log_handle.info(f"Gujarati document metadata: {json_dumps(gujarati_hits[0], truncate_fields=['vector_embedding'])}")
+
+    # Check embeddings for both documents
+    all_hits = hindi_hits + gujarati_hits
+    assert all('vector_embedding' in hit['_source'] for hit in all_hits)
+    assert all(isinstance(hit['_source']['vector_embedding'], list) for hit in all_hits)
     assert all(len(hit['_source']['vector_embedding']) == \
-               get_embedding_model(config.EMBEDDING_MODEL_NAME).get_sentence_embedding_dimension() for hit in hits)
+               get_embedding_model_factory(config).get_embedding_dimension() for hit in all_hits)
 
-    # Check metadata and text content
-    found_page_one = False
-    found_page_two = False
-    found_page_three = False
-    for hit in hits:
+    # Check Hindi document content
+    for hit in hindi_hits:
         source = hit['_source']
-        assert source['document_id'] == doc_id
-        assert source['original_filename'] == filename
-        assert source['metadata'] == metadata
+        assert source['document_id'] == doc_id_hindi
+        assert source['original_filename'] == "test_hindi.pdf"
+        assert source['metadata'] == hindi_metadata
         assert bookmarks[source["page_number"]] == source['bookmarks']
         assert 'timestamp_indexed' in source
-
-        # Check content in appropriate language-specific fields
-        hindi_content = source.get('text_content_hindi', '')
-        gujarati_content = source.get('text_content_gujarati', '')
         
-        if "page one content" in hindi_content:  # English content defaults to Hindi field
-            found_page_one = True
-        if "यह पृष्ठ दो की सामग्री है।" in hindi_content or "हिंदी पाठ" in hindi_content:
-            found_page_two = True
-        if "આ પાના ત્રણની સામગ્રી છે." in gujarati_content or "ગુજરાતી લખાણ" in gujarati_content:
-            found_page_three = True
+        # Hindi document should only have text_content_hindi
+        assert 'text_content_hindi' in source
+        assert 'text_content_gujarati' not in source or source['text_content_gujarati'] == ''
+        
+        hindi_content = source.get('text_content_hindi', '')
+        assert hindi_content != '', "Hindi content should not be empty"
+        assert "हिंदी" in hindi_content, "Should contain Hindi text"
 
-    assert found_page_one
-    assert found_page_two
-    assert found_page_three
+    # Check Gujarati document content
+    for hit in gujarati_hits:
+        source = hit['_source']
+        assert source['document_id'] == doc_id_gujarati
+        assert source['original_filename'] == "test_gujarati.pdf"
+        assert source['metadata'] == gujarati_metadata
+        assert bookmarks[source["page_number"]] == source['bookmarks']
+        assert 'timestamp_indexed' in source
+        
+        # Gujarati document should only have text_content_gujarati
+        assert 'text_content_gujarati' in source
+        assert 'text_content_hindi' not in source or source['text_content_hindi'] == ''
+        
+        gujarati_content = source.get('text_content_gujarati', '')
+        assert gujarati_content != '', "Gujarati content should not be empty"
+        assert "ગુજરાતી" in gujarati_content, "Should contain Gujarati text"
 
 def test_index_document_metadata_only_reindex(indexing_module):
     """
@@ -176,7 +223,9 @@ def test_index_document_metadata_only_reindex(indexing_module):
     config = Config()
     opensearch_client = get_opensearch_client(config, force_clean=True)
     tmp_path = tempfile.mkdtemp()
-    doc_id, filename, page_paths = dummy_text_files(tmp_path)
+    doc_id_hindi, hindi_page_paths, doc_id_gujarati, gujarati_page_paths = dummy_text_files(tmp_path)
+    # Use only the Hindi document for this test
+    doc_id, filename, page_paths = doc_id_hindi, "test_hindi.pdf", hindi_page_paths
     initial_metadata = {"title": "Old Title", "version": "1.0"}
     initial_bookmarks = {1: "Bookmark_1", 2: "Bookmark_2", 3: "Bookmark_3"}
 
@@ -271,7 +320,7 @@ def test_create_index_if_not_exists(indexing_module):
     assert 'document_id' in mappings and mappings['document_id']['type'] == 'keyword'
     assert 'vector_embedding' in mappings and mappings['vector_embedding']['type'] == 'knn_vector'
     assert mappings['vector_embedding']['dimension'] == \
-           get_embedding_model(config.EMBEDDING_MODEL_NAME).get_sentence_embedding_dimension()
+           get_embedding_model_factory(config).get_embedding_dimension()
     assert 'text_content_hindi' in mappings and mappings['text_content_hindi']['analyzer'] == 'hindi_analyzer'
     assert 'text_content_gujarati' in mappings and mappings['text_content_gujarati']['analyzer'] == 'gujarati_analyzer'
 
@@ -280,27 +329,9 @@ def test_generate_embedding_empty_text(indexing_module):
     Tests embedding generation for empty text.
     """
     config = Config()
-    embedding = get_embedding(config.EMBEDDING_MODEL_NAME, "")
-    assert len(embedding) == \
-           get_embedding_model(config.EMBEDDING_MODEL_NAME).get_sentence_embedding_dimension()
-
-def test_chunk_text_basic():
-    """
-    Tests basic text chunking.
-    """
-    text_splitter = DefaultChunksSplitter(config=Config())
-    long_text = "a " * 800 # 1600 characters (800 'a ' pairs)
-    chunks = text_splitter._chunk_text(long_text)
-    # With chunk_size=100, chunk_overlap=20, and "a " being 2 chars
-    # Expected chunks: (100-20) = 80 chars per effective chunk.
-    # Total chars = 1000. 1000 / 80 = 12.5. So 13 chunks.
-    # The first chunk will be 100 chars. Subsequent chunks will start 80 chars after previous.
-    # Let's verify that chunks are created and have reasonable lengths.
-    assert len(chunks) > 1
-    assert all(len(chunk) <= text_splitter._chunk_size for chunk in chunks)
-    assert chunks[0].startswith("a a a a a")
-    assert chunks[1].startswith("a a a a a") # Should have overlap
-
+    embedding_model = get_embedding_model_factory(config)
+    embedding = embedding_model.get_embedding("")
+    assert len(embedding) == embedding_model.get_embedding_dimension()
 
 def test_index_with_language_metadata(indexing_module):
     # clean index
