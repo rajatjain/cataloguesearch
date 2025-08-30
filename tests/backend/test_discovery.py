@@ -94,16 +94,17 @@ def test_get_metadata():
     config = Config()
     pdf_dir = config.BASE_PDF_PATH
 
+    # Test bangalore_hindi.pdf in a/b/c/ - should get hindi language from config
     sfp = SingleFileProcessor(
         config, "%s/a/b/c/bangalore_hindi.pdf" % pdf_dir,
         None, None,
         MockPDFProcessor(config),
         datetime.datetime.now().isoformat()
     )
-
     meta = sfp._get_metadata()
-    assert meta == {'category': 'b', 'type': 't2', 'new': 'c3'}
+    assert meta == {'category': 'b', 'type': 't2', 'new': 'c3', 'language': 'hindi'}
 
+    # Test bangalore_gujarati.pdf in a/b/c/ - should get base config from b/ directory
     sfp = SingleFileProcessor(
         config, "%s/a/b/c/bangalore_gujarati.pdf" % pdf_dir,
         None, None,
@@ -113,8 +114,9 @@ def test_get_metadata():
     meta = sfp._get_metadata()
     assert meta == {'category': 'b', 'type': 't1'}
 
+    # Test hampi_hindi.pdf in a/b/ - should get config from b/ directory
     sfp = SingleFileProcessor(
-        config, "%s/a/b/bangalore_english.pdf" % pdf_dir,
+        config, "%s/a/b/hampi_hindi.pdf" % pdf_dir,
         None, None,
         MockPDFProcessor(config),
         datetime.datetime.now().isoformat()
@@ -122,23 +124,25 @@ def test_get_metadata():
     meta = sfp._get_metadata()
     assert meta == {'category': 'b', 'type': 't1'}
 
-    abdmld = SingleFileProcessor(
-        config, "%s/a/b/d/multi_language_document.pdf" % pdf_dir,
+    # Test indore_hindi.pdf in a/b/d/ - should get config from b/ directory
+    sfp = SingleFileProcessor(
+        config, "%s/a/b/d/indore_hindi.pdf" % pdf_dir,
         None, None,
         MockPDFProcessor(config),
         datetime.datetime.now().isoformat()
     )
-    meta = abdmld._get_metadata()
+    meta = sfp._get_metadata()
     assert meta == {'category': 'b', 'type': 't1'}
 
-    xbg = SingleFileProcessor(
-        config, "%s/x/bangalore_gujarati.pdf" % pdf_dir,
+    # Test jaipur_gujarati.pdf in x/ - should get gujarati language from config
+    sfp = SingleFileProcessor(
+        config, "%s/x/jaipur_gujarati.pdf" % pdf_dir,
         None, None,
         MockPDFProcessor(config),
         datetime.datetime.now().isoformat()
     )
-    meta = xbg._get_metadata()
-    assert meta == {'category': 'x', 'type': 't3', 'new': 'c4'}
+    meta = sfp._get_metadata()
+    assert meta == {'category': 'x', 'type': 't3', 'new': 'c4', 'language': 'gujarati'}
 
 def test_crawl(initialise):
     config = Config()
@@ -157,7 +161,7 @@ def test_crawl(initialise):
 
     state1 = index_state.load_state()
     log_handle.info(f"state: {json_dumps(state1)}")
-    assert len(state1) == 7
+    assert len(state1) == 10
 
     # change the file "a/b/config.json"
     new_config = { "category": "c", "type": "t1", "new": "blah1" }
@@ -170,8 +174,9 @@ def test_crawl(initialise):
     changed_keys = [
         doc_ids["abcbh"][1],
         doc_ids["abcbg"][1],
-        doc_ids["abbeng"][1],
-        doc_ids["abdmld"][1]
+        doc_ids["abhampi"][1],
+        doc_ids["abdindore"][1],
+        doc_ids["absongadh"][1]
     ]
     state2 = index_state.load_state()
     log_handle.info(f"state: {json_dumps(state2)}")
@@ -180,20 +185,20 @@ def test_crawl(initialise):
     validate(state1, state2, changed_keys, check_file_changed=False, check_config_changed=True)
 
     log_handle.info(f"Test 2: re-crawling after changing config file again")
-    # change the same config_json
-    xbg = { "category": "c", "type": "t3", "new": "blah2" }
-    fname = doc_ids["xbg"][0]
+    # change the config for jaipur_gujarati.pdf
+    jgx = { "category": "c", "type": "t3", "new": "blah2", "language": "gujarati" }
+    fname = doc_ids["xjaipur"][0]
     config_fname = fname.replace(".pdf", "_config.json")
-    write_config_file(config_fname, xbg)
+    write_config_file(config_fname, jgx)
 
-    changed_keys = [doc_ids["xbg"][1]]
+    changed_keys = [doc_ids["xjaipur"][1]]
     discovery.crawl(process=True, index=True)
     state3 = index_state.load_state()
     validate(state2, state3, changed_keys, check_file_changed=False, check_config_changed=True)
 
     # adding bookmarks doesn't change anything.
-    xyzmld = doc_ids["xyzmld"][0]
-    add_bookmark_to_pdf(xyzmld, "new_bookmark", 1)
+    xyzhampi = doc_ids["xyzhampi"][0]
+    add_bookmark_to_pdf(xyzhampi, "new_bookmark", 1)
     log_handle.info(f"Test 3: re-crawling after changing file content")
     discovery.crawl(process=True, index=True)
     state4 = index_state.load_state()
@@ -203,17 +208,17 @@ def test_crawl(initialise):
 
     # delete a config file. should be removed from state
     log_handle.info(f"Test 4: re-crawling after deleting config file")
-    fname = doc_ids["abh"][0]
+    fname = doc_ids["abjaipur"][0]
     assert os.path.exists(fname)
     os.remove(fname)
     assert not os.path.exists(fname)
     discovery.crawl(process=True, index=True)
     state5 = index_state.load_state()
     log_handle.info(f"state: {json_dumps(state5)}")
-    assert len(state5) == 6
+    assert len(state5) == 9
 
     # it shouldn't have the fname in "state"
-    assert doc_ids["abh"][1] not in state5
+    assert doc_ids["abjaipur"][1] not in state5
     validate(state4, state5, changed_keys=[], check_file_changed=False, check_config_changed=False)
 
 
@@ -235,13 +240,13 @@ def test_pages_crawl(initialise):
 
     state1 = index_state.load_state()
     log_handle.info(f"Initial state with pages [1]: {json_dumps(state1)}")
-    assert len(state1) == 7
+    assert len(state1) == 10
 
     # Change scan_config to pages [1, 2] for some specific files by updating their config files
     files_to_change = [
         ("%s/a/b/c/bangalore_hindi.pdf" % config.BASE_PDF_PATH, doc_ids["abcbh"][1]),
         ("%s/a/b/c/bangalore_gujarati.pdf" % config.BASE_PDF_PATH, doc_ids["abcbg"][1]),
-        ("%s/a/b/bangalore_english.pdf" % config.BASE_PDF_PATH, doc_ids["abbeng"][1])
+        ("%s/a/b/hampi_hindi.pdf" % config.BASE_PDF_PATH, doc_ids["abhampi"][1])
     ]
 
     for file_path, doc_id in files_to_change:
@@ -255,7 +260,7 @@ def test_pages_crawl(initialise):
     log_handle.info(f"State after changing pages config for some files: {json_dumps(state2)}")
 
     # Ensure that only the modified files have their config_checksum changed
-    changed_files = [doc_ids["abcbh"][1], doc_ids["abcbg"][1], doc_ids["abbeng"][1]]
+    changed_files = [doc_ids["abcbh"][1], doc_ids["abcbg"][1], doc_ids["abhampi"][1]]
     
     validate(state1, state2, changed_files, check_file_changed=False, check_config_changed=True)
 

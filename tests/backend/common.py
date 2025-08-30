@@ -42,58 +42,75 @@ def setup(copy_text_files=False):
 
     TEST_BASE_DIR = os.getenv("TEST_BASE_DIR")
 
-    # copy files
+    # copy files - using all new test files
     data_pdf_path = os.path.join(TEST_BASE_DIR, "data", "pdfs")
     bangalore_hindi = os.path.join(data_pdf_path, "bangalore_hindi.pdf")
     bangalore_gujarati = os.path.join(data_pdf_path, "bangalore_gujarati.pdf")
-    bangalore_english = os.path.join(data_pdf_path, "bangalore_english.pdf")
-    multi_language_document = os.path.join(data_pdf_path, "multi_language_document.pdf")
+    hampi_hindi = os.path.join(data_pdf_path, "hampi_hindi.pdf")
+    hampi_gujarati = os.path.join(data_pdf_path, "hampi_gujarati.pdf")
+    indore_hindi = os.path.join(data_pdf_path, "indore_hindi.pdf")
+    indore_gujarati = os.path.join(data_pdf_path, "indore_gujarati.pdf")
+    jaipur_hindi = os.path.join(data_pdf_path, "jaipur_hindi.pdf")
+    jaipur_gujarati = os.path.join(data_pdf_path, "jaipur_gujarati.pdf")
+    songadh_hindi = os.path.join(data_pdf_path, "songadh_hindi.pdf")
+    songadh_gujarati = os.path.join(data_pdf_path, "songadh_gujarati.pdf")
 
     abcbh = "%s/a/b/c/bangalore_hindi.pdf" % pdf_dir
     abcbg = "%s/a/b/c/bangalore_gujarati.pdf" % pdf_dir
-    abbeng = "%s/a/b/bangalore_english.pdf" % pdf_dir
-    xyzmld = "%s/x/y/z/multi_language_document.pdf" % pdf_dir
-    abdmld = "%s/a/b/d/multi_language_document.pdf" % pdf_dir
-    abh = "%s/a/bangalore_hindi.pdf" % pdf_dir
-    xbg = "%s/x/bangalore_gujarati.pdf" % pdf_dir
+    abhampi = "%s/a/b/hampi_hindi.pdf" % pdf_dir
+    xyzhampi = "%s/x/y/z/hampi_gujarati.pdf" % pdf_dir
+    abdindore = "%s/a/b/d/indore_hindi.pdf" % pdf_dir
+    abjaipur = "%s/a/bangalore_hindi.pdf" % pdf_dir
+    xjaipur = "%s/x/jaipur_gujarati.pdf" % pdf_dir
+    xysongadh = "%s/x/y/songadh_hindi.pdf" % pdf_dir
+    absongadh = "%s/a/b/songadh_gujarati.pdf" % pdf_dir
+    xindore = "%s/x/indore_gujarati.pdf" % pdf_dir
 
     doc_ids = {
         "abcbh": [abcbh, get_doc_id(pdf_dir, abcbh)],
         "abcbg": [abcbg, get_doc_id(pdf_dir, abcbg)],
-        "abbeng": [abbeng, get_doc_id(pdf_dir, abbeng)],
-        "xyzmld": [xyzmld, get_doc_id(pdf_dir, xyzmld)],
-        "abdmld": [abdmld, get_doc_id(pdf_dir, abdmld)],
-        "abh": [abh, get_doc_id(pdf_dir, abh)],
-        "xbg": [xbg, get_doc_id(pdf_dir, xbg)]
+        "abhampi": [abhampi, get_doc_id(pdf_dir, abhampi)],
+        "xyzhampi": [xyzhampi, get_doc_id(pdf_dir, xyzhampi)],
+        "abdindore": [abdindore, get_doc_id(pdf_dir, abdindore)],
+        "abjaipur": [abjaipur, get_doc_id(pdf_dir, abjaipur)],
+        "xjaipur": [xjaipur, get_doc_id(pdf_dir, xjaipur)],
+        "xysongadh": [xysongadh, get_doc_id(pdf_dir, xysongadh)],
+        "absongadh": [absongadh, get_doc_id(pdf_dir, absongadh)],
+        "xindore": [xindore, get_doc_id(pdf_dir, xindore)]
     }
 
     shutil.copy(bangalore_hindi, abcbh)
     shutil.copy(bangalore_gujarati, abcbg)
-    shutil.copy(bangalore_english, abbeng)
-    shutil.copy(multi_language_document, xyzmld)
-    shutil.copy(multi_language_document, abdmld)
-    shutil.copy(bangalore_hindi, abh)
-    shutil.copy(bangalore_gujarati, xbg)
+    shutil.copy(hampi_hindi, abhampi)
+    shutil.copy(hampi_gujarati, xyzhampi)
+    shutil.copy(indore_hindi, abdindore)
+    shutil.copy(bangalore_hindi, abjaipur)
+    shutil.copy(jaipur_gujarati, xjaipur)
+    shutil.copy(songadh_hindi, xysongadh)
+    shutil.copy(songadh_gujarati, absongadh)
+    shutil.copy(indore_gujarati, xindore)
 
-    # create config files
+    # create config files with language metadata
     a = { "category": "a", "type": "t" }
     b = { "category": "b", "type": "t1" }
     # dir c is empty
-    bhc = { "type": "t2", "new": "c3" }
+    bhc = { "type": "t2", "new": "c3", "language": "hindi" }
 
     # dir d is empty
 
     x = { "category": "x", "type": "tx" }
+    y = { "category": "y", "type": "ty" }
     z = { "category": "z", "type": "tz" }
-    bgx = { "type": "t3", "new": "c4" }
+    jgx = { "type": "t3", "new": "c4", "language": "gujarati" }
 
     write_config_file("%s/a/config.json" % pdf_dir, a)
     write_config_file("%s/a/b/config.json" % pdf_dir, b)
     write_config_file("%s/a/b/c/bangalore_hindi_config.json" % pdf_dir, bhc)
 
     write_config_file("%s/x/config.json" % pdf_dir, x)
+    write_config_file("%s/x/y/config.json" % pdf_dir, y)
     write_config_file("%s/x/y/z/config.json" % pdf_dir, z)
-    write_config_file("%s/x/bangalore_gujarati_config.json" % pdf_dir, bgx)
+    write_config_file("%s/x/jaipur_gujarati_config.json" % pdf_dir, jgx)
 
     if copy_text_files:
         # This is to simulate the text files that would be generated
