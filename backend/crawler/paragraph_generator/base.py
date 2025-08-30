@@ -1,16 +1,34 @@
 import logging
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from abc import ABC, abstractmethod
 from typing import List, Tuple
 
 from backend.config import Config
-from backend.utils import json_dumps
 
 log_handle = logging.getLogger(__name__)
 
-class BaseParagraphGenerator:
+class BaseParagraphGenerator(ABC):
     def __init__(self, config: Config):
         self._config = config
+
+    @property
+    @abstractmethod
+    def punctuation_suffixes(self):
+        pass
+
+    @property
+    @abstractmethod
+    def stop_prefixes(self):
+        pass
+
+    @property
+    @abstractmethod
+    def answer_prefixes(self):
+        pass
+
+    @property
+    def dialogue_prefixes(self):
+        return self.stop_prefixes + self.answer_prefixes
 
     def generate_paragraphs(self, paragraphs: List[Tuple[int, List[str]]],
                             file_metadata : dict) -> List[Tuple[int, List[str]]]:
@@ -35,22 +53,15 @@ class BaseParagraphGenerator:
         return final_paragraphs
 
     def _combine_paragraphs(self, flattened_paras):
-        """Conditions:
+        """Language-agnostic paragraph combination logic.
+        Conditions:
             - for every paragraph, check if it ends with a punctuation mark
             - if it does, do nothing
             - if it does not, combine it with the next paragraph
-            - if next para starts with "श्रोता:" then do not combine
-            - if current para starts with "श्रोता:" and next with "पूज्य गुरुदेवश्री:" then combine
-            - final pass: if any para contains "(श्रोता: " then split the rest of it into two paragraphs
+            - if next para starts with dialogue prefixes then do not combine
+            - if current para starts with question prefix and next with answer prefix then combine
+            - final pass: combine Q&A sequences
         """
-        i = 0
-        # --- Start of Refactored Section ---
-
-        # Define constants for clarity
-        PUNCTUATION_SUFFIXES = ('।', '?', '!', ':', ')', ']', '}')
-        STOP_PREFIXES = ("श्रोता:", "मुमुक्षु:", "प्रश्न:")
-        ANSWER_PREFIXES = ("पूज्य गुरुदेवश्री:", "उत्तर:", "समाधान:")
-        DIALOGUE_PREFIXES = STOP_PREFIXES + ANSWER_PREFIXES
 
         combined_phase1 = []
         # A buffer to hold paragraphs that are being combined into a single thought.
@@ -77,7 +88,7 @@ class BaseParagraphGenerator:
 
             # If the current paragraph starts with a stop prefix, it marks the
             # end of the previous buffered paragraph. Finalize the buffer before proceeding.
-            if para_text.startswith(DIALOGUE_PREFIXES):
+            if para_text.startswith(self.dialogue_prefixes):
                 if final_para := _finalize_buffer(paragraph_buffer):
                     combined_phase1.append(final_para)
 
@@ -88,10 +99,10 @@ class BaseParagraphGenerator:
             # If the paragraph we just added ends with punctuation,
             # the buffered chunk is now complete. Finalize it.
             # For dialogue prefixes, only finalize if they also end with punctuation
-            should_finalize = (para_text.endswith(PUNCTUATION_SUFFIXES) or 
-                             (para_text.startswith(DIALOGUE_PREFIXES) and 
-                              para_text.endswith(PUNCTUATION_SUFFIXES)))
-            
+            should_finalize = (para_text.endswith(self.punctuation_suffixes) or
+                             (para_text.startswith(self.dialogue_prefixes) and
+                              para_text.endswith(self.punctuation_suffixes)))
+
             if should_finalize:
                 if final_para := _finalize_buffer(paragraph_buffer):
                     combined_phase1.append(final_para)
@@ -108,32 +119,84 @@ class BaseParagraphGenerator:
             para = para.strip()
 
             # Check if we have a question that can be combined with consecutive answers
-            if para.startswith(STOP_PREFIXES):
+            if para.startswith(self.stop_prefixes):
                 combined_qa = para
                 i += 1
-                
+
                 # Keep combining consecutive Q&A pairs
-                while (i < num_paras and 
-                       combined_phase1[i][1].strip().startswith(ANSWER_PREFIXES)):
+                while (i < num_paras and
+                       combined_phase1[i][1].strip().startswith(self.answer_prefixes)):
                     next_para = combined_phase1[i][1].strip()
                     combined_qa += "\n" + next_para
                     i += 1
-                    
+
                     # Check if there's another question following this answer
-                    if (i < num_paras and 
-                        combined_phase1[i][1].strip().startswith(STOP_PREFIXES)):
+                    if (i < num_paras and
+                        combined_phase1[i][1].strip().startswith(self.stop_prefixes)):
                         next_question = combined_phase1[i][1].strip()
                         combined_qa += "\n" + next_question
                         i += 1
-                
+
                 combined_paragraphs.append((page_num, combined_qa))
             else:
                 combined_paragraphs.append((page_num, para))
                 i += 1
         return combined_paragraphs
 
-    def _normalize_text(self, text: str, typo_list: List):
-        raise NotImplementedError("Implement inside subclass")
+    def _normalize_text(self, text: str, typo_list: List) -> str:
+        if not isinstance(text, str):
+            return ""
+
+        cleaned_text = text
+
+        # Common punctuation normalization
+        cleaned_text = self._normalize_punctuation(cleaned_text)
+
+        # Apply typo corrections
+        cleaned_text = self._apply_typo_corrections(cleaned_text, typo_list)
+
+        # Language-specific dialogue pattern normalization
+        cleaned_text = self._normalize_dialogue_patterns(cleaned_text)
+
+        # Final cleanup
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
+
+        return cleaned_text
+
+    def _normalize_punctuation(self, text: str) -> str:
+        # Normalize common OCR misclassifications for the purn viram (।)
+        # The purn viram is often misread as |, I, l, or 1.
+        purn_viram_errors = ['|', 'I', 'l', '1']
+        for error_char in purn_viram_errors:
+            text = text.replace(error_char, '।')
+
+        # Normalize "double danda" (end of verses)
+        text = text.replace("॥", "।")
+
+        # Remove whitespace after opening punctuation marks.
+        # This finds an opening punctuation mark followed by a space and removes the space.
+        opening_punctuation = r'[(\[{\'"]'
+        text = re.sub(r'(' + opening_punctuation + r')\s+', r'\1', text)
+
+        # Remove whitespace before closing punctuation marks.
+        # This finds a space before a closing punctuation mark and removes the space.
+        closing_punctuation = r'[।.,?!:;)\]}\'"]'
+        text = re.sub(r'\s+(' + closing_punctuation + r')', r'\1', text)
+
+        # Normalize spacing around ellipses (two or more dots).
+        # This removes any space before an ellipsis.
+        text = re.sub(r'\s+(\.{2,})', r'\1', text)
+
+        return text
+
+    def _apply_typo_corrections(self, text: str, typo_list: List) -> str:
+        for typo in typo_list:
+            text = text.replace(typo[0], typo[1])
+        return text
+
+    @abstractmethod
+    def _normalize_dialogue_patterns(self, text: str) -> str:
+        pass
 
     def _is_header_footer(self, para_num, para, header_prefix, header_regex):
         for prefix in header_prefix:
