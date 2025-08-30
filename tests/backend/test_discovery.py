@@ -219,6 +219,17 @@ def test_crawl(initialise):
     assert doc_ids["jaipur_hindi"][1] not in state5
     validate(state4, state5, changed_keys=[], check_file_changed=False, check_config_changed=False)
 
+    # copy an existing file to another folder to test new file discovery
+    log_handle.info(f"Test 5: copying file to new location and re-crawling")
+    source_file = doc_ids["songadh_hindi"][0]  # hindi/spiritual/songadh_hindi.pdf
+    dest_file = f"{config.BASE_PDF_PATH}/gujarati/history/songadh_copy.pdf"
+    shutil.copy(source_file, dest_file)
+    
+    discovery.crawl(process=True, index=True)
+    state6 = index_state.load_state()
+    log_handle.info(f"state after copying file: {json_dumps(state6)}")
+    assert len(state6) == 10  # should be back to 10 files (9 + 1 new copy)
+
 
 def test_pages_crawl(initialise):
     config = Config()

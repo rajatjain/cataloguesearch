@@ -1,3 +1,5 @@
+import logging
+import os
 import re
 import shutil
 import traceback
@@ -5,20 +7,14 @@ from concurrent.futures import ProcessPoolExecutor
 
 import fitz
 import pytesseract
-import os
-import logging
-
 from PIL import Image
-from pdf2image import convert_from_path
 from tqdm import tqdm
 
+from backend.config import Config
 from backend.crawler.paragraph_generator.hindi import HindiParagraphGenerator
-from backend.utils import json_dumps
 
 # Disable tokenizers parallelism to avoid fork conflicts
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-from backend.config import Config
 
 # Setup logging for this module
 log_handle = logging.getLogger(__name__)
@@ -35,7 +31,8 @@ class PDFProcessor:
         """
         if shutil.which("pdftoppm") is None:
             raise RuntimeError(
-                "Poppler is not installed or not in PATH. Please configure it for this module to work."
+                "Poppler is not installed or not in PATH. "
+                "Please configure it for this module to work."
             )
         self._output_text_folder = config.BASE_TEXT_PATH
         self._pytesseract_language_map = {
@@ -46,7 +43,7 @@ class PDFProcessor:
         self._paragraph_gen = HindiParagraphGenerator(self._config)
 
     def _write_paragraphs(self, output_dir, paragraphs):
-        page_paras = dict()
+        page_paras = {}
         for page_num, para in paragraphs:
             if page_num not in page_paras:
                 page_paras[page_num] = []
@@ -60,16 +57,18 @@ class PDFProcessor:
             try:
                 with open(fname, 'w', encoding='utf-8') as fh:
                     fh.write(content)
-            except IOError as e:
+            except IOError:
                 traceback.print_exc()
                 log_handle.error(f"Failed to write {fname}")
 
-    def _generate_paragraphs(self, pdf_file: str, page_list: list[int], scan_config: dict, language: str) -> list[tuple[int, list[str]]]:
+    def _generate_paragraphs(
+            self, pdf_file: str, page_list: list[int], scan_config: dict,
+            language: str) -> list[tuple[int, list[str]]]:
         """
         Extracts paragraphs from a specified list of pages in a PDF file.
 
-        This function converts each page of the PDF into an image and then uses
-        OCR to extract text.
+        This function converts each page of the PDF into an image and then
+        uses OCR to extract text.
 
         Args:
             pdf_file: The file path to the PDF document.
@@ -94,7 +93,9 @@ class PDFProcessor:
             top_percent = crop_config.get("top", 0)
             bottom_percent = crop_config.get("bottom", 0)
             if top_percent > 0 or bottom_percent > 0:
-                log_handle.info(f"Cropping enabled: {top_percent}% from top, {bottom_percent}% from bottom")
+                log_handle.info(
+                    f"Cropping enabled: {top_percent}% from top, "
+                    f"{bottom_percent}% from bottom")
             else:
                 crop_config = None  # No actual cropping needed
 
@@ -107,7 +108,7 @@ class PDFProcessor:
 
             for page_num in page_list:
                 # Validate page number (1-based) against total pages
-                if not (1 <= page_num <= total_pages):
+                if not 1 <= page_num <= total_pages:
                     log_handle.warning(
                         f"Page number {page_num} is out of bounds for PDF {pdf_file} "
                         f"which has {total_pages} pages. Skipping."
@@ -119,23 +120,23 @@ class PDFProcessor:
 
                 pix = page.get_pixmap(dpi=350)
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                
+
                 # Apply cropping if enabled
                 if crop_config:
                     width, height = img.size
                     top_crop = int(height * top_percent / 100)
                     bottom_crop = int(height * bottom_percent / 100)
-                    
+
                     # Crop the image (left, top, right, bottom)
                     img = img.crop((0, top_crop, width, height - bottom_crop))
-                    
                 images.append(img)
                 page_numbers_for_images.append(page_num)
 
             doc.close()
 
-        except Exception as e:
-            log_handle.error(f"Error during PDF to image conversion with PyMuPDF: {e}")
+        except Exception as pdf_error:
+            log_handle.error(
+                f"Error during PDF to image conversion with PyMuPDF: {pdf_error}")
             traceback.print_exc()
             return []
 
@@ -144,35 +145,38 @@ class PDFProcessor:
 
         # This is the corrected version of the original line.
         # It correctly pairs each image with its actual page number using zip().
-        tasks = [(page_num, image, pyt_lang) for page_num, image in zip(page_numbers_for_images, images)]
+        tasks = [(page_num, image, pyt_lang)
+                for page_num, image in zip(page_numbers_for_images, images)]
 
         if not tasks:
             return []
 
         extracted_data = []
         with ProcessPoolExecutor(max_workers=8) as executor:
-            results = list(tqdm(executor.map(
-                PDFProcessor._process_single_page, tasks), total=len(tasks), desc="Processing Pages"))
+            results = list(tqdm(
+                executor.map(PDFProcessor._process_single_page, tasks),
+                total=len(tasks), desc="Processing Pages"))
             extracted_data = results
 
         # Sort results by page number to guarantee order
         extracted_data.sort(key=lambda x: x[0])
 
         # Write it in tmp_folder
-        tmp_folder = "%s/tmp/cataloguesearch_files/%s" % (
-            os.getenv("HOME"), os.path.splitext(os.path.basename(pdf_file))[0])
+        tmp_folder = f"{os.getenv('HOME')}/tmp/cataloguesearch_files/" + \
+                     f"{os.path.splitext(os.path.basename(pdf_file))[0]}"
         shutil.rmtree(tmp_folder, ignore_errors=True)
         os.makedirs(tmp_folder)
         for page_num, paragraphs in extracted_data:
             fname = f"{tmp_folder}/page_{page_num:04d}.txt"
             for i, para in enumerate(paragraphs):
+                # pylint: disable=protected-access
                 paragraphs[i] = self._paragraph_gen._normalize_text(
                     para, scan_config.get("typo_list", []))
             content = "\n----\n".join(paragraphs)
             try:
                 with open(fname, 'w', encoding='utf-8') as fh:
                     fh.write(content)
-            except:
+            except IOError:
                 traceback.print_exc()
 
         return extracted_data
@@ -227,8 +231,6 @@ class PDFProcessor:
             log_handle.critical(f"output_dir {output_dir} does not exist. Exiting.")
             return None
 
-        doc = fitz.open(pdf_path)
-        num_pages = doc.page_count
         pages_list = self._get_page_list(scan_config)
         language = scan_config.get("language", "hi")
 
@@ -243,7 +245,8 @@ class PDFProcessor:
 
         if not to_process:
             log_handle.info(
-                f"Skipping process for {pdf_path} as it already exists and has all the requisite files.")
+                f"Skipping process for {pdf_path} as it already exists and "
+                f"has all the requisite files.")
             return None
 
         paragraphs = self._generate_paragraphs(
@@ -284,9 +287,9 @@ class PDFProcessor:
 
             return page_num, paragraphs
 
-        except Exception as e:
+        except Exception as page_error:
             # Log the error and return an empty result for this page.
-            print(f"An error occurred while processing page {page_num}: {e}")
+            print(f"An error occurred while processing page {page_num}: {page_error}")
             traceback.print_exc()
             return page_num, []
 
@@ -295,7 +298,7 @@ class PDFProcessor:
 
         # Add pages from the list of ranges
         pages_list = scan_config.get("page_list", [])
-        for i, page in enumerate(pages_list):
+        for page in pages_list:
             start = page.get("start")
             end = page.get("end")
 
