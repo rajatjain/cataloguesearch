@@ -36,9 +36,20 @@ def setup(copy_text_files=False):
     config.settings()["crawler"]["tmp_images_path"] = "%s/data/tmp_images" % base_dir
     config.settings()["crawler"]["sqlite_db_path"] = "%s/crawl_state.db" % base_dir
 
-    os.makedirs("%s/a/b/c" % pdf_dir, exist_ok=True)
-    os.makedirs("%s/a/b/d" % pdf_dir, exist_ok=True)
-    os.makedirs("%s/x/y/z" % pdf_dir, exist_ok=True)
+    # Create directory structure for hindi and gujarati
+    hindi_base = f"{pdf_dir}/hindi"
+    gujarati_base = f"{pdf_dir}/gujarati"
+    
+    # Create base language directories
+    os.makedirs(hindi_base, exist_ok=True)
+    os.makedirs(gujarati_base, exist_ok=True)
+    
+    # Create subdirectories for each language
+    for lang_base in [hindi_base, gujarati_base]:
+        os.makedirs(f"{lang_base}/cities/metro", exist_ok=True)
+        os.makedirs(f"{lang_base}/cities/non_metro", exist_ok=True)
+        os.makedirs(f"{lang_base}/spiritual", exist_ok=True)
+        os.makedirs(f"{lang_base}/history", exist_ok=True)
 
     TEST_BASE_DIR = os.getenv("TEST_BASE_DIR")
 
@@ -55,62 +66,68 @@ def setup(copy_text_files=False):
     songadh_hindi = os.path.join(data_pdf_path, "songadh_hindi.pdf")
     songadh_gujarati = os.path.join(data_pdf_path, "songadh_gujarati.pdf")
 
-    abcbh = "%s/a/b/c/bangalore_hindi.pdf" % pdf_dir
-    abcbg = "%s/a/b/c/bangalore_gujarati.pdf" % pdf_dir
-    abhampi = "%s/a/b/hampi_hindi.pdf" % pdf_dir
-    xyzhampi = "%s/x/y/z/hampi_gujarati.pdf" % pdf_dir
-    abdindore = "%s/a/b/d/indore_hindi.pdf" % pdf_dir
-    abjaipur = "%s/a/bangalore_hindi.pdf" % pdf_dir
-    xjaipur = "%s/x/jaipur_gujarati.pdf" % pdf_dir
-    xysongadh = "%s/x/y/songadh_hindi.pdf" % pdf_dir
-    absongadh = "%s/a/b/songadh_gujarati.pdf" % pdf_dir
-    xindore = "%s/x/indore_gujarati.pdf" % pdf_dir
+    # Define file paths in new directory structure
+    bangalore_hindi_path = f"{hindi_base}/cities/metro/bangalore_hindi.pdf"
+    bangalore_gujarati_path = f"{gujarati_base}/cities/metro/bangalore_gujarati.pdf"
+    hampi_hindi_path = f"{hindi_base}/history/hampi_hindi.pdf"
+    hampi_gujarati_path = f"{gujarati_base}/history/hampi_gujarati.pdf"
+    indore_hindi_path = f"{hindi_base}/cities/non_metro/indore_hindi.pdf"
+    indore_gujarati_path = f"{gujarati_base}/cities/non_metro/indore_gujarati.pdf"
+    jaipur_hindi_path = f"{hindi_base}/cities/non_metro/jaipur_hindi.pdf"
+    jaipur_gujarati_path = f"{gujarati_base}/cities/non_metro/jaipur_gujarati.pdf"
+    songadh_hindi_path = f"{hindi_base}/spiritual/songadh_hindi.pdf"
+    songadh_gujarati_path = f"{gujarati_base}/spiritual/songadh_gujarati.pdf"
+    thanjavur_hindi_path = f"{hindi_base}/history/thanjavur_hindi.pdf"
+    thanjavur_gujarati_path = f"{gujarati_base}/history/thanjavur_gujarati.pdf"
 
     doc_ids = {
-        "abcbh": [abcbh, get_doc_id(pdf_dir, abcbh)],
-        "abcbg": [abcbg, get_doc_id(pdf_dir, abcbg)],
-        "abhampi": [abhampi, get_doc_id(pdf_dir, abhampi)],
-        "xyzhampi": [xyzhampi, get_doc_id(pdf_dir, xyzhampi)],
-        "abdindore": [abdindore, get_doc_id(pdf_dir, abdindore)],
-        "abjaipur": [abjaipur, get_doc_id(pdf_dir, abjaipur)],
-        "xjaipur": [xjaipur, get_doc_id(pdf_dir, xjaipur)],
-        "xysongadh": [xysongadh, get_doc_id(pdf_dir, xysongadh)],
-        "absongadh": [absongadh, get_doc_id(pdf_dir, absongadh)],
-        "xindore": [xindore, get_doc_id(pdf_dir, xindore)]
+        "bangalore_hindi": [bangalore_hindi_path, get_doc_id(pdf_dir, bangalore_hindi_path)],
+        "bangalore_gujarati": [bangalore_gujarati_path, get_doc_id(pdf_dir, bangalore_gujarati_path)],
+        "hampi_hindi": [hampi_hindi_path, get_doc_id(pdf_dir, hampi_hindi_path)],
+        "hampi_gujarati": [hampi_gujarati_path, get_doc_id(pdf_dir, hampi_gujarati_path)],
+        "indore_hindi": [indore_hindi_path, get_doc_id(pdf_dir, indore_hindi_path)],
+        "indore_gujarati": [indore_gujarati_path, get_doc_id(pdf_dir, indore_gujarati_path)],
+        "jaipur_hindi": [jaipur_hindi_path, get_doc_id(pdf_dir, jaipur_hindi_path)],
+        "jaipur_gujarati": [jaipur_gujarati_path, get_doc_id(pdf_dir, jaipur_gujarati_path)],
+        "songadh_hindi": [songadh_hindi_path, get_doc_id(pdf_dir, songadh_hindi_path)],
+        "songadh_gujarati": [songadh_gujarati_path, get_doc_id(pdf_dir, songadh_gujarati_path)],
+        "thanjavur_hindi": [thanjavur_hindi_path, get_doc_id(pdf_dir, thanjavur_hindi_path)],
+        "thanjavur_gujarati": [thanjavur_gujarati_path, get_doc_id(pdf_dir, thanjavur_gujarati_path)]
     }
 
-    shutil.copy(bangalore_hindi, abcbh)
-    shutil.copy(bangalore_gujarati, abcbg)
-    shutil.copy(hampi_hindi, abhampi)
-    shutil.copy(hampi_gujarati, xyzhampi)
-    shutil.copy(indore_hindi, abdindore)
-    shutil.copy(bangalore_hindi, abjaipur)
-    shutil.copy(jaipur_gujarati, xjaipur)
-    shutil.copy(songadh_hindi, xysongadh)
-    shutil.copy(songadh_gujarati, absongadh)
-    shutil.copy(indore_gujarati, xindore)
+    # Copy files to new directory structure
+    shutil.copy(bangalore_hindi, bangalore_hindi_path)
+    shutil.copy(bangalore_gujarati, bangalore_gujarati_path)
+    shutil.copy(hampi_hindi, hampi_hindi_path)
+    shutil.copy(hampi_gujarati, hampi_gujarati_path)
+    shutil.copy(indore_hindi, indore_hindi_path)
+    shutil.copy(indore_gujarati, indore_gujarati_path)
+    shutil.copy(jaipur_hindi, jaipur_hindi_path)
+    shutil.copy(jaipur_gujarati, jaipur_gujarati_path)
+    shutil.copy(songadh_hindi, songadh_hindi_path)
+    shutil.copy(songadh_gujarati, songadh_gujarati_path)
 
-    # create config files with language metadata
-    a = { "category": "a", "type": "t" }
-    b = { "category": "b", "type": "t1" }
-    # dir c is empty
-    bhc = { "type": "t2", "new": "c3", "language": "hindi" }
-
-    # dir d is empty
-
-    x = { "category": "x", "type": "tx" }
-    y = { "category": "y", "type": "ty" }
-    z = { "category": "z", "type": "tz" }
-    jgx = { "type": "t3", "new": "c4", "language": "gujarati" }
-
-    write_config_file("%s/a/config.json" % pdf_dir, a)
-    write_config_file("%s/a/b/config.json" % pdf_dir, b)
-    write_config_file("%s/a/b/c/bangalore_hindi_config.json" % pdf_dir, bhc)
-
-    write_config_file("%s/x/config.json" % pdf_dir, x)
-    write_config_file("%s/x/y/config.json" % pdf_dir, y)
-    write_config_file("%s/x/y/z/config.json" % pdf_dir, z)
-    write_config_file("%s/x/jaipur_gujarati_config.json" % pdf_dir, jgx)
+    # Create config files for language base directories
+    hindi_config = {"language": "hi"}
+    gujarati_config = {"language": "gu"}
+    
+    write_config_file(f"{hindi_base}/config.json", hindi_config)
+    write_config_file(f"{gujarati_base}/config.json", gujarati_config)
+    
+    # Create config files for category directories
+    cities_config = {"category": "city"}
+    spiritual_config = {"category": "spiritual"}
+    history_config = {"category": "history"}
+    metro_config = {"type": "metro"}
+    non_metro_config = {"type": "non_metro"}
+    
+    # Write config files for all category and type directories
+    for lang_base in [hindi_base, gujarati_base]:
+        write_config_file(f"{lang_base}/cities/config.json", cities_config)
+        write_config_file(f"{lang_base}/cities/metro/config.json", metro_config)
+        write_config_file(f"{lang_base}/cities/non_metro/config.json", non_metro_config)
+        write_config_file(f"{lang_base}/spiritual/config.json", spiritual_config)
+        write_config_file(f"{lang_base}/history/config.json", history_config)
 
     if copy_text_files:
         # This is to simulate the text files that would be generated
