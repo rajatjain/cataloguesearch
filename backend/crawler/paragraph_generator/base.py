@@ -1,36 +1,34 @@
 import logging
 import re
 from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Tuple
 
 from backend.config import Config
-from backend.utils import json_dumps
 
 log_handle = logging.getLogger(__name__)
 
 class BaseParagraphGenerator(ABC):
     def __init__(self, config: Config):
         self._config = config
-    
+
     @property
     @abstractmethod
-    def PUNCTUATION_SUFFIXES(self):
+    def punctuation_suffixes(self):
         pass
-    
+
     @property
     @abstractmethod
-    def STOP_PREFIXES(self):
+    def stop_prefixes(self):
         pass
-    
+
     @property
     @abstractmethod
-    def ANSWER_PREFIXES(self):
+    def answer_prefixes(self):
         pass
-    
+
     @property
-    def DIALOGUE_PREFIXES(self):
-        return self.STOP_PREFIXES + self.ANSWER_PREFIXES
+    def dialogue_prefixes(self):
+        return self.stop_prefixes + self.answer_prefixes
 
     def generate_paragraphs(self, paragraphs: List[Tuple[int, List[str]]],
                             file_metadata : dict) -> List[Tuple[int, List[str]]]:
@@ -90,7 +88,7 @@ class BaseParagraphGenerator(ABC):
 
             # If the current paragraph starts with a stop prefix, it marks the
             # end of the previous buffered paragraph. Finalize the buffer before proceeding.
-            if para_text.startswith(self.DIALOGUE_PREFIXES):
+            if para_text.startswith(self.dialogue_prefixes):
                 if final_para := _finalize_buffer(paragraph_buffer):
                     combined_phase1.append(final_para)
 
@@ -101,10 +99,10 @@ class BaseParagraphGenerator(ABC):
             # If the paragraph we just added ends with punctuation,
             # the buffered chunk is now complete. Finalize it.
             # For dialogue prefixes, only finalize if they also end with punctuation
-            should_finalize = (para_text.endswith(self.PUNCTUATION_SUFFIXES) or 
-                             (para_text.startswith(self.DIALOGUE_PREFIXES) and 
-                              para_text.endswith(self.PUNCTUATION_SUFFIXES)))
-            
+            should_finalize = (para_text.endswith(self.punctuation_suffixes) or
+                             (para_text.startswith(self.dialogue_prefixes) and
+                              para_text.endswith(self.punctuation_suffixes)))
+
             if should_finalize:
                 if final_para := _finalize_buffer(paragraph_buffer):
                     combined_phase1.append(final_para)
@@ -121,24 +119,24 @@ class BaseParagraphGenerator(ABC):
             para = para.strip()
 
             # Check if we have a question that can be combined with consecutive answers
-            if para.startswith(self.STOP_PREFIXES):
+            if para.startswith(self.stop_prefixes):
                 combined_qa = para
                 i += 1
-                
+
                 # Keep combining consecutive Q&A pairs
-                while (i < num_paras and 
-                       combined_phase1[i][1].strip().startswith(self.ANSWER_PREFIXES)):
+                while (i < num_paras and
+                       combined_phase1[i][1].strip().startswith(self.answer_prefixes)):
                     next_para = combined_phase1[i][1].strip()
                     combined_qa += "\n" + next_para
                     i += 1
-                    
+
                     # Check if there's another question following this answer
-                    if (i < num_paras and 
-                        combined_phase1[i][1].strip().startswith(self.STOP_PREFIXES)):
+                    if (i < num_paras and
+                        combined_phase1[i][1].strip().startswith(self.stop_prefixes)):
                         next_question = combined_phase1[i][1].strip()
                         combined_qa += "\n" + next_question
                         i += 1
-                
+
                 combined_paragraphs.append((page_num, combined_qa))
             else:
                 combined_paragraphs.append((page_num, para))
@@ -150,21 +148,21 @@ class BaseParagraphGenerator(ABC):
             return ""
 
         cleaned_text = text
-        
+
         # Common punctuation normalization
         cleaned_text = self._normalize_punctuation(cleaned_text)
-        
+
         # Apply typo corrections
         cleaned_text = self._apply_typo_corrections(cleaned_text, typo_list)
-        
+
         # Language-specific dialogue pattern normalization
         cleaned_text = self._normalize_dialogue_patterns(cleaned_text)
-        
+
         # Final cleanup
         cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
-        
+
         return cleaned_text
-    
+
     def _normalize_punctuation(self, text: str) -> str:
         # Normalize common OCR misclassifications for the purn viram (।)
         # The purn viram is often misread as |, I, l, or 1.
@@ -188,14 +186,14 @@ class BaseParagraphGenerator(ABC):
         # Normalize spacing around ellipses (two or more dots).
         # This removes any space before an ellipsis.
         text = re.sub(r'\s+(\.{2,})', r'\1', text)
-        
+
         return text
-    
+
     def _apply_typo_corrections(self, text: str, typo_list: List) -> str:
         for typo in typo_list:
             text = text.replace(typo[0], typo[1])
         return text
-    
+
     @abstractmethod
     def _normalize_dialogue_patterns(self, text: str) -> str:
         pass
