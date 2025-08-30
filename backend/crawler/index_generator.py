@@ -1,11 +1,11 @@
 import logging
 import os.path
-from opensearchpy import OpenSearch, helpers
 from datetime import datetime, timezone
+
+from opensearchpy import OpenSearch, helpers
 
 from backend.common.embedding_models import get_embedding_model_factory
 from backend.common.opensearch import delete_documents_by_filename
-
 from backend.config import Config
 
 # Setup logging for this module
@@ -54,7 +54,7 @@ class IndexGenerator:
         except Exception as e:
             log_handle.error(f"Failed to delete existing documents for {original_filename}: {e}")
             # Continue with indexing even if deletion fails, as it's a safety measure
-            
+
         # 1. Get paragraphs from text files
         paras = self._get_paras(page_text_paths)
 
@@ -83,7 +83,9 @@ class IndexGenerator:
             response = self._opensearch_client.search(index=self._index_name, body=query)
             hits = response['hits']['hits']
             log_handle.info(
-                f"Found {len(hits)} existing chunks for document {document_id} for metadata update.")
+                f"Found {len(hits)} existing chunks for document {document_id} "
+                f"for metadata update."
+            )
 
             update_actions = []
             for hit in hits:
@@ -135,7 +137,7 @@ class IndexGenerator:
             # Default to Hindi for unsupported languages or English text
             lang_key = self._index_keys_per_lang.get(language, self._index_keys_per_lang["hi"])
             chunk[lang_key] = para_text
-            
+
             chunks.append(chunk)
         return chunks
 
@@ -159,7 +161,10 @@ class IndexGenerator:
             chunk["vector_embedding"] = embeddings[i]
             del chunk["embedding_text"]  # Save space
 
-        log_handle.info(f"Generated embeddings for {len(all_chunks)} chunks using {self._config.EMBEDDING_MODEL_TYPE} model.")
+        log_handle.info(
+            f"Generated embeddings for {len(all_chunks)} chunks using "
+            f"{self._config.EMBEDDING_MODEL_TYPE} model."
+        )
         return all_chunks
 
     def _bulk_index_chunks(self, chunks: list[dict]):
@@ -173,10 +178,16 @@ class IndexGenerator:
             for chunk in chunks
         ]
         try:
-            success, failed = helpers.bulk(self._opensearch_client, actions, stats_only=True, raise_on_error=False)
-            log_handle.info(f"Successfully indexed {success} chunks, failed to index {failed} chunks.")
+            success, failed = helpers.bulk(
+                self._opensearch_client, actions, stats_only=True, raise_on_error=False
+            )
+            log_handle.info(
+                f"Successfully indexed {success} chunks, failed to index {failed} chunks."
+            )
             if failed > 0:
-                log_handle.error(f"Failed to index {failed} chunks. Check OpenSearch logs for details.")
+                log_handle.error(
+                    f"Failed to index {failed} chunks. Check OpenSearch logs for details."
+                )
         except Exception as e:
             log_handle.error(f"An exception occurred during bulk indexing: {e}")
 
@@ -227,7 +238,9 @@ class IndexGenerator:
             log_handle.info(f"Successfully sent {len(actions)} updates to the metadata index.")
 
     def _get_paras(self, page_text_paths: list[str]) -> list[tuple[int, str]]:
-        """Reads all paragraph files and returns a flattened list of (page_number, paragraph_text)."""
+        """
+        Reads all paragraph files and returns a flattened list of (page_number, paragraph_text).
+        """
         final_paras = []
         for page_text_path in page_text_paths:
             page_num = self._get_page_num(page_text_path)
