@@ -3,18 +3,178 @@
 Metrics Export Script
 
 This script parses the metrics.log file and exports the data to a CSV format
-suitable for Excel analysis.
+suitable for Excel analysis. Optionally includes IP geolocation data.
 
 Usage:
-    python scripts/metrics_exporter.py [--input logs/metrics.log] [--output metrics_export.csv]
+    # Basic export
+    python scripts/metrics_exporter.py
+    
+    # With geolocation lookups
+    python scripts/metrics_exporter.py --geo
+    
+    # With summary statistics
+    python scripts/metrics_exporter.py --summary --geo
+    
+    # Custom files
+    python scripts/metrics_exporter.py -i logs/metrics.log -o my_export.csv --geo
 """
 
 import argparse
 import csv
 import os
 import re
+import time
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+import requests
+
+
+class IPGeolocator:
+    """
+    IP Geolocation lookup class with caching and rate limiting.
+    Uses ip-api.com free service (1000 requests/hour).
+    """
+    
+    def __init__(self):
+        self.cache = {}
+        self.last_request_time = 0
+        self.request_delay = 0.1  # 100ms between requests to be respectful
+    
+    def get_location(self, ip_address: str) -> Dict[str, Optional[str]]:
+        """
+        Get geolocation information for an IP address.
+        
+        Returns:
+            Dictionary with location fields or None values if lookup fails.
+        """
+        # Default response
+        default_location = {
+            'country': None,
+            'country_code': None,
+            'region': None,
+            'city': None,
+            'latitude': None,
+            'longitude': None
+        }
+        
+        # Handle local/private IPs
+        if self._is_private_ip(ip_address):
+            return {
+                'country': 'Local/Private',
+                'country_code': 'LOCAL',
+                'region': 'Private Network',
+                'city': 'Local',
+                'latitude': None,
+                'longitude': None
+            }
+        
+        # Check cache first
+        if ip_address in self.cache:
+            return self.cache[ip_address]
+        
+        # Rate limiting
+        current_time = time.time()
+        if current_time - self.last_request_time < self.request_delay:
+            time.sleep(self.request_delay - (current_time - self.last_request_time))
+        
+        try:
+            # Make API request
+            response = requests.get(
+                f'http://ip-api.com/json/{ip_address}',
+                timeout=5
+            )
+            self.last_request_time = time.time()
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if data.get('status') == 'success':
+                    location = {
+                        'country': data.get('country'),
+                        'country_code': data.get('countryCode'),
+                        'region': data.get('regionName'),
+                        'city': data.get('city'),
+                        'latitude': data.get('lat'),
+                        'longitude': data.get('lon')
+                    }
+                    
+                    # Cache the result
+                    self.cache[ip_address] = location
+                    return location
+                
+        except requests.RequestException as e:
+            print(f"Warning: Failed to lookup IP {ip_address}: {e}")
+        
+        # Cache the default result to avoid repeated failed lookups
+        self.cache[ip_address] = default_location
+        return default_location
+    
+    def _is_private_ip(self, ip_address: str) -> bool:
+        """Check if IP address is private/local."""
+        if ip_address in ['127.0.0.1', 'localhost', '::1', 'unknown']:
+            return True
+        
+        try:
+            # Check for private IP ranges
+            parts = [int(x) for x in ip_address.split('.')]
+            if len(parts) != 4:
+                return True  # Invalid IP, treat as private
+            
+            # Private IP ranges
+            if parts[0] == 10:
+                return True
+            if parts[0] == 172 and 16 <= parts[1] <= 31:
+                return True
+            if parts[0] == 192 and parts[1] == 168:
+                return True
+                
+        except (ValueError, IndexError):
+            return True  # Invalid IP format, treat as private
+        
+        return False
+
+
+def enrich_with_geolocation(metrics_data: List[Dict[str, Any]], enable_geo: bool = False) -> List[Dict[str, Any]]:
+    """
+    Enrich metrics data with geolocation information.
+    
+    Args:
+        metrics_data: List of metrics records
+        enable_geo: Whether to perform IP geolocation lookups
+        
+    Returns:
+        Enhanced metrics data with location fields
+    """
+    if not enable_geo:
+        # Add empty geo fields
+        for record in metrics_data:
+            record.update({
+                'country': None,
+                'country_code': None,
+                'region': None,
+                'city': None,
+                'latitude': None,
+                'longitude': None
+            })
+        return metrics_data
+    
+    print("Performing IP geolocation lookups...")
+    print("This may take a while for large datasets due to rate limiting.")
+    
+    geolocator = IPGeolocator()
+    unique_ips = set(record['client_ip'] for record in metrics_data)
+    
+    print(f"Looking up {len(unique_ips)} unique IP addresses...")
+    
+    for i, record in enumerate(metrics_data, 1):
+        if i % 100 == 0:
+            print(f"Processing record {i}/{len(metrics_data)}...")
+        
+        location = geolocator.get_location(record['client_ip'])
+        record.update(location)
+    
+    print("Geolocation lookup complete!")
+    return metrics_data
 
 
 def parse_metrics_log(log_file_path: str) -> List[Dict[str, Any]]:
@@ -100,10 +260,11 @@ def export_to_csv(metrics_data: List[Dict[str, Any]], output_file: str):
         print("No metrics data to export.")
         return
     
-    # Define CSV headers
+    # Define CSV headers (including geolocation fields)
     headers = [
         'timestamp', 'date', 'hour', 'day_of_week',
-        'client_ip', 'query', 'search_type', 'exact_match',
+        'client_ip', 'country', 'country_code', 'region', 'city', 'latitude', 'longitude',
+        'query', 'search_type', 'exact_match',
         'categories', 'language', 'enable_reranking',
         'page_size', 'page_number', 'latency_ms', 'total_results', 'has_results'
     ]
@@ -172,16 +333,24 @@ def main():
         action='store_true',
         help='Print summary statistics'
     )
+    parser.add_argument(
+        '--geo', '-g',
+        action='store_true',
+        help='Perform IP geolocation lookups (requires internet connection)'
+    )
     
     args = parser.parse_args()
     
     print(f"Parsing metrics from: {args.input}")
     metrics_data = parse_metrics_log(args.input)
     
-    if args.summary:
-        print_summary(metrics_data)
-    
     if metrics_data:
+        # Enrich with geolocation data if requested
+        metrics_data = enrich_with_geolocation(metrics_data, enable_geo=args.geo)
+        
+        if args.summary:
+            print_summary(metrics_data)
+        
         export_to_csv(metrics_data, args.output)
     else:
         print("No metrics data found to export.")
