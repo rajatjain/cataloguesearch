@@ -301,6 +301,12 @@ def print_summary(metrics_data: List[Dict[str, Any]]):
         lang = m['language']
         languages[lang] = languages.get(lang, 0) + 1
     
+    # Calculate queries per day breakdown
+    queries_per_day = {}
+    for m in metrics_data:
+        date = m['date']
+        queries_per_day[date] = queries_per_day.get(date, 0) + 1
+    
     print("\n=== METRICS SUMMARY ===")
     print(f"Total queries: {total_queries}")
     print(f"Lexical queries: {lexical_queries} ({lexical_queries/total_queries*100:.1f}%)")
@@ -314,6 +320,11 @@ def print_summary(metrics_data: List[Dict[str, Any]]):
     if metrics_data:
         date_range = f"{min(m['timestamp'] for m in metrics_data).date()} to {max(m['timestamp'] for m in metrics_data).date()}"
         print(f"Date range: {date_range}")
+        
+        # Print queries per day breakdown
+        print("\n=== QUERIES PER DAY BREAKDOWN ===")
+        for date in sorted(queries_per_day.keys()):
+            print(f"{date}: {queries_per_day[date]} queries")
 
 
 def main():

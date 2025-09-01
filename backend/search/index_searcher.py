@@ -304,13 +304,13 @@ class IndexSearcher:
                 truncated_text = doc_text[:1000] if len(doc_text) > 1000 else doc_text
                 sentence_pairs.append([keywords, truncated_text])
 
-            log_handle.warning("--- Starting expensive reranker.predict() call... ---")
+            log_handle.info("--- Starting expensive reranker.predict() call... ---")
             rerank_start_time = time.time()
             # Use very small batch size for e2-medium
             rerank_scores = self._reranker.predict(
                 sentence_pairs)
             rerank_duration = time.time() - rerank_start_time
-            log_handle.warning(f"--- Reranker.predict() finished. Took {rerank_duration:.2f} seconds. ---")
+            log_handle.info(f"--- Reranker.predict() finished. Took {rerank_duration:.2f} seconds. ---")
 
             for hit, score in zip(hits, rerank_scores):
                 hit["rerank_score"] = score
