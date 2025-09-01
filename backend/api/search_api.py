@@ -12,7 +12,7 @@ from backend.common.opensearch import get_opensearch_client, get_metadata
 from backend.config import Config
 from backend.search.index_searcher import IndexSearcher
 from backend.utils import json_dumps, JSONResponse, log_memory_usage
-from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
+from utils.logger import setup_logging, VERBOSE_LEVEL_NUM, METRICS_LEVEL_NUM
 from backend.api.feedback_api import router as feedback_router
 
 log_handle = logging.getLogger(__name__)
@@ -162,6 +162,12 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                         has_advanced_options)
 
     try:
+        # Start timing for metrics
+        start_time = time.time()
+        
+        # Get client IP
+        client_ip = getattr(request.client, 'host', 'unknown') if request.client else 'unknown'
+        
         log_handle.info(f"Received search request: keywords='{keywords}', "
                         f"exact_match={exact_match}, exclude_words={exclude_words}, "
                         f"categories={categories}, page={page_number}, size={page_size}, "
@@ -198,6 +204,16 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                     "total_vector_results": 0,
                     "suggestions": suggestions
                 }
+                
+                # Log metrics for zero results case
+                latency_ms = round((time.time() - start_time) * 1000, 2)
+                escaped_query = keywords.replace(',', ';').replace('"', "'").replace('\n', ' ').replace('\r', '')
+                escaped_categories = str(categories).replace(',', ';').replace('"', "'")
+                
+                log_handle.metrics(
+                    f"{client_ip},{escaped_query},lexical,{exact_match},{escaped_categories},{language},"
+                    f"{enable_reranking},{page_size},{page_number},{latency_ms},0"
+                )
                 
                 log_handle.info(f"No lexical results found for lexical query '{keywords}'. Returning {len(suggestions)} suggestions.")
                 return JSONResponse(content=response, status_code=200)
@@ -237,6 +253,21 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
             "vector_results": vector_results,
             "total_vector_results": vector_total_hits
         }
+
+        # Calculate latency and log metrics
+        latency_ms = round((time.time() - start_time) * 1000, 2)
+        search_type = "lexical" if is_lexical_query else "vector"
+        total_results = lexical_total_hits + vector_total_hits
+        
+        # Escape query for CSV (replace commas with semicolons, quotes with single quotes)
+        escaped_query = keywords.replace(',', ';').replace('"', "'").replace('\n', ' ').replace('\r', '')
+        escaped_categories = str(categories).replace(',', ';').replace('"', "'")
+        
+        # Log metrics in CSV format: client_ip,query,search_type,exact_match,categories,language,enable_reranking,page_size,page_number,latency_ms,total_results
+        log_handle.metrics(
+            f"{client_ip},{escaped_query},{search_type},{exact_match},{escaped_categories},{language},"
+            f"{enable_reranking},{page_size},{page_number},{latency_ms},{total_results}"
+        )
 
         log_handle.info(f"Search response: {json_dumps(response)}")
         return JSONResponse(content=response, status_code=200)

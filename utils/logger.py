@@ -5,6 +5,9 @@ from logging.handlers import RotatingFileHandler
 VERBOSE_LEVEL_NUM = 15
 logging.addLevelName(VERBOSE_LEVEL_NUM, "VERBOSE")
 
+METRICS_LEVEL_NUM = 25
+logging.addLevelName(METRICS_LEVEL_NUM, "METRICS")
+
 def verbose(self, message, *args, **kws):
     if self.isEnabledFor(VERBOSE_LEVEL_NUM):
         # Call self.log with stacklevel=2. This tells the logging module to go
@@ -12,7 +15,12 @@ def verbose(self, message, *args, **kws):
         # original call site for getting the correct filename and line number.
         self.log(VERBOSE_LEVEL_NUM, message, *args, stacklevel=2, **kws)
 
+def metrics(self, message, *args, **kws):
+    if self.isEnabledFor(METRICS_LEVEL_NUM):
+        self.log(METRICS_LEVEL_NUM, message, *args, stacklevel=2, **kws)
+
 logging.Logger.verbose = verbose
+logging.Logger.metrics = metrics
 
 def setup_logging(logs_dir="logs",
                   console_level=VERBOSE_LEVEL_NUM,
@@ -45,9 +53,10 @@ def setup_logging(logs_dir="logs",
     logging.getLogger('elasticsearch').setLevel(logging.WARNING)
 
     if not console_only:
-        # Set up two file handlers: one for INFO+, one for VERBOSE+
+        # Set up three file handlers: one for INFO+, one for VERBOSE+, one for METRICS
         info_log_path = os.path.join(logs_dir, "info.log")
         verbose_log_path = os.path.join(logs_dir, "verbose.log")
+        metrics_log_path = os.path.join(logs_dir, "metrics.log")
 
         info_handler = RotatingFileHandler(
             info_log_path, maxBytes=5*1024*1024, backupCount=5
@@ -62,3 +71,12 @@ def setup_logging(logs_dir="logs",
         verbose_handler.setLevel(VERBOSE_LEVEL_NUM)
         verbose_handler.setFormatter(logging.Formatter(log_format, date_format))
         root_logger.addHandler(verbose_handler)
+
+        # Metrics handler with CSV-friendly format
+        metrics_handler = RotatingFileHandler(
+            metrics_log_path, maxBytes=10*1024*1024, backupCount=10
+        )
+        metrics_handler.setLevel(METRICS_LEVEL_NUM)
+        metrics_format = '%(asctime)s,%(message)s'
+        metrics_handler.setFormatter(logging.Formatter(metrics_format, date_format))
+        root_logger.addHandler(metrics_handler)
