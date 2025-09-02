@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import traceback
+import uuid
 from concurrent.futures import ProcessPoolExecutor
 
 import fitz
@@ -23,47 +24,80 @@ log_handle = logging.getLogger(__name__)
 
 class PDFProcessor:
     """
-    Handles PDF processing, including OCR, text extraction, and bookmark extraction.
+    Handles PDF processing, including OCR, text extraction, bookmark extraction.
     """
-
     def __init__(self, config: Config):
-        """
-        Initializes the PDFProcessor.
-        """
         if shutil.which("pdftoppm") is None:
             raise RuntimeError(
                 "Poppler is not installed or not in PATH. "
                 "Please configure it for this module to work."
             )
-        self._output_text_folder = config.BASE_TEXT_PATH
         self._pytesseract_language_map = {
             "hi": "hin",
             "gu": "guj"
         }
         self._config = config
-        self._paragraph_generators = {
-            "hi": HindiParagraphGenerator(self._config),
-            "gu": GujaratiParagraphGenerator(self._config)
-        }
+        self._base_ocr_folder = config.BASE_OCR_PATH
+        self._base_pdf_folder = config.BASE_PDF_PATH
 
-    def _write_paragraphs(self, output_dir, paragraphs):
-        page_paras = {}
-        for page_num, para in paragraphs:
-            if page_num not in page_paras:
-                page_paras[page_num] = []
-            page_paras[page_num].append(para)
+    def process_pdf(
+            self, pdf_file: str, scan_config: dict,
+            pages_list: list[int]):
+        if not os.path.exists(pdf_file):
+            raise FileNotFoundError(f"Error: File {pdf_file} not found.")
 
-        page_nums = sorted(page_paras.keys())
-        for page_num in page_nums:
-            para_list = page_paras[page_num]
-            fname = f"{output_dir}/page_{page_num:04d}.txt"
-            content = "\n----\n".join(para_list)
+        log_handle.info(f"base_pdf_folder: {self._base_pdf_folder}")
+        log_handle.info(f"pdf_file: {pdf_file}")
+        relative_pdf_path = os.path.relpath(pdf_file, self._base_pdf_folder)
+        output_ocr_dir = f"{self._base_ocr_folder}/{os.path.splitext(relative_pdf_path)[0]}"
+        log_handle.info(f"Output OCR directory: {output_ocr_dir}")
+
+        if os.path.exists(output_ocr_dir):
+            shutil.rmtree(output_ocr_dir)
+
+        os.makedirs(output_ocr_dir, exist_ok=True)
+        language = scan_config.get("language", "hi")
+        paragraphs = self._generate_paragraphs(
+            pdf_file, pages_list, scan_config, language)
+
+        # Write to the OCR directory.
+        # Save paragraphs to OCR directory with same format as text files
+        for page_num, page_paragraphs in paragraphs:
+            fname = f"{output_ocr_dir}/page_{page_num:04d}.txt"
+            content = "\n----\n".join(page_paragraphs)
             try:
                 with open(fname, 'w', encoding='utf-8') as fh:
                     fh.write(content)
-            except IOError:
+            except IOError as e:
                 traceback.print_exc()
-                log_handle.error(f"Failed to write {fname}")
+                log_handle.error(f"Failed to write OCR file {fname}: {e}")
+
+        log_handle.info(f"Generated OCR text files for {pdf_file} in dir {output_ocr_dir}")
+        return True
+
+
+    def _get_page_list(self, scan_config):
+        all_pages = set()
+
+        # Add pages from the list of ranges
+        pages_list = scan_config.get("page_list", [])
+        for page in pages_list:
+            start = page.get("start")
+            end = page.get("end")
+
+            # Add pages if both start and end exist
+            if start is not None and end is not None:
+                all_pages.update(range(start, end + 1))
+
+        # Add pages from the top-level range
+        start_page = scan_config.get("start_page")
+        end_page = scan_config.get("end_page")
+
+        if start_page is not None and end_page is not None:
+            all_pages.update(range(start_page, end_page + 1))
+
+        # 3. Return the final sorted list of unique pages
+        return sorted(list(all_pages))
 
     def _generate_paragraphs(
             self, pdf_file: str, page_list: list[int], scan_config: dict,
@@ -150,7 +184,7 @@ class PDFProcessor:
         # This is the corrected version of the original line.
         # It correctly pairs each image with its actual page number using zip().
         tasks = [(page_num, image, pyt_lang)
-                for page_num, image in zip(page_numbers_for_images, images)]
+                 for page_num, image in zip(page_numbers_for_images, images)]
 
         if not tasks:
             return []
@@ -165,106 +199,7 @@ class PDFProcessor:
         # Sort results by page number to guarantee order
         extracted_data.sort(key=lambda x: x[0])
 
-        # Write it in tmp_folder
-        tmp_folder = f"{os.getenv('HOME')}/tmp/cataloguesearch_files/" + \
-                     f"{os.path.splitext(os.path.basename(pdf_file))[0]}"
-        shutil.rmtree(tmp_folder, ignore_errors=True)
-        os.makedirs(tmp_folder)
-        # Select appropriate paragraph generator for normalization
-        paragraph_generator = self._paragraph_generators[language]
-        for page_num, paragraphs in extracted_data:
-            fname = f"{tmp_folder}/page_{page_num:04d}.txt"
-            for i, para in enumerate(paragraphs):
-                # pylint: disable=protected-access
-                paragraphs[i] = paragraph_generator._normalize_text(
-                    para, scan_config.get("typo_list", []))
-            content = "\n----\n".join(paragraphs)
-            try:
-                with open(fname, 'w', encoding='utf-8') as fh:
-                    fh.write(content)
-            except IOError:
-                traceback.print_exc()
-
         return extracted_data
-
-    def fetch_bookmarks(self, pdf_file: str) -> dict[int, str]:
-        doc = fitz.open(pdf_file)
-        toc = doc.get_toc(simple=True)  # Format: [level, title, page_number]
-
-        # Step 1: Build full hierarchical titles with pages
-        bookmarks = []
-        stack = []
-
-        for level, title, page in toc:
-            while len(stack) >= level:
-                stack.pop()
-            stack.append(title)
-            full_title = " / ".join(stack)
-            bookmarks.append((page, full_title))
-
-        # Step 2: Map every page to the last applicable bookmark
-        page_to_bookmark = {}
-        current_title = None
-        bookmark_index = 0
-        total_pages = doc.page_count
-
-        for page_num in range(1, total_pages + 1):
-            # Advance bookmark if next one starts on this page
-            while bookmark_index < len(bookmarks) and bookmarks[bookmark_index][0] <= page_num:
-                current_title = bookmarks[bookmark_index][1].strip()
-                bookmark_index += 1
-            page_to_bookmark[page_num] = current_title
-
-        return page_to_bookmark
-
-    def process_pdf(
-            self, pdf_path: str, output_dir: str,
-            scan_config: dict):
-        """
-        Processes a PDF file, extracts text page by page, saves them,
-        and extracts bookmarks.
-
-        Args:
-            pdf_path (str): The full path to the PDF file.
-            output_dir (str): The base directory where page-wise text files will be saved.
-                              It is assumed that this directory exists.
-            images_dir (str): Directory where images will be temporarily stored.
-            scan_config (dict): Metadata associated with the PDF file.
-        """
-        pdf_name = os.path.splitext(os.path.basename(pdf_path))[0]
-        log_handle.verbose(f"pdf_name: {pdf_name} output_dir: {output_dir}")
-        if not os.path.exists(output_dir):
-            log_handle.critical(f"output_dir {output_dir} does not exist. Exiting.")
-            return None
-
-        pages_list = self._get_page_list(scan_config)
-        language = scan_config.get("language", "hi")
-
-        # Process only if some pages do not exist
-        to_process = False
-        if os.path.exists(output_dir):
-            for i in pages_list:
-                fpath = f"{output_dir}/page_{i:04d}.txt"
-                if not os.path.exists(fpath):
-                    to_process = True
-                    break
-
-        if not to_process:
-            log_handle.info(
-                f"Skipping process for {pdf_path} as it already exists and "
-                f"has all the requisite files.")
-            return None
-
-        paragraphs = self._generate_paragraphs(
-            pdf_path, pages_list, scan_config, language)
-
-        # Select appropriate paragraph generator based on language
-        paragraph_generator = self._paragraph_generators[language]
-        paragraphs = paragraph_generator.generate_paragraphs(
-            paragraphs, scan_config
-        )
-        self._write_paragraphs(output_dir, paragraphs)
-        return None
 
     @staticmethod
     def _process_single_page(args):
@@ -300,26 +235,3 @@ class PDFProcessor:
             log_handle.error(f"An error occurred while processing page {page_num}: {page_error}")
             traceback.print_exc()
             return page_num, []
-
-    def _get_page_list(self, scan_config):
-        all_pages = set()
-
-        # Add pages from the list of ranges
-        pages_list = scan_config.get("page_list", [])
-        for page in pages_list:
-            start = page.get("start")
-            end = page.get("end")
-
-            # Add pages if both start and end exist
-            if start is not None and end is not None:
-                all_pages.update(range(start, end + 1))
-
-        # Add pages from the top-level range
-        start_page = scan_config.get("start_page")
-        end_page = scan_config.get("end_page")
-
-        if start_page is not None and end_page is not None:
-            all_pages.update(range(start_page, end_page + 1))
-
-        # 3. Return the final sorted list of unique pages
-        return sorted(list(all_pages))

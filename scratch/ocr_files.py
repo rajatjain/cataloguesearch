@@ -21,12 +21,14 @@ def main():
     log_handle.info("Starting OCR processing...")
     # Initialize PDF Processor with config
     config = Config()
-    processor = PDFProcessor(config)
-    
+
     # Base directory for PDF files
     base_dir = ROOT_DIR / "tests" / "data" / "pdfs"
-    base_output_dir = ROOT_DIR / "tests" / "data" / "text"
-    
+    base_output_dir = ROOT_DIR / "tests" / "data" / "ocr"
+    config.settings()["crawler"]["base_ocr_path"] = base_output_dir
+    config.settings()["crawler"]["base_pdf_path"] = base_dir
+    processor = PDFProcessor(config)
+
     # Create output directory if it doesn't exist
     base_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -56,14 +58,13 @@ def main():
             "end_page": total_pages,
             "language": language
         }
+        pages_list = list(range(1, total_pages + 1))
         
         log_handle.info(f"Processing {pdf_file.name} as {language} language...")
         
         # Call process_pdf function
         processor.process_pdf(
-            pdf_path=str(pdf_file),
-            output_dir=str(output_dir),
-            scan_config=scan_config
+            pdf_file, scan_config, pages_list
         )
 
 if __name__ == "__main__":

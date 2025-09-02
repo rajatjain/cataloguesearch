@@ -1,5 +1,6 @@
 import logging
 import os.path
+import traceback
 from datetime import datetime, timezone
 
 from opensearchpy import OpenSearch, helpers
@@ -7,6 +8,8 @@ from opensearchpy import OpenSearch, helpers
 from backend.common.embedding_models import get_embedding_model_factory
 from backend.common.opensearch import delete_documents_by_filename
 from backend.config import Config
+from backend.crawler.paragraph_generator.gujarati import GujaratiParagraphGenerator
+from backend.crawler.paragraph_generator.hindi import HindiParagraphGenerator
 
 # Setup logging for this module
 log_handle = logging.getLogger(__name__)
@@ -31,17 +34,45 @@ class IndexGenerator:
             "gu": "text_content_gujarati"
         }
 
-    def index_document(
-            self, document_id: str, original_filename: str,
-            page_text_paths: list[str], metadata: dict, bookmarks: dict[int, str],
-            reindex_metadata_only: bool = False):
-        """
-        Indexes a document (its pages/chunks) and associated metadata into OpenSearch.
-        """
-        log_handle.info(
-            f"Indexing document: {document_id}, reindex_metadata_only: {reindex_metadata_only}")
-        timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+        self._paragraph_generators = {
+            "hi": HindiParagraphGenerator(self._config),
+            "gu": GujaratiParagraphGenerator(self._config)
+        }
 
+
+    def index_document(
+        self, document_id: str, original_filename: str,
+        ocr_dir: str, output_text_dir: str, pages_list: list[int], metadata: dict,
+        scan_config: dict, bookmarks: dict[int, str],
+        reindex_metadata_only: bool = False, dry_run: bool = True):
+        log_handle.info(
+            f"Indexing document: {document_id}, reindex_metadata_only: {reindex_metadata_only}"
+            f"Dry Run: {dry_run}")
+        paragraphs = []
+        for page_num in pages_list:
+            ocr_file = f"{ocr_dir}/page_{page_num:04d}.txt"
+            with open(ocr_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                page_paragraphs = content.split("\n----\n") if content.strip() else []
+                paragraphs.append((page_num, page_paragraphs))
+
+        language = metadata.get("language", "hi")
+        paragraph_gen = self._paragraph_generators[language]
+        processed_paras = paragraph_gen.generate_paragraphs(
+            paragraphs, scan_config
+        )
+
+        # Write paragraphs to the text directory
+        self._write_paragraphs(output_text_dir, processed_paras)
+
+        if dry_run:
+            log_handle.info(
+                f"[DRY RUN] Would index document to OpenSearch and save state for "
+                f"{original_filename}"
+            )
+            return
+
+        timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
         if reindex_metadata_only:
             self._reindex_metadata_only(document_id, metadata, bookmarks, timestamp)
             return
@@ -55,10 +86,15 @@ class IndexGenerator:
             log_handle.error(f"Failed to delete existing documents for {original_filename}: {e}")
             # Continue with indexing even if deletion fails, as it's a safety measure
 
-        # 1. Get paragraphs from text files
+        page_text_paths = []
+        for root, _, files in os.walk(output_text_dir):
+            for file_name in files:
+                if not file_name.lower().endswith(".txt"):
+                    continue
+                page_text_paths.append(os.path.join(root, file_name))
+        page_text_paths = sorted(page_text_paths)
         paras = self._get_paras(page_text_paths)
 
-        # 2. Create chunk dictionaries from paragraphs
         chunks = self._create_chunks_from_paras(
             paras, document_id, original_filename, metadata, bookmarks, timestamp
         )
@@ -75,6 +111,26 @@ class IndexGenerator:
 
         log_handle.info(
             f"Finished full indexing for document {document_id}: total_chunks: {len(chunks)}.")
+
+
+    def _write_paragraphs(self, output_dir, paragraphs):
+        page_paras = {}
+        for page_num, para in paragraphs:
+            if page_num not in page_paras:
+                page_paras[page_num] = []
+            page_paras[page_num].append(para)
+
+        page_nums = sorted(page_paras.keys())
+        for page_num in page_nums:
+            para_list = page_paras[page_num]
+            fname = f"{output_dir}/page_{page_num:04d}.txt"
+            content = "\n----\n".join(para_list)
+            try:
+                with open(fname, 'w', encoding='utf-8') as fh:
+                    fh.write(content)
+            except IOError:
+                traceback.print_exc()
+                log_handle.error(f"Failed to write {fname}")
 
     def _reindex_metadata_only(self, document_id, metadata, bookmarks, timestamp):
         """Handles the logic for updating metadata of existing documents."""

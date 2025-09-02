@@ -67,27 +67,6 @@ class MockIndexState(IndexState):
             return ""
         return hashlib.sha256(relative_file_path.encode('utf-8')).hexdigest()
 
-class MockPagesPDFProcessor(PDFProcessor):
-    def __init__(self, config: Config):
-        super().__init__(config)
-
-    def _generate_paragraphs(
-            self, pdf_file: str, page_list: list[int], scan_config: dict, language: str) -> \
-        list[tuple[int, list[str]]]:
-        result = []
-        for page_num in page_list:
-            paragraphs = [
-                f"Test paragraph 1 for page {page_num}",
-                f"Test paragraph 2 for page {page_num}",
-                f"Test paragraph 3 for page {page_num}",
-                f"Test paragraph 4 for page {page_num}",
-                f"Test paragraph 5 for page {page_num}",
-                f"Test paragraph 6 for page {page_num}",
-                f"Test paragraph 7 for page {page_num}",
-                f"Test paragraph 8 for page {page_num}"
-            ]
-            result.append((page_num, paragraphs))
-        return result
 
 def test_get_metadata():
     setup()

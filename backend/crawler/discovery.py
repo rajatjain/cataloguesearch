@@ -172,15 +172,35 @@ class SingleFileProcessor:
         """Saves the current indexed state to a JSON file."""
         self._index_state.update_state(document_id, state)
 
+    def _get_page_list(self, scan_config):
+        all_pages = set()
+
+        # Add pages from the list of ranges
+        pages_list = scan_config.get("page_list", [])
+        for page in pages_list:
+            start = page.get("start")
+            end = page.get("end")
+
+            # Add pages if both start and end exist
+            if start is not None and end is not None:
+                all_pages.update(range(start, end + 1))
+
+        # Add pages from the top-level range
+        start_page = scan_config.get("start_page")
+        end_page = scan_config.get("end_page")
+
+        if start_page is not None and end_page is not None:
+            all_pages.update(range(start_page, end_page + 1))
+
+        # 3. Return the final sorted list of unique pages
+        return sorted(list(all_pages))
+
     def process(self):
         relative_pdf_path = os.path.relpath(self._file_path, self._base_pdf_folder)
         document_id = str(uuid.uuid5(uuid.NAMESPACE_URL, relative_pdf_path))
-        log_handle.info(f"Processing PDF for OCR extraction: {self._file_path} (ID: {document_id})")
-
-        output_ocr_dir = f"{self._output_ocr_base_dir}/{os.path.splitext(relative_pdf_path)[0]}"
 
         scan_config = self._get_scan_config()
-        pages_list = self._pdf_processor._get_page_list(scan_config)
+        pages_list = self._get_page_list(scan_config)
         current_ocr_checksum = self._index_state.calculate_ocr_checksum(
             relative_pdf_path, pages_list)
 
@@ -192,28 +212,24 @@ class SingleFileProcessor:
             return
 
         try:
-            os.makedirs(output_ocr_dir, exist_ok=True)
-
             file_metadata = self._get_metadata(scan_config)
             scan_config["language"] = file_metadata.get("language", "hi")
 
-            log_handle.info(f"Extracting OCR paragraphs for {self._file_path} to {output_ocr_dir}")
-
             language = scan_config.get("language", "hi")
+            ret = self._pdf_processor.process_pdf(
+                self._file_path, scan_config, pages_list)
 
-            paragraphs = self._pdf_processor._generate_paragraphs(
-                self._file_path, pages_list, scan_config, language)
-
-            # Save paragraphs to OCR directory with same format as text files
-            for page_num, page_paragraphs in paragraphs:
-                fname = f"{output_ocr_dir}/page_{page_num:04d}.txt"
-                content = "\n----\n".join(page_paragraphs)
-                try:
-                    with open(fname, 'w', encoding='utf-8') as fh:
-                        fh.write(content)
-                except IOError as e:
-                    traceback.print_exc()
-                    log_handle.error(f"Failed to write OCR file {fname}: {e}")
+            if ret:
+                self._save_state(
+                    document_id,
+                    {
+                        "file_path": self._file_path,
+                        "last_indexed_timestamp": self._scan_time,
+                        "file_checksum": "",
+                        "config_hash": "",
+                        "ocr_checksum": current_ocr_checksum
+                    }
+                )
 
             log_handle.info(f"Generated OCR text files for {self._file_path}")
 
@@ -222,16 +238,6 @@ class SingleFileProcessor:
             log_handle.error(f"Failed to generate OCR text for {self._file_path}: {e}")
             return
 
-        self._save_state(
-            document_id,
-            {
-                "file_path": self._file_path,
-                "last_indexed_timestamp": self._scan_time,
-                "file_checksum": "",
-                "config_hash": "",
-                "ocr_checksum": current_ocr_checksum
-            }
-        )
 
     def index(self, dry_run=False):
         relative_path = os.path.relpath(self._file_path, self._base_pdf_folder)
@@ -248,7 +254,7 @@ class SingleFileProcessor:
             return
 
         scan_config = self._get_scan_config()
-        pages_list = self._pdf_processor._get_page_list(scan_config)
+        pages_list = self._get_page_list(scan_config)
 
         # Check if all required OCR pages exist
         missing_pages = []
@@ -264,7 +270,6 @@ class SingleFileProcessor:
             return
 
         # Calculate current checksums for comparison
-        scan_config = self._get_scan_config()
         file_metadata = self._get_metadata(scan_config)
         current_config_hash = self._get_config_hash(file_metadata)
         current_ocr_checksum = self._index_state.calculate_ocr_checksum(relative_path, pages_list)
@@ -278,71 +283,23 @@ class SingleFileProcessor:
             log_handle.info(f"No changes detected for {self._file_path}. Not indexing.")
             return
 
-        try:
-            # Create text directory
-            os.makedirs(output_text_dir, exist_ok=True)
-
-            scan_config["language"] = file_metadata.get("language", "hi")
-
-            log_handle.info(f"Processing OCR files to generate final text for {self._file_path}")
-
-            # Read OCR files and prepare paragraphs in correct format: List[Tuple[int, List[str]]]
-            paragraphs = []
-            for page_num in pages_list:
-                ocr_file = f"{output_ocr_dir}/page_{page_num:04d}.txt"
-                with open(ocr_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    page_paragraphs = content.split('\n----\n') if content.strip() else []
-                    paragraphs.append((page_num, page_paragraphs))
-
-            # Apply paragraph generation processing
-            language = scan_config.get("language", "hi")
-            paragraph_generator = self._pdf_processor._paragraph_generators[language]
-            processed_paragraphs = paragraph_generator.generate_paragraphs(
-                paragraphs, scan_config
-            )
-
-            # Write processed paragraphs to text directory
-            self._pdf_processor._write_paragraphs(output_text_dir, processed_paragraphs)
-
-            log_handle.info(f"Generated processed text files for {self._file_path}")
-
-        except Exception as e:
-            traceback.print_exc()
-            log_handle.error(f"Failed to process OCR files for {self._file_path}: {e}")
-            return
-
-        # Get all the text file paths for indexing
-        page_text_paths = []
-        for root, _, files in os.walk(output_text_dir):
-            for file_name in files:
-                if not file_name.lower().endswith(".txt"):
-                    continue
-                page_text_paths.append(os.path.join(root, file_name))
-        page_text_paths = sorted(page_text_paths)
-
         bookmarks = self._pdf_processor.fetch_bookmarks(self._file_path)
-
-        if dry_run:
-            log_handle.info(
-                f"[DRY RUN] Would index document to OpenSearch and save state for "
-                f"{self._file_path}")
-            return
-
         self._indexing_module.index_document(
-            document_id, relative_path, page_text_paths, file_metadata, bookmarks,
-            reindex_metadata_only=False
+            document_id, relative_path, output_ocr_dir, output_text_dir,
+            pages_list, file_metadata, scan_config, bookmarks, False,
+            dry_run
         )
 
-        self._save_state(document_id, {
-            "file_path": self._file_path,
-            "last_indexed_timestamp": self._scan_time,
-            "file_checksum": "",
-            "config_hash": current_config_hash,
-            "index_checksum": "",
-            "ocr_checksum": current_ocr_checksum
-        })
-        log_handle.info(f"Completed indexing of {self._file_path}")
+        if not dry_run:
+            self._save_state(document_id, {
+                "file_path": self._file_path,
+                "last_indexed_timestamp": self._scan_time,
+                "file_checksum": "",
+                "config_hash": current_config_hash,
+                "index_checksum": "",
+                "ocr_checksum": current_ocr_checksum
+            })
+            log_handle.info(f"Completed indexing of {self._file_path}")
 
 
 class Discovery:
