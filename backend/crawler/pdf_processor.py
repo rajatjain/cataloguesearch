@@ -201,6 +201,36 @@ class PDFProcessor:
 
         return extracted_data
 
+    def fetch_bookmarks(self, pdf_file: str) -> dict[int, str]:
+        doc = fitz.open(pdf_file)
+        toc = doc.get_toc(simple=True)  # Format: [level, title, page_number]
+
+        # Step 1: Build full hierarchical titles with pages
+        bookmarks = []
+        stack = []
+
+        for level, title, page in toc:
+            while len(stack) >= level:
+                stack.pop()
+            stack.append(title)
+            full_title = " / ".join(stack)
+            bookmarks.append((page, full_title))
+
+        # Step 2: Map every page to the last applicable bookmark
+        page_to_bookmark = {}
+        current_title = None
+        bookmark_index = 0
+        total_pages = doc.page_count
+
+        for page_num in range(1, total_pages + 1):
+            # Advance bookmark if next one starts on this page
+            while bookmark_index < len(bookmarks) and bookmarks[bookmark_index][0] <= page_num:
+                current_title = bookmarks[bookmark_index][1].strip()
+                bookmark_index += 1
+            page_to_bookmark[page_num] = current_title
+
+        return page_to_bookmark
+
     @staticmethod
     def _process_single_page(args):
         """

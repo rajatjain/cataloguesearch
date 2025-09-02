@@ -1,5 +1,6 @@
 import logging
 import os.path
+import shutil
 import traceback
 from datetime import datetime, timezone
 
@@ -61,6 +62,10 @@ class IndexGenerator:
         processed_paras = paragraph_gen.generate_paragraphs(
             paragraphs, scan_config
         )
+
+        if os.path.exists(output_text_dir):
+            shutil.rmtree(output_text_dir)
+        os.makedirs(output_text_dir, exist_ok=True)
 
         # Write paragraphs to the text directory
         self._write_paragraphs(output_text_dir, processed_paras)
