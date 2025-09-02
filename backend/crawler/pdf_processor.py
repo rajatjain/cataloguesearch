@@ -124,6 +124,34 @@ class PDFProcessor:
         if not page_list:
             return []
 
+        images, page_numbers_for_images = self._get_image(
+            pdf_file, page_list, scan_config
+        )
+
+        pyt_lang = self._pytesseract_language_map.get(language)
+        log_handle.info(f"Scanning total pages: {len(page_list)}")
+
+        tasks = [(page_num, image, pyt_lang)
+                 for page_num, image in zip(page_numbers_for_images, images)]
+
+        if not tasks:
+            return []
+
+        extracted_data = []
+        with ProcessPoolExecutor(max_workers=8) as executor:
+            results = list(tqdm(
+                executor.map(PDFProcessor._process_single_page, tasks),
+                total=len(tasks), desc="Processing Pages"))
+            extracted_data = results
+
+        # Sort results by page number to guarantee order
+        extracted_data.sort(key=lambda x: x[0])
+
+        return extracted_data
+
+    def _get_image(self, pdf_file, page_list, scan_config):
+        images = []
+        page_numbers_for_images = []
         # Check for cropping configuration once at the beginning
         crop_config = None
         if "crop" in scan_config:
@@ -137,9 +165,6 @@ class PDFProcessor:
             else:
                 crop_config = None  # No actual cropping needed
 
-        images = []
-        # Keep track of the page numbers for the images we successfully create
-        page_numbers_for_images = []
         try:
             doc = fitz.open(pdf_file)
             total_pages = len(doc)
@@ -171,35 +196,13 @@ class PDFProcessor:
                 page_numbers_for_images.append(page_num)
 
             doc.close()
+            return images, page_numbers_for_images
 
         except Exception as pdf_error:
             log_handle.error(
                 f"Error during PDF to image conversion with PyMuPDF: {pdf_error}")
             traceback.print_exc()
-            return []
-
-        pyt_lang = self._pytesseract_language_map.get(language)
-        log_handle.info(f"Scanning total pages: {len(page_list)}")
-
-        # This is the corrected version of the original line.
-        # It correctly pairs each image with its actual page number using zip().
-        tasks = [(page_num, image, pyt_lang)
-                 for page_num, image in zip(page_numbers_for_images, images)]
-
-        if not tasks:
-            return []
-
-        extracted_data = []
-        with ProcessPoolExecutor(max_workers=8) as executor:
-            results = list(tqdm(
-                executor.map(PDFProcessor._process_single_page, tasks),
-                total=len(tasks), desc="Processing Pages"))
-            extracted_data = results
-
-        # Sort results by page number to guarantee order
-        extracted_data.sort(key=lambda x: x[0])
-
-        return extracted_data
+            return [], []
 
     def fetch_bookmarks(self, pdf_file: str) -> dict[int, str]:
         doc = fitz.open(pdf_file)
