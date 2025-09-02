@@ -165,8 +165,12 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
         # Start timing for metrics
         start_time = time.time()
         
-        # Get client IP
-        client_ip = getattr(request.client, 'host', 'unknown') if request.client else 'unknown'
+        # Get client IP - check X-Forwarded-For and X-Real-IP headers first (for nginx proxy)
+        client_ip = (
+            request.headers.get("x-real-ip") or
+            request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
+            getattr(request.client, 'host', 'unknown') if request.client else 'unknown'
+        )
         
         log_handle.info(f"Received search request: keywords='{keywords}', "
                         f"exact_match={exact_match}, exclude_words={exclude_words}, "
