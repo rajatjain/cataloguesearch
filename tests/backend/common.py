@@ -33,7 +33,7 @@ def setup(copy_text_files=False):
     log_handle.info(f"Using base dir: {base_dir}, pdf dir: {pdf_dir}")
     config.settings()["crawler"]["base_pdf_path"] = pdf_dir
     config.settings()["crawler"]["base_text_path"] = "%s/data/texts" % base_dir
-    config.settings()["crawler"]["tmp_images_path"] = "%s/data/tmp_images" % base_dir
+    config.settings()["crawler"]["base_ocr_path"] = "%s/data/ocr" % base_dir
     config.settings()["crawler"]["sqlite_db_path"] = "%s/crawl_state.db" % base_dir
 
     # Create directory structure for hindi and gujarati

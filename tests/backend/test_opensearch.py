@@ -24,7 +24,7 @@ log_handle = logging.getLogger(__name__)
 def load_test_documents():
     """Load all test documents from tests/data/text directory."""
     test_data_dir = get_test_data_dir()
-    text_dir = os.path.join(test_data_dir, "text")
+    text_dir = os.path.join(test_data_dir, "ocr")
     documents = []
     
     # Get all subdirectories in text folder
@@ -423,7 +423,7 @@ class TestIntegration:
         
         # Load test data
         test_data_dir = get_test_data_dir()
-        test_file_path = os.path.join(test_data_dir, "text/bangalore_english/page_0001.txt")
+        test_file_path = os.path.join(test_data_dir, "ocr/bangalore_hindi/page_0001.txt")
         
         with open(test_file_path, 'r', encoding='utf-8') as f:
             test_content = f.read()
@@ -432,10 +432,10 @@ class TestIntegration:
         
         # Index test document
         doc = {
-            "original_filename": "bangalore_page_0001.txt",
+            "original_filename": "bangalore_hindi_page_0001.txt",
             "content": test_content,
             "metadata": {
-                "language": "english",
+                "language": "hindi",
                 "city": "bangalore"
             }
         }
@@ -453,7 +453,7 @@ class TestIntegration:
             body={
                 "query": {
                     "match": {
-                        "content": "Bengaluru"
+                        "content": "बेंगलुरु"
                     }
                 }
             }
@@ -461,8 +461,8 @@ class TestIntegration:
         
         assert search_response['hits']['total']['value'] == 1
         found_doc = search_response['hits']['hits'][0]['_source']
-        assert found_doc['original_filename'] == "bangalore_page_0001.txt"
-        assert "Bengaluru" in found_doc['content']
+        assert found_doc['original_filename'] == "bangalore_hindi_page_0001.txt"
+        assert "बेंगलुरु" in found_doc['content']
         
         # Verify document exists before deletion
         search_before = client.search(
@@ -479,7 +479,7 @@ class TestIntegration:
         assert search_before['hits']['total']['value'] == 1
         
         # Test deletion
-        delete_documents_by_filename(config, "bangalore_page_0001.txt")
+        delete_documents_by_filename(config, "bangalore_hindi_page_0001.txt")
         
         # Force refresh to ensure changes are visible
         client.indices.refresh(index=index_name)
