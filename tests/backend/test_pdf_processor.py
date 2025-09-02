@@ -8,7 +8,6 @@ from backend.config import Config
 # Setup logging once for all tests
 log_handle = logging.getLogger(__name__)
 
-@pytest.mark.slow
 def test_page_range_processing():
     """
     Test PDF processing with specific page ranges and page lists.
