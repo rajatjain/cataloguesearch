@@ -1,6 +1,7 @@
 import datetime
 import hashlib
-
+import os
+import shutil
 import tempfile
 import fitz
 from opensearchpy import OpenSearch
@@ -38,8 +39,11 @@ class MockIndexGenerator(IndexGenerator):
     def __init__(self, config: Config, opensearch_client: OpenSearch):
         super().__init__(config, opensearch_client)
 
-    def index_document(self, document_id: str, original_filename: str, page_text_paths: list[str],
-                       metadata: dict, bookmarks: list[dict], reindex_metadata_only: bool = False):
+    def index_document(
+        self, document_id: str, original_filename: str,
+        ocr_dir: str, output_text_dir: str, pages_list: list[int], metadata: dict,
+        scan_config: dict, bookmarks: dict[int, str],
+        reindex_metadata_only: bool = False, dry_run: bool = True):
         pass
 
     def create_index_if_not_exists(self):
@@ -50,15 +54,29 @@ class MockPDFProcessor(PDFProcessor):
         super().__init__(config)
 
     def process_pdf(
-            self, pdf_path: str, output_dir: str,
-            scan_config: dict):
-        return None
-
-    def _generate_paragraphs(self, pdf_file: str, page_list: list[int], scan_config: dict, language: str) -> list[tuple[int, list[str]]]:
-        return []
-
-    def _get_page_list(self, scan_config):
-        return []
+        self, pdf_path: str, scan_config: dict,
+        pages_list: list[int]):
+        relative_pdf_path = os.path.relpath(pdf_path, self._base_pdf_folder)
+        output_ocr_dir = f"{self._base_ocr_folder}/{os.path.splitext(relative_pdf_path)[0]}"
+        
+        if os.path.exists(output_ocr_dir):
+            shutil.rmtree(output_ocr_dir)
+        
+        os.makedirs(output_ocr_dir, exist_ok=True)
+        
+        # Get the base filename without path and extension for source directory
+        base_filename = os.path.splitext(os.path.basename(pdf_path))[0]
+        source_ocr_dir = f"{get_test_base_dir()}/data/ocr/{base_filename}"
+        
+        # Copy the page files for the pages in pages_list
+        if os.path.exists(source_ocr_dir):
+            for page_num in pages_list:
+                source_file = f"{source_ocr_dir}/page_{page_num:04d}.txt"
+                dest_file = f"{output_ocr_dir}/page_{page_num:04d}.txt"
+                if os.path.exists(source_file):
+                    shutil.copy2(source_file, dest_file)
+        
+        return True
 
 class MockIndexState(IndexState):
     def calculate_ocr_checksum(self, relative_file_path: str, ocr_pages: list[int]) -> str:
@@ -66,7 +84,6 @@ class MockIndexState(IndexState):
         if not relative_file_path:
             return ""
         return hashlib.sha256(relative_file_path.encode('utf-8')).hexdigest()
-
 
 def test_get_metadata():
     setup()
@@ -219,7 +236,7 @@ def test_pages_crawl(initialise):
     discovery = Discovery(
         config,
         MockIndexGenerator(config, None),
-        MockPagesPDFProcessor(config),
+        MockPDFProcessor(config),
         index_state)
 
     # Start with scan_config pages [1]
@@ -252,14 +269,126 @@ def test_pages_crawl(initialise):
     
     validate(state1, state2, changed_files, check_file_changed=False, check_config_changed=True)
 
+def test_ignore_file(initialise):
+    config = Config()
+    doc_ids = setup()
+
+    index_state = MockIndexState(config.SQLITE_DB_PATH)
+
+    discovery = Discovery(
+        config,
+        MockIndexGenerator(config, None),
+        MockPDFProcessor(config),
+        index_state)
+
+    # Add _ignore files in 2 folders to ignore all files in those folders
+    ignore_folders = [
+        f"{config.BASE_PDF_PATH}/hindi/cities/metro",     # Will ignore bangalore_hindi.pdf
+        f"{config.BASE_PDF_PATH}/gujarati/history"        # Will ignore hampi_gujarati.pdf
+    ]
+    
+    for folder in ignore_folders:
+        ignore_file = f"{folder}/_ignore"
+        with open(ignore_file, 'w') as f:
+            f.write("")  # Empty file
+
+    # First crawl - should ignore files in the 2 folders
+    discovery.crawl(process=True, index=True)
+    
+    state1 = index_state.load_state()
+    log_handle.info(f"Initial crawl with 2 ignored folders: {json_dumps(state1)}")
+    # Should have fewer files (depends on how many files are in ignored folders)
+    
+    # Verify the ignored files are not in state
+    ignored_doc_ids = [doc_ids["bangalore_hindi"][1], doc_ids["hampi_gujarati"][1]]
+    for ignored_id in ignored_doc_ids:
+        assert ignored_id not in state1
+
+    # Delete first ignore file
+    first_ignore = f"{ignore_folders[0]}/_ignore"
+    os.remove(first_ignore)
+    
+    discovery.crawl(process=True, index=True)
+    state2 = index_state.load_state()
+    log_handle.info(f"After removing first ignore file: {json_dumps(state2)}")
+    assert doc_ids["bangalore_hindi"][1] in state2  # This file should now be indexed
+    
+    # Validate that only the newly unignored file is changed, others remain unchanged
+    changed_keys = [doc_ids["bangalore_hindi"][1]]
+    validate(state1, state2, changed_keys, check_file_changed=False, check_config_changed=True, new_file_added=True)
+
+    # Delete second ignore file
+    second_ignore = f"{ignore_folders[1]}/_ignore"
+    os.remove(second_ignore)
+    
+    discovery.crawl(process=True, index=True)
+    state3 = index_state.load_state()
+    log_handle.info(f"After removing second ignore file: {json_dumps(state3)}")
+    assert doc_ids["hampi_gujarati"][1] in state3  # This file should now be indexed
+    
+    # Validate that only the newly unignored file is changed, others remain unchanged
+    changed_keys = [doc_ids["hampi_gujarati"][1]]
+    validate(state2, state3, changed_keys, check_file_changed=False, check_config_changed=True, new_file_added=True)
+    
+    # Final validation - should have all 10 files
+    assert len(state3) == 10
+
+def test_crawl_vs_crawl_and_index(initialise):
+    config = Config()
+    doc_ids = setup()
+
+    index_state = MockIndexState(config.SQLITE_DB_PATH)
+
+    discovery = Discovery(
+        config,
+        MockIndexGenerator(config, None),
+        MockPDFProcessor(config),
+        index_state)
+
+    # First call crawl with only process=True (no indexing)
+    discovery.crawl(process=True, index=False)
+    
+    state1 = index_state.load_state()
+    log_handle.info(f"State after crawl(process=True, index=False): {json_dumps(state1)}")
+    assert len(state1) == 10
+    
+    # Validate that ocr_checksum is present but config_hash should be empty (since no indexing was done)
+    for doc_id, vals in state1.items():
+        assert vals["ocr_checksum"] is not None  # OCR processing was done
+        assert vals["config_hash"] == ""         # No indexing was done, so config_hash is empty
+
+    # Now call crawl with both process=True and index=True
+    discovery.crawl(process=True, index=True)
+    
+    state2 = index_state.load_state()
+    log_handle.info(f"State after crawl(process=True, index=True): {json_dumps(state2)}")
+    assert len(state2) == 10
+    
+    # Validate that both ocr_checksum and config_hash are present
+    for doc_id, vals in state2.items():
+        assert vals["ocr_checksum"] is not None  # OCR processing was done
+        assert vals["config_hash"] != ""         # Indexing was done, so config_hash is set to non-empty
+        # Timestamp should be updated since indexing happened
+        assert vals["last_indexed_timestamp"] != state1[doc_id]["last_indexed_timestamp"]
+        # OCR checksum should remain the same since files didn't change
+        assert vals["ocr_checksum"] == state1[doc_id]["ocr_checksum"]
+
 def validate(old_state, new_state, changed_keys,
-             check_file_changed=False, check_config_changed=True):
+             check_file_changed=False, check_config_changed=True, new_file_added=False):
     for doc_id, vals in new_state.items():
         if doc_id in changed_keys:
-            assert vals["last_indexed_timestamp"] != old_state[doc_id]["last_indexed_timestamp"]
-            assert check_config_changed == (vals["config_hash"] != old_state[doc_id]["config_hash"])
-            assert vals["ocr_checksum"] == old_state[doc_id]["ocr_checksum"]
+            if new_file_added:
+                # For newly added files, they shouldn't exist in old_state
+                assert doc_id not in old_state
+                assert vals["ocr_checksum"] is not None
+            else:
+                # For existing files that changed
+                assert vals["last_indexed_timestamp"] != old_state[doc_id]["last_indexed_timestamp"]
+                assert check_config_changed == (vals["config_hash"] != old_state[doc_id]["config_hash"])
+                assert vals["ocr_checksum"] == old_state[doc_id]["ocr_checksum"]
         else:
+            # For unchanged files, they should exist in both states and be identical
+            assert doc_id in old_state
             assert vals["last_indexed_timestamp"] == old_state[doc_id]["last_indexed_timestamp"]
             assert vals["config_hash"] == old_state[doc_id]["config_hash"]
             assert vals["ocr_checksum"] == old_state[doc_id]["ocr_checksum"]
