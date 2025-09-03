@@ -24,17 +24,9 @@ def build_index(initialise):
     Setup test data and build search index.
     Copy OCR data to base_ocr_path and call discovery with process=False, index=True.
     """
-    # Setup test environment
-    setup(copy_ocr_files=True)
+    # Setup test environment with scan_config files
+    setup(copy_ocr_files=True, add_scan_config=True)
     config = Config()
-    
-    # Copy OCR data from tests/data/ocr to base_ocr_path
-    source_ocr_dir = f"{get_test_base_dir()}/data/ocr"
-    dest_ocr_dir = config.BASE_OCR_PATH
-    
-    # Create scan_config.json files dynamically from OCR data
-    from tests.backend.common import create_scan_configs_from_ocr
-    create_scan_configs_from_ocr(source_ocr_dir, config.BASE_PDF_PATH)
     
     # Initialize OpenSearch client and ensure clean index state
     opensearch_client = get_opensearch_client(config)
@@ -422,3 +414,45 @@ def test_vector_search_with_categories():
                 log_handle.warning(f"Expected filename '{expected_filename}' not found in filtered vector results for '{question}'")
         else:
             log_handle.info(f"No results found for filtered vector search: '{question}' with categories {categories}")
+
+def test_exclude_words():
+    """Test exclude words functionality in lexical search."""
+    config = Config()
+    index_searcher = IndexSearcher(config)
+    
+    # Test query that should return results without exclusion
+    query = "दिगंबर जैन मनोरंजन"  # Traditional tourism
+    exclude_word = "सोनगढ़"  # Songarh
+    language = "hi"
+    
+    # First search without exclude words - should return 1 result
+    log_handle.info(f"Running search without exclude words: '{query}'")
+    results_without_exclude, total_hits_without_exclude = index_searcher.perform_lexical_search(
+        keywords=query,
+        exact_match=False,
+        exclude_words=[],
+        categories={},
+        detected_language=language,
+        page_size=10,
+        page_number=1
+    )
+    
+    log_handle.info(f"Search without exclude words returned {len(results_without_exclude)} results (total: {total_hits_without_exclude})")
+    assert len(results_without_exclude) == 1, f"Expected 1 result without exclude words, got {len(results_without_exclude)}"
+    
+    # Second search with exclude words - should return 0 results
+    log_handle.info(f"Running search with exclude word: '{query}' excluding '{exclude_word}'")
+    results_with_exclude, total_hits_with_exclude = index_searcher.perform_lexical_search(
+        keywords=query,
+        exact_match=False,
+        exclude_words=[exclude_word],
+        categories={},
+        detected_language=language,
+        page_size=10,
+        page_number=1
+    )
+    
+    log_handle.info(f"Search with exclude words returned {len(results_with_exclude)} results (total: {total_hits_with_exclude})")
+    assert len(results_with_exclude) == 0, f"Expected 0 results with exclude word '{exclude_word}', got {len(results_with_exclude)}"
+    
+    log_handle.info(f"✓ Exclude words test passed: {len(results_without_exclude)} results without exclusion, {len(results_with_exclude)} results with exclusion")

@@ -99,20 +99,20 @@ async def get_metadata_api(request: Request):
     try:
         current_time = time.time()
         cache = request.app.state.metadata_cache
-        
+
         # Check if cache is valid
-        if (cache["data"] is not None and 
+        if (cache["data"] is not None and
             current_time - cache["timestamp"] < cache["ttl"]):
             log_handle.info("Retrieving metadata from in-memory cache")
             return JSONResponse(content=cache["data"], status_code=200)
-        
+
         # Cache is expired or empty, fetch from OpenSearch
         log_handle.info("Cache expired or empty, fetching metadata from OpenSearch")
         metadata = get_metadata(request.app.state.config)
 
         # Filter to only return Granth, Anuyog, Year fields
         filtered_metadata = {
-            key: values for key, values in metadata.items() 
+            key: values for key, values in metadata.items()
             if key in ["Granth", "Anuyog", "Year"]
         }
 
@@ -147,7 +147,7 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
     """
     index_searcher = request.app.state.index_searcher
     embedding_model = request.app.state.embedding_model
-    
+
     keywords = request_data.query
     exact_match = request_data.exact_match
     exclude_words = request_data.exclude_words
@@ -164,14 +164,14 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
     try:
         # Start timing for metrics
         start_time = time.time()
-        
+
         # Get client IP - check X-Forwarded-For and X-Real-IP headers first (for nginx proxy)
         client_ip = (
             request.headers.get("x-real-ip") or
             request.headers.get("x-forwarded-for", "").split(",")[0].strip() or
             getattr(request.client, 'host', 'unknown') if request.client else 'unknown'
         )
-        
+
         log_handle.info(f"Received search request: keywords='{keywords}', "
                         f"exact_match={exact_match}, exclude_words={exclude_words}, "
                         f"categories={categories}, page={page_number}, size={page_size}, "
@@ -189,7 +189,7 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                 page_number=page_number
             )
             log_handle.info(f"Lexical search returned {len(lexical_results)} results (total: {lexical_total_hits}).")
-            
+
             # If no lexical results, get spelling suggestions
             if lexical_total_hits == 0:
                 suggestions = index_searcher.get_spelling_suggestions(
@@ -199,7 +199,7 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                     min_score=0.6,
                     num_suggestions=3
                 )
-                
+
                 response = {
                     "total_results": 0,
                     "page_size": page_size,
@@ -209,20 +209,20 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                     "total_vector_results": 0,
                     "suggestions": suggestions
                 }
-                
+
                 # Log metrics for zero results case
                 latency_ms = round((time.time() - start_time) * 1000, 2)
                 escaped_query = keywords.replace(',', ';').replace('"', "'").replace('\n', ' ').replace('\r', '')
                 escaped_categories = str(categories).replace(',', ';').replace('"', "'")
-                
+
                 log_handle.metrics(
                     f"{client_ip},{escaped_query},lexical,{exact_match},{escaped_categories},{language},"
                     f"{enable_reranking},{page_size},{page_number},{latency_ms},0"
                 )
-                
+
                 log_handle.info(f"No lexical results found for lexical query '{keywords}'. Returning {len(suggestions)} suggestions.")
                 return JSONResponse(content=response, status_code=200)
-            
+
             # Skip vector search for lexical queries
             vector_results = []
             vector_total_hits = 0
@@ -230,7 +230,7 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
             # For non-lexical queries: only perform vector search
             lexical_results = []
             lexical_total_hits = 0
-            
+
             query_embedding = embedding_model.get_embedding(keywords)
             if not query_embedding:
                 log_handle.warning("Could not generate embedding for query. Vector search skipped.")
@@ -263,11 +263,11 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
         latency_ms = round((time.time() - start_time) * 1000, 2)
         search_type = "lexical" if is_lexical_query else "vector"
         total_results = lexical_total_hits + vector_total_hits
-        
+
         # Escape query for CSV (replace commas with semicolons, quotes with single quotes)
         escaped_query = keywords.replace(',', ';').replace('"', "'").replace('\n', ' ').replace('\r', '')
         escaped_categories = str(categories).replace(',', ';').replace('"', "'")
-        
+
         # Log metrics in CSV format: client_ip,query,search_type,exact_match,categories,language,enable_reranking,page_size,page_number,latency_ms,total_results
         log_handle.metrics(
             f"{client_ip},{escaped_query},{search_type},{exact_match},{escaped_categories},{language},"
