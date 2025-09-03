@@ -24,7 +24,7 @@ def verify_recaptcha(token: str, remote_ip: str = None) -> bool:
     if not secret_key:
         log_handle.warning("RECAPTCHA_SECRET_KEY not configured")
         return True  # Allow in development if not configured
-    
+
     try:
         response = requests.post(
             'https://www.google.com/recaptcha/api/siteverify',
@@ -47,25 +47,25 @@ def send_feedback_email(feedback_data: dict) -> bool:
     if not brevo_api_key:
         log_handle.error("BREVO_API_KEY not configured")
         return False
-    
+
     # Brevo API endpoint
     url = "https://api.sendinblue.com/v3/smtp/email"
-    
+
     # Email template
     email_content = f"""
     New Feedback Submission - Aagam Khoj
-    
+
     From: {feedback_data['name']}
     Email: {feedback_data.get('email', 'Not provided')}
     Phone: {feedback_data.get('phoneNumber', 'Not provided')}
     Subject: {feedback_data['subject']}
-    
+
     Message:
     {feedback_data['feedback']}
-    
+
     Submitted at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     """
-    
+
     payload = {
         "sender": {
             "name": "Aagam Khoj Feedback",
@@ -81,13 +81,13 @@ def send_feedback_email(feedback_data: dict) -> bool:
         "textContent": email_content,
         "htmlContent": email_content.replace('\n', '<br>')
     }
-    
+
     headers = {
         "accept": "application/json",
         "api-key": brevo_api_key,
         "content-type": "application/json"
     }
-    
+
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=30)
         if response.status_code == 201:
@@ -110,11 +110,11 @@ async def submit_feedback(feedback: FeedbackRequest, request: Request):
             client_ip = request.headers.get('x-forwarded-for', client_ip)
             if ',' in client_ip:
                 client_ip = client_ip.split(',')[0].strip()
-        
+
         # Verify reCAPTCHA
         if not verify_recaptcha(feedback.captchaToken, client_ip):
             raise HTTPException(status_code=400, detail="Invalid CAPTCHA")
-        
+
         # Prepare feedback data
         feedback_data = {
             'name': feedback.name.strip(),
@@ -123,18 +123,18 @@ async def submit_feedback(feedback: FeedbackRequest, request: Request):
             'subject': feedback.subject.strip(),
             'feedback': feedback.feedback.strip()
         }
-        
+
         # Validate required fields
         if not feedback_data['name'] or not feedback_data['subject'] or not feedback_data['feedback']:
             raise HTTPException(status_code=400, detail="Required fields are missing")
-        
+
         # Send email
         if send_feedback_email(feedback_data):
             log_handle.info(f"Feedback submitted by {feedback_data['name']} - {feedback_data['subject']}")
             return {"message": "Feedback submitted successfully"}
         else:
             raise HTTPException(status_code=500, detail="Failed to send feedback email")
-            
+
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=f"Validation error: {str(e)}")
     except Exception as e:

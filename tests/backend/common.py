@@ -4,6 +4,8 @@ import shutil
 import tempfile
 import uuid
 
+import fitz
+
 from backend.common import opensearch
 from backend.common.opensearch import get_opensearch_client
 from backend.config import Config
@@ -87,7 +89,7 @@ def get_doc_id(base_dir, file_path):
         uuid.uuid5(uuid.NAMESPACE_URL, relative_path))
     return doc_id
 
-def setup(copy_ocr_files=False):
+def setup(copy_ocr_files=False, add_scan_config=False):
     config = Config()
     base_dir = tempfile.mkdtemp(prefix="test_")
     pdf_dir = "%s/data/pdfs" % base_dir
@@ -126,6 +128,8 @@ def setup(copy_ocr_files=False):
     jaipur_gujarati = os.path.join(data_pdf_path, "jaipur_gujarati.pdf")
     songadh_hindi = os.path.join(data_pdf_path, "songadh_hindi.pdf")
     songadh_gujarati = os.path.join(data_pdf_path, "songadh_gujarati.pdf")
+    thanjavur_hindi = os.path.join(data_pdf_path, "thanjavur_hindi.pdf")
+    thanjavur_gujarati = os.path.join(data_pdf_path, "thanjavur_gujarati.pdf")
 
     # Define file paths in new directory structure
     bangalore_hindi_path = f"{hindi_base}/cities/metro/bangalore_hindi.pdf"
@@ -167,6 +171,8 @@ def setup(copy_ocr_files=False):
     shutil.copy(jaipur_gujarati, jaipur_gujarati_path)
     shutil.copy(songadh_hindi, songadh_hindi_path)
     shutil.copy(songadh_gujarati, songadh_gujarati_path)
+    shutil.copy(thanjavur_hindi, thanjavur_hindi_path)
+    shutil.copy(thanjavur_gujarati, thanjavur_gujarati_path)
 
     # Create config files for language base directories
     hindi_config = {"language": "hi"}
@@ -209,6 +215,48 @@ def setup(copy_ocr_files=False):
             )
             log_handle.info(f"Copying text ocr from {src_folder} to {dest_folder}")
             shutil.copytree(src_folder, dest_folder)
+    
+    if add_scan_config:
+        # Create scan_config.json files for each directory containing PDF files
+        # Group PDFs by their directories
+        pdf_directories = {}
+        
+        for file_path, _ in doc_ids.values():
+            directory = os.path.dirname(file_path)
+            filename = os.path.basename(file_path)
+            filename_without_ext = os.path.splitext(filename)[0]
+            
+            if directory not in pdf_directories:
+                pdf_directories[directory] = []
+            pdf_directories[directory].append((file_path, filename_without_ext))
+        
+        # Create scan_config for each directory
+        for directory, pdf_files in pdf_directories.items():
+            scan_config = {}
+            
+            for pdf_path, filename_without_ext in pdf_files:
+                try:
+                    # Open PDF and get page count
+                    doc = fitz.open(pdf_path)
+                    total_pages = doc.page_count
+                    doc.close()
+                    
+                    # Add to scan_config
+                    scan_config[filename_without_ext] = {
+                        "start_page": 1,
+                        "end_page": total_pages
+                    }
+                    log_handle.info(f"Added {filename_without_ext} to scan_config: pages 1-{total_pages}")
+                    
+                except Exception as e:
+                    log_handle.error(f"Error processing PDF {pdf_path}: {e}")
+                    continue
+            
+            # Write scan_config.json to the directory
+            if scan_config:
+                config_path = os.path.join(directory, "scan_config.json")
+                write_config_file(config_path, scan_config)
+                log_handle.info(f"Created scan_config.json for {directory}")
 
     return doc_ids
 
