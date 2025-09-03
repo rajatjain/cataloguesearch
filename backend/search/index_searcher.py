@@ -455,7 +455,8 @@ class IndexSearcher:
             return {}
 
     def get_spelling_suggestions(
-            self, index_name: str, text: str, min_score: float = 0.6, num_suggestions: int = 3):
+            self, index_name: str, text: str, language: str,
+            min_score: float = 0.6, num_suggestions: int = 3):
         """
         Gets spelling suggestions for a given text and returns a list of corrected query strings.
 
@@ -475,6 +476,7 @@ class IndexSearcher:
 
         client = get_opensearch_client(self._config)
         suggester_name = "spell-check"
+        text_field = self._text_fields.get(language)
 
         query_body = {
             "size": 0,
@@ -482,7 +484,7 @@ class IndexSearcher:
                 suggester_name: {
                     "text": text,
                     "term": {
-                        "field": "text_content_hindi",
+                        "field": text_field,
                         "size": num_suggestions,  # Get up to N suggestions per term.
                         "sort": "score",
                         "min_word_length": 3,

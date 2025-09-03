@@ -195,6 +195,7 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                 suggestions = index_searcher.get_spelling_suggestions(
                     index_name=request.app.state.config.OPENSEARCH_INDEX_NAME,
                     text=keywords,
+                    language=language,
                     min_score=0.6,
                     num_suggestions=3
                 )

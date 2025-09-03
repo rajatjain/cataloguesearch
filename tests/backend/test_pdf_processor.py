@@ -8,9 +8,7 @@ from backend.config import Config
 # Setup logging once for all tests
 log_handle = logging.getLogger(__name__)
 
-@pytest.mark.slow
 def test_page_range_processing():
-    # TODO(rajatjain): Add support for testing gujarati files
     """
     Test PDF processing with specific page ranges and page lists.
     """
