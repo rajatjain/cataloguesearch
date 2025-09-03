@@ -22,66 +22,6 @@ def write_config_file(file_name, config_data):
         json_dump(config_data, f)
     log_handle.info(f"Config file written: {file_name}")
 
-def create_scan_configs_from_ocr(ocr_base_dir, pdf_base_dir):
-    """
-    Create scan_config.json files by scanning OCR data directories.
-    
-    Args:
-        ocr_base_dir: Base directory containing OCR data (e.g., tests/data/ocr)
-        pdf_base_dir: Base PDF directory where scan_config.json files should be created
-    """
-    if not os.path.exists(ocr_base_dir):
-        log_handle.warning(f"OCR base directory not found: {ocr_base_dir}")
-        return
-    
-    # Group files by their directory
-    dir_to_files = {}
-    
-    # Scan each OCR directory
-    for item in os.listdir(ocr_base_dir):
-        item_path = os.path.join(ocr_base_dir, item)
-        if os.path.isdir(item_path):
-            # Find the corresponding PDF file
-            for root, dirs, files in os.walk(pdf_base_dir):
-                pdf_filename = f"{item}.pdf"
-                if pdf_filename in files:
-                    # Group by directory
-                    if root not in dir_to_files:
-                        dir_to_files[root] = []
-                    dir_to_files[root].append(item)
-                    break
-    
-    # Create scan_config.json for each directory
-    for directory, filenames in dir_to_files.items():
-        scan_config = {}
-        
-        for filename in filenames:
-            # Find all page files for this filename
-            ocr_dir = os.path.join(ocr_base_dir, filename)
-            pages = []
-            
-            for file in os.listdir(ocr_dir):
-                if file.startswith('page_') and file.endswith('.txt'):
-                    # Extract page number from filename like page_0001.txt
-                    page_num_str = file.replace('page_', '').replace('.txt', '')
-                    try:
-                        page_num = int(page_num_str)
-                        pages.append(page_num)
-                    except ValueError:
-                        continue
-            
-            if pages:
-                pages.sort()
-                scan_config[filename] = {
-                    "start_page": pages[0],
-                    "end_page": pages[-1]
-                }
-        
-        # Write scan_config.json to the directory
-        if scan_config:
-            config_path = os.path.join(directory, "scan_config.json")
-            write_config_file(config_path, scan_config)
-            log_handle.info(f"Created scan_config.json for {directory}: {scan_config}")
 
 def get_doc_id(base_dir, file_path):
     relative_path = os.path.relpath(file_path, base_dir)

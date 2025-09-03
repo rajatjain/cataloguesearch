@@ -157,7 +157,7 @@ def test_crawl(initialise):
 
     state1 = index_state.load_state()
     log_handle.info(f"state: {json_dumps(state1)}")
-    assert len(state1) == 10
+    assert len(state1) == 12
 
     # change the hindi cities config file to affect all hindi city files
     new_config = {"category": "urban"}
@@ -209,7 +209,7 @@ def test_crawl(initialise):
     discovery.crawl(process=True, index=True)
     state5 = index_state.load_state()
     log_handle.info(f"state: {json_dumps(state5)}")
-    assert len(state5) == 9
+    assert len(state5) == 11
 
     # it shouldn't have the fname in "state"
     assert doc_ids["jaipur_hindi"][1] not in state5
@@ -224,7 +224,7 @@ def test_crawl(initialise):
     discovery.crawl(process=True, index=True)
     state6 = index_state.load_state()
     log_handle.info(f"state after copying file: {json_dumps(state6)}")
-    assert len(state6) == 10  # should be back to 10 files (9 + 1 new copy)
+    assert len(state6) == 12  # should be back to 12 files (11 + 1 new copy)
 
 
 def test_pages_crawl(initialise):
@@ -245,7 +245,7 @@ def test_pages_crawl(initialise):
 
     state1 = index_state.load_state()
     log_handle.info(f"Initial state with pages [1]: {json_dumps(state1)}")
-    assert len(state1) == 10
+    assert len(state1) == 12
 
     # Change scan_config to pages [1, 2] for some specific files by updating their config files
     files_to_change = [
@@ -284,7 +284,7 @@ def test_ignore_file(initialise):
     # Add _ignore files in 2 folders to ignore all files in those folders
     ignore_folders = [
         f"{config.BASE_PDF_PATH}/hindi/cities/metro",     # Will ignore bangalore_hindi.pdf
-        f"{config.BASE_PDF_PATH}/gujarati/history"        # Will ignore hampi_gujarati.pdf
+        f"{config.BASE_PDF_PATH}/gujarati/history"        # Will ignore hampi_gujarati.pdf, thanjavur_gujarati.pdf
     ]
     
     for folder in ignore_folders:
@@ -300,7 +300,8 @@ def test_ignore_file(initialise):
     # Should have fewer files (depends on how many files are in ignored folders)
     
     # Verify the ignored files are not in state
-    ignored_doc_ids = [doc_ids["bangalore_hindi"][1], doc_ids["hampi_gujarati"][1]]
+    ignored_doc_ids = [doc_ids["bangalore_hindi"][1], doc_ids["hampi_gujarati"][1],
+                       doc_ids["thanjavur_gujarati"][1]]
     for ignored_id in ignored_doc_ids:
         assert ignored_id not in state1
 
@@ -325,13 +326,14 @@ def test_ignore_file(initialise):
     state3 = index_state.load_state()
     log_handle.info(f"After removing second ignore file: {json_dumps(state3)}")
     assert doc_ids["hampi_gujarati"][1] in state3  # This file should now be indexed
+    assert doc_ids["thanjavur_gujarati"][1] in state3
     
     # Validate that only the newly unignored file is changed, others remain unchanged
-    changed_keys = [doc_ids["hampi_gujarati"][1]]
+    changed_keys = [doc_ids["hampi_gujarati"][1], doc_ids["thanjavur_gujarati"][1]]
     validate(state2, state3, changed_keys, check_file_changed=False, check_config_changed=True, new_file_added=True)
     
     # Final validation - should have all 10 files
-    assert len(state3) == 10
+    assert len(state3) == 12
 
 def test_crawl_vs_crawl_and_index(initialise):
     config = Config()
@@ -350,7 +352,7 @@ def test_crawl_vs_crawl_and_index(initialise):
     
     state1 = index_state.load_state()
     log_handle.info(f"State after crawl(process=True, index=False): {json_dumps(state1)}")
-    assert len(state1) == 10
+    assert len(state1) == 12
     
     # Validate that ocr_checksum is present but config_hash should be empty (since no indexing was done)
     for doc_id, vals in state1.items():
@@ -362,7 +364,7 @@ def test_crawl_vs_crawl_and_index(initialise):
     
     state2 = index_state.load_state()
     log_handle.info(f"State after crawl(process=True, index=True): {json_dumps(state2)}")
-    assert len(state2) == 10
+    assert len(state2) == 12
     
     # Validate that both ocr_checksum and config_hash are present
     for doc_id, vals in state2.items():

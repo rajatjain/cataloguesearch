@@ -24,17 +24,9 @@ def build_index(initialise):
     Setup test data and build search index.
     Copy OCR data to base_ocr_path and call discovery with process=False, index=True.
     """
-    # Setup test environment
-    setup(copy_ocr_files=True)
+    # Setup test environment with scan_config files
+    setup(copy_ocr_files=True, add_scan_config=True)
     config = Config()
-    
-    # Copy OCR data from tests/data/ocr to base_ocr_path
-    source_ocr_dir = f"{get_test_base_dir()}/data/ocr"
-    dest_ocr_dir = config.BASE_OCR_PATH
-    
-    # Create scan_config.json files dynamically from OCR data
-    from tests.backend.common import create_scan_configs_from_ocr
-    create_scan_configs_from_ocr(source_ocr_dir, config.BASE_PDF_PATH)
     
     # Initialize OpenSearch client and ensure clean index state
     opensearch_client = get_opensearch_client(config)
