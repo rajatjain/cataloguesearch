@@ -51,8 +51,8 @@ async def initialize():
     log_handle.info("Logging setup complete.")
 
     # Load configuration
-    relative_config_path = "configs/config.yaml"
-    config = Config(relative_config_path)
+    config_path = os.environ.get("CONFIG_PATH", "configs/config.yaml")
+    config = Config(config_path)
     app.state.config = config
     log_handle.info("Configuration loaded.")
 
@@ -83,7 +83,7 @@ async def initialize():
         }
         app.state.metadata_cache["data"] = filtered_metadata
         app.state.metadata_cache["timestamp"] = time.time()
-        log_handle.info(f"Metadata cache populated with {json_dumps(metadata)}.")
+        log_handle.info(f"Metadata cache populated with {json_dumps(metadata)}")
     except Exception as e:
         log_handle.exception(f"Failed to populate metadata cache at startup: {e}")
 

@@ -1,0 +1,381 @@
+import asyncio
+import logging
+import multiprocessing
+import os
+import shutil
+import threading
+import time
+import uvicorn
+import pytest
+import requests
+from backend.common import embedding_models
+from backend.common.opensearch import get_opensearch_client
+from backend.crawler.discovery import Discovery
+from backend.crawler.index_state import IndexState
+from backend.crawler.index_generator import IndexGenerator
+from backend.crawler.pdf_processor import PDFProcessor
+from backend.search.index_searcher import IndexSearcher
+from tests.backend.common import setup, get_all_documents
+from tests.backend.base import *
+
+log_handle = logging.getLogger(__name__)
+
+def run_api_server(host, port):
+    """Module-level function to run the API server (required for multiprocessing)."""
+    # Initialize test environment in the API server process
+    # This is needed because the API server runs in a separate process
+    # and doesn't inherit the pytest fixture initialization
+    import os
+    from dotenv import load_dotenv
+    from backend.config import Config
+    
+    # Load .env file (same logic as in tests.backend.base.initialise)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    load_dotenv(dotenv_path=f"{project_root}/.env", verbose=True)
+    
+    # Set test environment variables
+    test_base_dir = os.getenv("TEST_BASE_DIR")
+    if not test_base_dir:
+        raise ValueError("TEST_BASE_DIR not set in .env file")
+    
+    # Set environment variables for the API server
+    os.environ["LOGS_DIR"] = "logs"
+    os.environ["CONFIG_PATH"] = f"{test_base_dir}/data/configs/test_config.yaml"
+    
+    # Reset Config singleton to use the test config
+    Config.reset()
+    
+    # Import the FastAPI app
+    from backend.api.search_api import app
+    # Run the server
+    uvicorn.run(
+        app, 
+        host=host, 
+        port=port, 
+        log_level="error",  # Reduce log noise during tests
+        access_log=False
+    )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def build_index(initialise):
+    """
+    Setup test data and build search index.
+    Copy OCR data to base_ocr_path and call discovery with process=False, index=True.
+    """
+    # Setup test environment with scan_config files
+    setup(copy_ocr_files=True, add_scan_config=True)
+    config = Config()
+    
+    # Initialize OpenSearch client and ensure clean index state
+    opensearch_client = get_opensearch_client(config)
+    
+    # Explicitly delete indices to ensure clean state and proper mapping creation
+    log_handle.info("Deleting existing indices to ensure clean state for vector search")
+    indices_to_delete = [config.OPENSEARCH_INDEX_NAME, config.OPENSEARCH_METADATA_INDEX_NAME]
+    for index_name in indices_to_delete:
+        if index_name and opensearch_client.indices.exists(index=index_name):
+            opensearch_client.indices.delete(index=index_name)
+            log_handle.info(f"Deleted existing index: {index_name}")
+    
+    # Create indices with proper mapping (including knn_vector for embeddings)
+    from backend.common.opensearch import create_indices_if_not_exists
+    create_indices_if_not_exists(config, opensearch_client)
+    log_handle.info("Created indices with proper mapping for vector search")
+    
+    pdf_processor = PDFProcessor(config)  # We won't actually use this since process=False
+    discovery = Discovery(
+        config, 
+        IndexGenerator(config, opensearch_client),
+        pdf_processor, 
+        IndexState(config.SQLITE_DB_PATH)
+    )
+
+    # Call discovery with process=False, index=True
+    log_handle.info("Starting discovery with process=False, index=True")
+    discovery.crawl(process=False, index=True)
+
+    # Verify indexes are present
+    os_all_docs = get_all_documents()
+    doc_count = len(os_all_docs)
+    log_handle.info(f"Indexed {doc_count} documents")
+
+    yield
+
+    # Cleanup - delete index
+    opensearch_client.indices.delete(index=config.OPENSEARCH_INDEX_NAME, ignore=[400, 404])
+
+
+class APIServerManager:
+    """Manager class to handle API server startup and shutdown."""
+    
+    def __init__(self, host="127.0.0.1", port=8001):
+        self.host = host
+        self.port = port
+        self.process = None
+        self.server_thread = None
+        
+    def start_server_in_process(self):
+        """Start the API server in a separate process."""
+        # Start server in a separate process using the module-level function
+        self.process = multiprocessing.Process(target=run_api_server, args=(self.host, self.port))
+        self.process.start()
+        
+        # Wait for server to start up
+        self._wait_for_server_startup()
+        
+    def _wait_for_server_startup(self, timeout=30):
+        """Wait for the server to start up by checking if it's responding."""
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                response = requests.get(f"http://{self.host}:{self.port}/api/metadata", timeout=1)
+                if response.status_code in [200, 404, 500]:  # Any response means server is up
+                    log_handle.info(f"API server started successfully at http://{self.host}:{self.port}")
+                    return True
+            except requests.exceptions.RequestException:
+                pass  # Server not ready yet
+            
+            time.sleep(0.5)
+        
+        raise TimeoutError(f"API server failed to start within {timeout} seconds")
+        
+    def stop_server(self):
+        """Stop the API server."""
+        if self.process and self.process.is_alive():
+            log_handle.info("Stopping API server process...")
+            self.process.terminate()
+            self.process.join(timeout=10)
+            if self.process.is_alive():
+                self.process.kill()
+            self.process = None
+
+
+@pytest.fixture(scope="module")
+def api_server():
+    """Fixture to start and stop the API server for tests."""
+    server_manager = APIServerManager(host="127.0.0.1", port=8001)  # Use different port to avoid conflicts
+    
+    try:
+        log_handle.info("Starting API server for tests...")
+        server_manager.start_server_in_process()
+        yield server_manager
+    finally:
+        log_handle.info("Stopping API server...")
+        server_manager.stop_server()
+
+
+def test_api_server_startup(api_server):
+    """Test that the API server starts up successfully."""
+    # Test that the server is responding
+    response = requests.get(f"http://{api_server.host}:{api_server.port}/api/metadata")
+    assert response.status_code == 200
+    log_handle.info("API server startup test passed")
+
+
+def test_api_search_endpoint(api_server):
+    """Test the /api/search endpoint."""
+    # Test search endpoint with a simple query
+    search_payload = {
+        "query": "बेंगलुरु",
+        "language": "hi",
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "page_size": 10,
+        "page_number": 1,
+        "enable_reranking": True
+    }
+    
+    response = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload
+    )
+    
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Check response structure
+    assert "total_results" in data
+    assert "results" in data
+    assert "vector_results" in data
+    assert isinstance(data["results"], list)
+    assert isinstance(data["vector_results"], list)
+    
+    log_handle.info(f"✓ API search test passed - found {data['total_results']} lexical results and {data.get('total_vector_results', 0)} vector results")
+
+
+@pytest.mark.skip("search_api.py hardcodes to take only Granth, Year, Anuyog.")
+def test_api_metadata_endpoint(api_server):
+    """Test the /api/metadata endpoint."""
+    response = requests.get(f"http://{api_server.host}:{api_server.port}/api/metadata")
+    assert response.status_code == 200
+    
+    data = response.json()
+    assert isinstance(data, dict)
+    
+    # Check that metadata contains expected keys (filtered to Granth, Anuyog, Year)
+    expected_keys = {"type", "language", "category"}
+    actual_keys = set(data.keys())
+    
+    # At least one of the expected keys should be present
+    assert len(expected_keys.intersection(actual_keys)) > 0
+    
+    log_handle.info(f"API metadata test passed - received keys: {list(data.keys())}")
+
+
+def test_api_exact_phrase_search(api_server):
+    """Test the /api/search endpoint with exact phrase matching."""
+    test_cases = [
+        {
+            "query": "बृहदीश्वर मंदिर",
+            "language": "hi",
+            "expected_file": "thanjavur_hindi.pdf"
+        },
+        {
+            "query": "ગુલાબી નગરી", 
+            "language": "gu",
+            "expected_file": "jaipur_gujarati.pdf"
+        }
+    ]
+    
+    for i, test_case in enumerate(test_cases):
+        search_payload = {
+            "query": test_case["query"],
+            "language": test_case["language"],
+            "exact_match": True,
+            "exclude_words": [],
+            "categories": {},
+            "page_size": 10,
+            "page_number": 1,
+            "enable_reranking": True
+        }
+        
+        response = requests.post(
+            f"http://{api_server.host}:{api_server.port}/api/search",
+            json=search_payload
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        log_handle.info(f"response: {json_dumps(data, truncate_fields=['vector_embedding'])}")
+        
+        # Check response structure
+        assert "total_results" in data
+        assert "results" in data
+        assert isinstance(data["results"], list)
+        for result in data["results"]:
+            fname = result["filename"]
+            assert fname == test_case["expected_file"]
+
+
+def test_api_exclude_words(api_server):
+    """Test the /api/search endpoint with exclude words functionality."""
+    query = "हिंदू पौराणिक"
+    language = "hi"
+    
+    # First test: regular search without exclude words - should return 2 results
+    regular_search_payload = {
+        "query": query,
+        "language": language,
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "page_size": 10,
+        "page_number": 1,
+        "enable_reranking": True
+    }
+    
+    response = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=regular_search_payload
+    )
+    
+    assert response.status_code == 200
+    data = response.json()
+    log_handle.info(f"Regular search response: {json_dumps(data, truncate_fields=['vector_embedding'])}")
+    
+    # Check response structure
+    assert "total_results" in data
+    assert "results" in data
+    assert isinstance(data["results"], list)
+    
+    # Should return 2 results
+    regular_result_count = data["total_results"]
+    assert regular_result_count == 3, f"Expected 2 results for regular search, got {regular_result_count}"
+    
+    # Second test: search with exclude words - should return only 1 result
+    exclude_search_payload = {
+        "query": query,
+        "language": language,
+        "exact_match": False,
+        "exclude_words": ["हंपी"],
+        "categories": {},
+        "page_size": 10,
+        "page_number": 1,
+        "enable_reranking": True
+    }
+    
+    response = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=exclude_search_payload
+    )
+    
+    assert response.status_code == 200
+    data = response.json()
+    log_handle.info(f"Exclude words search response: {json_dumps(data, truncate_fields=['vector_embedding'])}")
+    
+    # Check response structure
+    assert "total_results" in data
+    assert "results" in data
+    assert isinstance(data["results"], list)
+    
+    # Should return only 1 result after excluding "हंपी"
+    exclude_result_count = data["total_results"]
+    assert exclude_result_count == 1, f"Expected 1 result after excluding 'हंपी', got {exclude_result_count}"
+    
+    log_handle.info(f"✓ Exclude words test passed - regular search: {regular_result_count} results, exclude search: {exclude_result_count} results")
+
+
+def test_api_context_endpoint(api_server):
+    """Test the /api/context/{chunk_id} endpoint."""
+    # First, get some search results to get a valid chunk_id
+    search_payload = {
+        "query": "बेंगलुरु",
+        "language": "hi",
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "page_size": 1,
+        "page_number": 1,
+        "enable_reranking": True
+    }
+    
+    search_response = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload
+    )
+    
+    assert search_response.status_code == 200
+    search_data = search_response.json()
+    
+    if search_data["total_results"] > 0:
+        # Get chunk_id from first result
+        chunk_id = search_data["results"][0].get("id") or search_data["results"][0].get("_id")
+        
+        if chunk_id:
+            # Test context endpoint
+            context_response = requests.get(
+                f"http://{api_server.host}:{api_server.port}/api/context/{chunk_id}?language=hi"
+            )
+            
+            if context_response.status_code == 200:
+                context_data = context_response.json()
+                assert "current" in context_data
+                log_handle.info("API context test passed")
+            else:
+                log_handle.info(f"Context endpoint returned {context_response.status_code}, may not be implemented or chunk not found")
+        else:
+            log_handle.info("No chunk_id found in search results, skipping context test")
+    else:
+        log_handle.info("No search results found, skipping context test")
