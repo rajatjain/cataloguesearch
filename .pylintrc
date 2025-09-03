@@ -7,4 +7,5 @@ disable=
     C0115,  # missing-class-docstring - Allow classes without docstrings  
     C0116,  # missing-function-docstring - Allow functions without docstrings
     C0304,  # end-newline missing
-    W0718   # Catching too general exception Exception (broad-exception-caught)
+    W0718,  # Catching too general exception Exception (broad-exception-caught)
+    E1123   # Unexpected keyword argumen

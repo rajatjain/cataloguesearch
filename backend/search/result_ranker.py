@@ -60,28 +60,37 @@ class ResultRanker:
 
                 # Update the specific source score if it's higher
                 if source_type == 'lexical':
-                    combined_results_map[doc_page_id]['lexical_score'] = max(combined_results_map[doc_page_id]['lexical_score'], current_score)
+                    combined_results_map[doc_page_id]['lexical_score'] = max(
+                        combined_results_map[doc_page_id]['lexical_score'], current_score)
                 elif source_type == 'vector':
-                    combined_results_map[doc_page_id]['vector_score'] = max(combined_results_map[doc_page_id]['vector_score'], current_score)
+                    combined_results_map[doc_page_id]['vector_score'] = max(
+                        combined_results_map[doc_page_id]['vector_score'], current_score)
 
                 all_scores.append(current_score)
 
 
         # Determine max scores for normalization
-        max_lexical_score = max(res.get('lexical_score', 0.0) for res in combined_results_map.values()) if combined_results_map else 0.0
-        max_vector_score = max(res.get('vector_score', 0.0) for res in combined_results_map.values()) if combined_results_map else 0.0
+        max_lexical_score = (max(res.get('lexical_score', 0.0) 
+                                 for res in combined_results_map.values()) 
+                             if combined_results_map else 0.0)
+        max_vector_score = (max(res.get('vector_score', 0.0) 
+                                for res in combined_results_map.values()) 
+                            if combined_results_map else 0.0)
 
         # Calculate combined scores
         final_ranked_list = []
         for doc_page_id, res in combined_results_map.items():
             # Normalize individual scores
-            normalized_lexical_score = ResultRanker._normalize_score(res.get('lexical_score', 0.0), max_lexical_score)
-            normalized_vector_score = ResultRanker._normalize_score(res.get('vector_score', 0.0), max_vector_score)
+            normalized_lexical_score = ResultRanker._normalize_score(
+                res.get('lexical_score', 0.0), max_lexical_score)
+            normalized_vector_score = ResultRanker._normalize_score(
+                res.get('vector_score', 0.0), max_vector_score)
 
             # Simple weighted sum (can be tuned)
             # You might want to adjust these weights based on empirical testing
-            combined_score = (0.6 * normalized_lexical_score) + (0.4 * normalized_vector_score)
-            res['score'] = combined_score # Overwrite the original score with the combined score
+            combined_score = ((0.6 * normalized_lexical_score) + 
+                              (0.4 * normalized_vector_score))
+            res['score'] = combined_score  # Overwrite the original score with the combined score
             final_ranked_list.append(res)
 
         # Sort by combined score in descending order
@@ -94,7 +103,8 @@ class ResultRanker:
         end_index = start_index + page_size
         paginated_results = final_ranked_list[start_index:end_index]
 
-        log_handle.info(f"Collated and ranked {total_unique_results} unique results. Returning page {page_number} (size {page_size}).")
+        log_handle.info(f"Collated and ranked {total_unique_results} unique results. "
+                        f"Returning page {page_number} (size {page_size}).")
         return paginated_results, total_unique_results
 
     # --- Optional: Reciprocal Rank Fusion (RRF) Implementation ---
@@ -107,7 +117,7 @@ class ResultRanker:
     #     Args:
     #         results_lists (List[List[Dict[str, Any]]]): A list where each element is a list of results
     #                                                      from a different search source (e.g., lexical, vector).
-    #                                                      Each result dict must have 'document_id' and 'page_number'.
+    #         Each result dict must have 'document_id' and 'page_number'.
     #         k (int): A constant that controls the influence of lower ranks.
     #     Returns:
     #         List[Dict[str, Any]]: A single list of results, ranked by RRF score.
@@ -118,16 +128,17 @@ class ResultRanker:
     #     for results_list in results_lists:
     #         for rank, result in enumerate(results_list):
     #             doc_page_id = f"{result.get('document_id')}-{result.get('page_number')}"
-    #             fused_scores[doc_page_id] += 1 / (k + rank + 1) # rank is 0-indexed
+    #             fused_scores[doc_page_id] += 1 / (k + rank + 1)  # rank is 0-indexed
     #             if doc_page_id not in doc_data:
     #                 doc_data[doc_page_id] = result
     #
     #     # Sort by fused score
-    #     ranked_doc_ids = sorted(fused_scores.keys(), key=lambda doc_id: fused_scores[doc_id], reverse=True)
+    #     ranked_doc_ids = sorted(fused_scores.keys(), 
+    #                             key=lambda doc_id: fused_scores[doc_id], reverse=True)
     #
     #     final_ranked_results = []
     #     for doc_id in ranked_doc_ids:
-    #         doc_data[doc_id]['score'] = fused_scores[doc_id] # Add the RRF score
+    #         doc_data[doc_id]['score'] = fused_scores[doc_id]  # Add the RRF score
     #         final_ranked_results.append(doc_data[doc_id])
     #
     #     return final_ranked_results

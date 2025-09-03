@@ -1,14 +1,11 @@
 import logging
-import string
-import traceback
-import hashlib
-import time
-
-from opensearchpy import OpenSearch, RequestsHttpConnection, NotFoundError
 import os
+import string
+import time
+import traceback
 from typing import List, Dict, Any, Tuple
 
-from sentence_transformers import CrossEncoder
+from opensearchpy import NotFoundError
 
 from backend.common.opensearch import get_opensearch_config, get_opensearch_client
 from backend.common.embedding_models import get_embedding_model_factory
@@ -42,12 +39,13 @@ class IndexSearcher:
         try:
             embedding_model = get_embedding_model_factory(self._config)
             self._reranker = embedding_model.get_reranking_model()
-            log_handle.info(f"Using embedding model type '{self._config.EMBEDDING_MODEL_TYPE}' for reranking")
-        except Exception as e:
+            log_handle.info(
+                f"Using embedding model type '{self._config.EMBEDDING_MODEL_TYPE}' for reranking")
+        except Exception:
             traceback.print_exc()
             self._reranker = None
 
-        log_handle.info(f"Initialized IndexSearcher")
+        log_handle.info("Initialized IndexSearcher")
 
     def _build_category_filters(self, categories: Dict[str, List[str]]) -> List[Dict[str, Any]]:
         filters = []
@@ -62,7 +60,8 @@ class IndexSearcher:
                         "minimum_should_match": 1
                     }
                 })
-                log_handle.debug(f"Added bookmark filter: {self._bookmark_field} with values {values}")
+                log_handle.debug(
+                    f"Added bookmark filter: {self._bookmark_field} with values {values}")
             else:
                 field_name = f"{self._metadata_prefix}.{category_key}.keyword"
                 filters.append({
@@ -81,21 +80,18 @@ class IndexSearcher:
         exact_match determines if exact phrase match is used.
         exclude_words are terms to exclude from results.
         """
-        # TODO(rajatjain): Remove the code for fuzzy matches. Now the code handles typing suggestions.
+        # TODO(rajatjain): Remove the code for fuzzy matches.
+        # Now the code handles typing suggestions.
         query_field = self._text_fields.get(detected_language)
         if not query_field:
-            log_handle.warning(f"Detected language '{detected_language}' not supported. Defaulting to Hindi field.")
+            log_handle.warning(
+                f"Detected language '{detected_language}' not supported. "
+                f"Defaulting to Hindi field.")
             query_field = 'text_content_hindi'
 
-        # Determine which analyzer to use for highlighting
-        analyzer_name = None
-        if detected_language == "hi":
-            analyzer_name = "hindi_analyzer"
-        elif detected_language == "gu":
-            analyzer_name = "gujarati_analyzer"
-
-        log_handle.verbose(f"Lexical search targeting field: {query_field} for language: {detected_language}, "
-                           f"exact_match: {exact_match}, exclude_words: {exclude_words}")
+        log_handle.verbose(
+            f"Lexical search targeting field: {query_field} for language: {detected_language}, "
+            f"exact_match: {exact_match}, exclude_words: {exclude_words}")
 
         # Build the main query based on exact_match
         if exact_match:
@@ -135,7 +131,7 @@ class IndexSearcher:
         bool_query = {
             "must": [main_query]
         }
-        
+
         # Add exclude words as must_not clauses
         if exclude_words:
             must_not_clauses = []
@@ -147,7 +143,6 @@ class IndexSearcher:
                 })
             bool_query["must_not"] = must_not_clauses
             log_handle.debug(f"Added {len(exclude_words)} exclude words to lexical query.")
-        
         query_body = {
             "query": {
                 "bool": bool_query
@@ -175,7 +170,7 @@ class IndexSearcher:
                 "k": size
             }
         }
-        
+
         category_filters = self._build_category_filters(categories)
         if category_filters:
             # For filtered vector search, add filters directly to the knn query
@@ -185,17 +180,15 @@ class IndexSearcher:
                 }
             }
             log_handle.debug(f"Added {len(category_filters)} category filters to vector query.")
-        
         query_body = {
             "size": size,
             "query": {
                 "knn": knn_query
             }
         }
-        
+
         log_handle.verbose(
             f"Vector query: {json_dumps(query_body, truncate_fields=['vector'])}")
-        
         return query_body
 
     def _extract_results(
@@ -214,7 +207,7 @@ class IndexSearcher:
                 field = self._text_fields.get(language)
 
                 # Prioritise the highlighted content if available
-                highlighted_fragment = hit.get('highlight', {}).get(field, []) 
+                highlighted_fragment = hit.get('highlight', {}).get(field, [])
                 if highlighted_fragment:
                     content_snippet = "...".join(highlighted_fragment)
             elif not is_lexical:
@@ -262,16 +255,18 @@ class IndexSearcher:
             total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
             log_handle.info(f"Lexical search executed. Total hits: {total_hits}.")
             log_handle.info(
-                f"Lexical search response: {json_dumps(response, truncate_fields=['content_snippet', 'vector_embedding'])}")
-            return self._extract_results(hits, is_lexical=True, language=detected_language), total_hits
+                f"Lexical search response: "
+                f"{json_dumps(response, truncate_fields=['content_snippet', 'vector_embedding'])}")
+            return (self._extract_results(hits, is_lexical=True, language=detected_language),
+                    total_hits)
         except Exception as e:
             log_handle.error(f"Error during lexical search: {e}", exc_info=True)
             return [], 0
 
     def perform_vector_search(
             self, keywords: str, embedding: List[float], categories: Dict[str, List[str]],
-            page_size: int, page_number: int, language: str, rerank: bool = True, rerank_top_k: int = 40) \
-            -> Tuple[List[Dict[str, Any]], int]:
+            page_size: int, page_number: int, language: str, rerank: bool = True,
+            rerank_top_k: int = 40) -> Tuple[List[Dict[str, Any]], int]:
         initial_fetch_size = rerank_top_k
         from_ = 0 if rerank else (page_number - 1) * page_size
 
@@ -294,7 +289,8 @@ class IndexSearcher:
                 return self._extract_results(hits, is_lexical=False, language=language), total_hits
 
             text_field = self._text_fields.get(language, "text_content_hindi")
-            log_handle.info(f"Performing reranking on {len(hits)} documents for query: '{keywords}'")
+            log_handle.info(
+                f"Performing reranking on {len(hits)} documents for query: '{keywords}'")
 
             # Create pairs of [query, document_text] for the reranker
             sentence_pairs = []
@@ -310,7 +306,8 @@ class IndexSearcher:
             rerank_scores = self._reranker.predict(
                 sentence_pairs)
             rerank_duration = time.time() - rerank_start_time
-            log_handle.info(f"--- Reranker.predict() finished. Took {rerank_duration:.2f} seconds. ---")
+            log_handle.info(
+                f"--- Reranker.predict() finished. Took {rerank_duration:.2f} seconds. ---")
 
             for hit, score in zip(hits, rerank_scores):
                 hit["rerank_score"] = score
@@ -323,12 +320,14 @@ class IndexSearcher:
             end_index = start_index + page_size
             paginated_hits = reranked_hits[start_index:end_index]
 
-            return self._extract_results(paginated_hits, is_lexical=False, language=language), total_hits
+            return (self._extract_results(paginated_hits, is_lexical=False, language=language),
+                    total_hits)
         except Exception as e:
             log_handle.error(f"Error during vector search: {e}", exc_info=True)
             return [], 0
 
-    def find_similar_by_id(self, doc_id: str, language: str, size: int = 10) -> Tuple[List[Dict[str, Any]], int]:
+    def find_similar_by_id(self, doc_id: str, language: str, size: int = 10) \
+            -> Tuple[List[Dict[str, Any]], int]:
         """
         Finds documents similar to the one with the given doc_id.
         """
@@ -338,7 +337,9 @@ class IndexSearcher:
             source_vector = source_doc['_source'].get(self._vector_field)
 
             if not source_vector:
-                log_handle.warning(f"Document {doc_id} does not have a vector embedding. Cannot find similar documents.")
+                log_handle.warning(
+                    f"Document {doc_id} does not have a vector embedding. "
+                    f"Cannot find similar documents.")
                 return [], 0
 
             # 2. Build a k-NN query to find similar vectors, excluding the source document itself
@@ -351,7 +352,7 @@ class IndexSearcher:
                                 "knn": {
                                     self._vector_field: {
                                         "vector": source_vector,
-                                        "k": size + 1  # Fetch one extra to account for the source doc
+                                        "k": size + 1
                                     }
                                 }
                             }
@@ -374,7 +375,6 @@ class IndexSearcher:
                 body=query_body
             )
             hits = response.get('hits', {}).get('hits', [])
-            total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
 
             # The total will be for the whole index, so we cap it at the number of results returned.
             effective_total = len(hits)
@@ -385,8 +385,9 @@ class IndexSearcher:
         except NotFoundError:
             log_handle.error(f"Document with id '{doc_id}' not found.")
             return [], 0
-        except Exception as e:
-            log_handle.error(f"Error finding similar documents for doc_id {doc_id}: {e}", exc_info=True)
+        except Exception as exc:
+            log_handle.error(
+                f"Error finding similar documents for doc_id {doc_id}: {exc}", exc_info=True)
             return [], 0
 
     def get_paragraph_context(self, chunk_id: str, language: str) -> Dict[str, Any]:
@@ -404,14 +405,17 @@ class IndexSearcher:
             current_para_id = source.get('paragraph_id')
 
             if document_id is None or current_para_id is None:
-                raise ValueError(f"Source document for chunk_id {chunk_id} is missing 'document_id' or 'paragraph_id'")
+                raise ValueError(
+                    f"Source document for chunk_id {chunk_id} is missing "
+                    f"'document_id' or 'paragraph_id'")
 
             current_para_id = int(current_para_id)
 
             # Initialize the context with the current document we already have.
             context = {
                 "previous": None,
-                "current": self._extract_results([current_doc_response], is_lexical=False, language=language)[0],
+                "current": self._extract_results(
+                    [current_doc_response], is_lexical=False, language=language)[0],
                 "next": None
             }
 
@@ -430,9 +434,12 @@ class IndexSearcher:
             }
 
             response = self._opensearch_client.search(index=self._index_name, body=query_body)
-            neighbor_hits = self._extract_results(response.get('hits', {}).get('hits', []), is_lexical=False, language=language)
-            log_handle.info(f"response: {json_dumps(response, truncate_fields=['vector_embedding'])}")
-            log_handle.info(f"neighbor_hits: {json_dumps(neighbor_hits, truncate_fields=['vector_embedding'])}")
+            neighbor_hits = self._extract_results(
+                response.get('hits', {}).get('hits', []), is_lexical=False, language=language)
+            log_handle.info(
+                f"response: {json_dumps(response, truncate_fields=['vector_embedding'])}")
+            log_handle.info(
+                f"neighbor_hits: {json_dumps(neighbor_hits, truncate_fields=['vector_embedding'])}")
             # Step 3: Populate the context with the neighbors.
             for doc in neighbor_hits:
                 para_id = int(doc.get('paragraph_id', 0))
@@ -450,8 +457,10 @@ class IndexSearcher:
         except (ValueError, TypeError) as e:
             log_handle.error(f"Could not process context for chunk_id '{chunk_id}': {e}")
             return {}
-        except Exception as e:
-            log_handle.error(f"An unexpected error occurred getting paragraph context for {chunk_id}: {e}", exc_info=True)
+        except Exception as exc:
+            log_handle.error(
+                f"An unexpected error occurred getting paragraph context for {chunk_id}: {exc}",
+                exc_info=True)
             return {}
 
     def get_spelling_suggestions(
