@@ -48,7 +48,6 @@ class IndexGenerator:
         reindex_metadata_only: bool = False, dry_run: bool = True):
         log_handle.info(
             f"Indexing document: {document_id}, reindex_metadata_only: {reindex_metadata_only}, "
-            f"pages_list: {pages_list}, "
             f"Dry Run: {dry_run}")
         paragraphs = []
         for page_num in pages_list:
