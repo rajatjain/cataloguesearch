@@ -368,6 +368,131 @@ def test_api_context_endpoint(api_server):
     else:
         log_handle.info("No search results found, skipping context test")
 
+def test_is_lexical_query(api_server):
+    """Test is_lexical_query() logic with Hindi text searches."""
+    # Test case 1: "इंदौर का इतिहास" - should trigger lexical search
+    # (3 words, no punctuation, so is_lexical_query should return True)
+    search_payload_1 = {
+        "query": "इंदौर का इतिहास",
+        "language": "hi",
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "page_size": 10,
+        "page_number": 1,
+        "enable_reranking": True
+    }
+    
+    response_1 = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload_1
+    )
+    
+    assert response_1.status_code == 200
+    data_1 = response_1.json()
+    log_handle.info(f"Response for 'इंदौर का इतिहास': {json_dumps(data_1, truncate_fields=['vector_embedding'])}")
+    
+    # Validate response structure for lexical search
+    validate_result_schema(data_1, True)
+    
+    # Should have lexical results and specifically from indore_hindi.pdf
+    assert data_1["total_results"] > 0, "Expected lexical results for 'इंदौर का इतिहास'"
+    
+    # Verify results are from indore_hindi.pdf
+    found_indore_file = False
+    for result in data_1["results"]:
+        if "indore_hindi.pdf" in result["filename"]:
+            found_indore_file = True
+            break
+    assert found_indore_file, "Expected to find results from indore_hindi.pdf"
+    
+    # Test case 2: "इंदौर का इतिहास?" - should trigger vector search  
+    # (has punctuation '?', so is_lexical_query should return False)
+    search_payload_2 = {
+        "query": "इंदौर का इतिहास?",
+        "language": "hi",
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "page_size": 10,
+        "page_number": 1,
+        "enable_reranking": True
+    }
+    
+    response_2 = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload_2
+    )
+    
+    assert response_2.status_code == 200
+    data_2 = response_2.json()
+    log_handle.info(f"Response for 'इंदौर का इतिहास?': {json_dumps(data_2, truncate_fields=['vector_embedding'])}")
+    
+    # Validate response structure for vector search
+    validate_result_schema(data_2, False)
+    
+    # Should have vector results (can be from any file)
+    assert data_2["total_vector_results"] > 0, "Expected vector results for 'इंदौर का इतिहास?'"
+    
+    # Test case 3: "સોનગઢ ઇતિહાસ" - should trigger lexical search
+    # (2 words, no punctuation, so is_lexical_query should return True)
+    search_payload_3 = {
+        "query": "સોનગઢ ઇતિહાસ",
+        "language": "gu",
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "page_size": 10,
+        "page_number": 1,
+        "enable_reranking": True
+    }
+    
+    response_3 = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload_3
+    )
+    
+    assert response_3.status_code == 200
+    data_3 = response_3.json()
+    log_handle.info(f"Response for 'સોનગઢ ઇતિહાસ': {json_dumps(data_3, truncate_fields=['vector_embedding'])}")
+    
+    # Validate response structure for lexical search
+    validate_result_schema(data_3, True)
+    
+    # Should have lexical results
+    assert data_3["total_results"] > 0, "Expected lexical results for 'સોનગઢ ઇતિહાસ'"
+    
+    # Test case 4: "સોનગઢનો ઇતિહાસ?" - should trigger vector search  
+    # (has punctuation '?', so is_lexical_query should return False)
+    search_payload_4 = {
+        "query": "સોનગઢનો ઇતિહાસ?",
+        "language": "gu",
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "page_size": 10,
+        "page_number": 1,
+        "enable_reranking": True
+    }
+    
+    response_4 = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload_4
+    )
+    
+    assert response_4.status_code == 200
+    data_4 = response_4.json()
+    log_handle.info(f"Response for 'સોનગઢનો ઇતિહાસ?': {json_dumps(data_4, truncate_fields=['vector_embedding'])}")
+    
+    # Validate response structure for vector search
+    validate_result_schema(data_4, False)
+    
+    # Should have vector results
+    assert data_4["total_vector_results"] > 0, "Expected vector results for 'સોનગઢનો ઇતિહાસ?'"
+    
+    log_handle.info(f"is_lexical_query test passed - Hindi lexical: {data_1['total_results']}, Hindi vector: {data_2['total_vector_results']}, Gujarati lexical: {data_3['total_results']}, Gujarati vector: {data_4['total_vector_results']} results")
+
+
 def validate_result_schema(data, lexical_results):
     keys = ["results", "total_results", "vector_results", "total_vector_results"]
     for key in keys:
