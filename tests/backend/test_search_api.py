@@ -196,16 +196,10 @@ def test_api_search_endpoint(api_server):
     data = response.json()
     
     # Check response structure
-    assert "total_results" in data
-    assert "results" in data
-    assert "vector_results" in data
-    assert isinstance(data["results"], list)
-    assert isinstance(data["vector_results"], list)
-    
+    validate_result_schema(data, True)
     log_handle.info(f"✓ API search test passed - found {data['total_results']} lexical results and {data.get('total_vector_results', 0)} vector results")
 
 
-@pytest.mark.skip("search_api.py hardcodes to take only Granth, Year, Anuyog.")
 def test_api_metadata_endpoint(api_server):
     """Test the /api/metadata endpoint."""
     response = requests.get(f"http://{api_server.host}:{api_server.port}/api/metadata")
@@ -233,7 +227,7 @@ def test_api_exact_phrase_search(api_server):
             "expected_file": "thanjavur_hindi.pdf"
         },
         {
-            "query": "ગુલાબી નગરી", 
+            "query": "વિધાધર ભટ્ટાયાર્યની",
             "language": "gu",
             "expected_file": "jaipur_gujarati.pdf"
         }
@@ -259,11 +253,9 @@ def test_api_exact_phrase_search(api_server):
         assert response.status_code == 200
         data = response.json()
         log_handle.info(f"response: {json_dumps(data, truncate_fields=['vector_embedding'])}")
-        
-        # Check response structure
-        assert "total_results" in data
-        assert "results" in data
-        assert isinstance(data["results"], list)
+        validate_result_schema(data, True)
+
+        assert len(data["results"]) > 0
         for result in data["results"]:
             fname = result["filename"]
             assert fname == test_case["expected_file"]
@@ -296,10 +288,8 @@ def test_api_exclude_words(api_server):
     log_handle.info(f"Regular search response: {json_dumps(data, truncate_fields=['vector_embedding'])}")
     
     # Check response structure
-    assert "total_results" in data
-    assert "results" in data
-    assert isinstance(data["results"], list)
-    
+    validate_result_schema(data, True)
+
     # Should return 2 results
     regular_result_count = data["total_results"]
     assert regular_result_count == 3, f"Expected 2 results for regular search, got {regular_result_count}"
@@ -326,10 +316,8 @@ def test_api_exclude_words(api_server):
     log_handle.info(f"Exclude words search response: {json_dumps(data, truncate_fields=['vector_embedding'])}")
     
     # Check response structure
-    assert "total_results" in data
-    assert "results" in data
-    assert isinstance(data["results"], list)
-    
+    validate_result_schema(data, True)
+
     # Should return only 1 result after excluding "हंपी"
     exclude_result_count = data["total_results"]
     assert exclude_result_count == 1, f"Expected 1 result after excluding 'हंपी', got {exclude_result_count}"
@@ -379,3 +367,14 @@ def test_api_context_endpoint(api_server):
             log_handle.info("No chunk_id found in search results, skipping context test")
     else:
         log_handle.info("No search results found, skipping context test")
+
+def validate_result_schema(data, lexical_results):
+    keys = ["results", "total_results", "vector_results", "total_vector_results"]
+    for key in keys:
+        assert key in data
+    if lexical_results:
+        assert data["vector_results"] == []
+        assert data["total_vector_results"] == 0
+    else:
+        assert data["results"] == []
+        assert data["total_results"] == 0

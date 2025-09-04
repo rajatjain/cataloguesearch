@@ -79,7 +79,7 @@ async def initialize():
         metadata = get_metadata(config)
         filtered_metadata = {
             key: values for key, values in metadata.items()
-            if key in ["Granth", "Anuyog", "Year"]
+            if key in config.FILTERED_METADATA_FIELDS
         }
         app.state.metadata_cache["data"] = filtered_metadata
         app.state.metadata_cache["timestamp"] = time.time()

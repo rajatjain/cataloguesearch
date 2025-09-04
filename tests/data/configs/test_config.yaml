@@ -14,6 +14,8 @@ index:
       similarity_threshold: 0.5
   chunk_strategy: "paragraph"
 
+search:
+  filtered_metadata_fields: ["type", "category", "language"]
 
 opensearch:
   host: localhost

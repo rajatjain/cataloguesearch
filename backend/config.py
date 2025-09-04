@@ -121,6 +121,8 @@ class Config:
             return self._settings.get("vector_embeddings", {}).get("embedding_model_type", "base")
         elif name == "RERANKER_ONNX_PATH":
             return self._settings.get("vector_embeddings", {}).get("reranker_onnx_path", None)
+        elif name == "FILTERED_METADATA_FIELDS":
+            return self._settings.get("search", {}).get("filtered_metadata_fields", {})
         else:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
