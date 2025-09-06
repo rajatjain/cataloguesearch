@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import multiprocessing
 import os
 import shutil
 import threading
@@ -20,11 +19,10 @@ from tests.backend.base import *
 
 log_handle = logging.getLogger(__name__)
 
-def run_api_server(host, port):
-    """Module-level function to run the API server (required for multiprocessing)."""
-    # Initialize test environment in the API server process
-    # This is needed because the API server runs in a separate process
-    # and doesn't inherit the pytest fixture initialization
+def run_api_server_in_thread(host, port, stop_event):
+    """Function to run the API server in a thread."""
+    # Initialize test environment in the API server thread
+    # This ensures the same process context as the test
     import os
     from dotenv import load_dotenv
     from backend.config import Config
@@ -47,14 +45,31 @@ def run_api_server(host, port):
     
     # Import the FastAPI app
     from backend.api.search_api import app
-    # Run the server
-    uvicorn.run(
-        app, 
-        host=host, 
-        port=port, 
-        log_level="error",  # Reduce log noise during tests
+    
+    # Create a custom server that can be stopped
+    import uvicorn
+    from uvicorn import Config as UvicornConfig
+    
+    config = UvicornConfig(
+        app=app,
+        host=host,
+        port=port,
+        log_level="error",
         access_log=False
     )
+    server = uvicorn.Server(config)
+    
+    # Run server until stop event is set
+    import asyncio
+    
+    async def serve():
+        await server.serve()
+    
+    # Run the server
+    try:
+        asyncio.run(serve())
+    except Exception as e:
+        log_handle.error(f"API server error: {e}")
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -112,14 +127,20 @@ class APIServerManager:
     def __init__(self, host="127.0.0.1", port=8001):
         self.host = host
         self.port = port
-        self.process = None
         self.server_thread = None
+        self.stop_event = None
         
-    def start_server_in_process(self):
-        """Start the API server in a separate process."""
-        # Start server in a separate process using the module-level function
-        self.process = multiprocessing.Process(target=run_api_server, args=(self.host, self.port))
-        self.process.start()
+    def start_server_in_thread(self):
+        """Start the API server in a separate thread."""
+        self.stop_event = threading.Event()
+        
+        # Start server in a separate thread
+        self.server_thread = threading.Thread(
+            target=run_api_server_in_thread, 
+            args=(self.host, self.port, self.stop_event),
+            daemon=True
+        )
+        self.server_thread.start()
         
         # Wait for server to start up
         self._wait_for_server_startup()
@@ -142,13 +163,17 @@ class APIServerManager:
         
     def stop_server(self):
         """Stop the API server."""
-        if self.process and self.process.is_alive():
-            log_handle.info("Stopping API server process...")
-            self.process.terminate()
-            self.process.join(timeout=10)
-            if self.process.is_alive():
-                self.process.kill()
-            self.process = None
+        if self.stop_event:
+            self.stop_event.set()
+        
+        if self.server_thread and self.server_thread.is_alive():
+            log_handle.info("Stopping API server thread...")
+            self.server_thread.join(timeout=5)
+            if self.server_thread.is_alive():
+                log_handle.warning("API server thread did not stop gracefully")
+        
+        self.server_thread = None
+        self.stop_event = None
 
 
 @pytest.fixture(scope="module")
@@ -158,7 +183,7 @@ def api_server():
     
     try:
         log_handle.info("Starting API server for tests...")
-        server_manager.start_server_in_process()
+        server_manager.start_server_in_thread()
         yield server_manager
     finally:
         log_handle.info("Stopping API server...")
@@ -491,6 +516,253 @@ def test_is_lexical_query(api_server):
     assert data_4["total_vector_results"] > 0, "Expected vector results for 'સોનગઢનો ઇતિહાસ?'"
     
     log_handle.info(f"is_lexical_query test passed - Hindi lexical: {data_1['total_results']}, Hindi vector: {data_2['total_vector_results']}, Gujarati lexical: {data_3['total_results']}, Gujarati vector: {data_4['total_vector_results']} results")
+
+
+def test_api_spell_suggestion_search(api_server):
+    """Test search with spelling suggestion functionality."""
+    test_cases = [
+        {
+            "misspelled_query": "सराफ",
+            "language": "hi",
+            "expected_suggestion": "सराफा",
+            "expected_file": "indore_hindi.pdf"
+        },
+        {
+            "misspelled_query": "સરાફ",
+            "language": "gu",
+            "expected_suggestion": "સરાફા",
+            "expected_file": "indore_gujarati.pdf"
+        }
+    ]
+    
+    for i, test_case in enumerate(test_cases):
+        # Test case 1: Search for misspelled word - should return no results but suggest correct spelling
+        search_payload_1 = {
+            "query": test_case["misspelled_query"],
+            "language": test_case["language"],
+            "exact_match": False,
+            "exclude_words": [],
+            "categories": {},
+            "page_size": 10,
+            "page_number": 1,
+            "enable_reranking": True
+        }
+        
+        response_1 = requests.post(
+            f"http://{api_server.host}:{api_server.port}/api/search",
+            json=search_payload_1
+        )
+        
+        assert response_1.status_code == 200
+        data_1 = response_1.json()
+        log_handle.info(f"Response for '{test_case['misspelled_query']}': {json_dumps(data_1, truncate_fields=['vector_embedding'])}")
+        
+        # Should have no results but contain suggestions
+        assert data_1["total_results"] == 0, f"Expected no results for misspelled '{test_case['misspelled_query']}'"
+        assert "suggestions" in data_1, "Expected suggestions in response"
+        assert len(data_1["suggestions"]) > 0, "Expected at least one suggestion"
+        
+        # Check if expected suggestion is in suggestions
+        suggested_words = data_1["suggestions"]
+        assert test_case["expected_suggestion"] in suggested_words, f"Expected '{test_case['expected_suggestion']}' in suggestions"
+        
+        # Test case 2: Search for the suggested word - should return results from expected file
+        search_payload_2 = {
+            "query": test_case["expected_suggestion"],
+            "language": test_case["language"],
+            "exact_match": False,
+            "exclude_words": [],
+            "categories": {},
+            "page_size": 10,
+            "page_number": 1,
+            "enable_reranking": True
+        }
+        
+        response_2 = requests.post(
+            f"http://{api_server.host}:{api_server.port}/api/search",
+            json=search_payload_2
+        )
+        
+        assert response_2.status_code == 200
+        data_2 = response_2.json()
+        log_handle.info(f"Response for '{test_case['expected_suggestion']}': {json_dumps(data_2, truncate_fields=['vector_embedding'])}")
+        
+        # Should have results for the correctly spelled word
+        assert data_2["total_results"] > 0, f"Expected results for correctly spelled '{test_case['expected_suggestion']}'"
+        
+        # Validate response structure
+        validate_result_schema(data_2, True)
+        
+        # Validate that results come from expected file
+        found_expected_file = False
+        for result in data_2["results"]:
+            if test_case["expected_file"] in result["filename"]:
+                found_expected_file = True
+                break
+        assert found_expected_file, f"Expected to find results from {test_case['expected_file']}"
+        
+        log_handle.info(f"✓ {test_case['language']} spell suggestion test passed - '{test_case['misspelled_query']}' returned {data_1['total_results']} results with {len(data_1.get('suggestions', []))} suggestions, '{test_case['expected_suggestion']}' returned {data_2['total_results']} results from {test_case['expected_file']}")
+    
+    log_handle.info("✓ All spell suggestion tests passed")
+
+
+def test_get_context(api_server):
+    """Test the /api/context/{document_id} endpoint with Gujarati and Hindi queries."""
+    test_cases = [
+        {
+            "query": "અહમદનગર",
+            "language": "gu", 
+            "expected_file": "hampi_gujarati.pdf"
+        },
+        {
+            "query": "गोलकोंडा",
+            "language": "hi",
+            "expected_file": "hampi_hindi.pdf"
+        }
+    ]
+    
+    for i, test_case in enumerate(test_cases):
+        # Step 1: Issue search query to get document_id
+        search_payload = {
+            "query": test_case["query"],
+            "language": test_case["language"],
+            "exact_match": False,
+            "exclude_words": [],
+            "categories": {},
+            "page_size": 10,
+            "page_number": 1,
+            "enable_reranking": True
+        }
+        
+        search_response = requests.post(
+            f"http://{api_server.host}:{api_server.port}/api/search",
+            json=search_payload
+        )
+        
+        assert search_response.status_code == 200
+        search_data = search_response.json()
+        log_handle.info(f"Search response for '{test_case['query']}': {json_dumps(search_data, truncate_fields=['vector_embedding'])}")
+        
+        # Validate we have search results
+        assert search_data["total_results"] > 0, f"Expected results for '{test_case['query']}'"
+        
+        # Validate results come from expected file
+        first_result = search_data["results"][0]
+        assert test_case["expected_file"] in first_result["filename"], f"Expected result from {test_case['expected_file']}"
+        
+        # Step 2: Get document_id from first result
+        document_id = first_result.get("document_id") or first_result.get("id") or first_result.get("_id")
+        assert document_id is not None, "Expected document_id in search result"
+        
+        # Step 3: Issue get_context API call
+        context_response = requests.get(
+            f"http://{api_server.host}:{api_server.port}/api/context/{document_id}?language={test_case['language']}"
+        )
+        
+        assert context_response.status_code == 200, f"Context API should return 200 for document_id: {document_id}"
+        context_data = context_response.json()
+        log_handle.info(f"Context response for document_id '{document_id}': {json_dumps(context_data, truncate_fields=['vector_embedding'])}")
+        
+        # Step 4: Validate response structure - should have previous, current, next keys
+        expected_keys = {"previous", "current", "next"}
+        actual_keys = set(context_data.keys())
+        assert expected_keys.issubset(actual_keys), f"Expected keys {expected_keys} in context response, got {actual_keys}"
+        
+        # Step 5: Validate consecutive paragraph_id values
+        paragraphs = []
+        for key in ["previous", "current", "next"]:
+            if context_data[key] is not None:  # Some keys might be None at document boundaries
+                paragraph_id = context_data[key].get("paragraph_id")
+                if paragraph_id is not None:
+                    paragraphs.append((key, paragraph_id))
+        
+        # Sort by paragraph_id to check if they are consecutive
+        paragraphs.sort(key=lambda x: x[1])
+        assert len(paragraphs) > 2
+        
+        # Check if paragraph_ids are consecutive
+        for j in range(1, len(paragraphs)):
+            current_id = paragraphs[j][1]
+            previous_id = paragraphs[j-1][1]
+            assert current_id == previous_id + 1, f"Expected consecutive paragraph_ids, got {previous_id} and {current_id}"
+        
+        log_handle.info(f"✓ {test_case['language']} context test passed - document_id: {document_id}, paragraph_ids: {[p[1] for p in paragraphs]}")
+    
+    log_handle.info("✓ All context tests passed")
+
+
+def test_get_similar_documents(api_server):
+    """Test the /api/similar/{document_id} endpoint with Gujarati and Hindi queries."""
+    test_cases = [
+        {
+            "query": "સોનગઢનો ઇતિહાસ શું છે?",
+            "language": "gu"
+        },
+        {
+            "query": "सोनगढ़ का इतिहास क्या है?",
+            "language": "hi"
+        }
+    ]
+    
+    for i, test_case in enumerate(test_cases):
+        # Step 1: Issue search query to get search results
+        search_payload = {
+            "query": test_case["query"],
+            "language": test_case["language"],
+            "exact_match": False,
+            "exclude_words": [],
+            "categories": {},
+            "page_size": 10,
+            "page_number": 1,
+            "enable_reranking": True
+        }
+        
+        search_response = requests.post(
+            f"http://{api_server.host}:{api_server.port}/api/search",
+            json=search_payload
+        )
+        
+        assert search_response.status_code == 200
+        search_data = search_response.json()
+        log_handle.info(f"Search response for '{test_case['query']}': {json_dumps(search_data, truncate_fields=['vector_embedding'])}")
+        
+        # Validate we have enough search results to get the second one
+        total_results = search_data.get("total_vector_results", 0)
+        assert total_results >= 2, f"Expected at least 2 results for '{test_case['query']}', got {total_results}"
+        
+        # Step 2: Get document_id from second result
+        one_result = search_data["vector_results"][1]
+
+        assert one_result is not None, "Could not find search result"
+        
+        document_id = one_result.get("document_id")
+        assert document_id is not None, "Expected document_id in second search result"
+        
+        log_handle.info(f"Using document_id '{document_id}' from second search result")
+        
+        # Step 3: Issue get similar documents API call
+        similar_response = requests.get(
+            f"http://{api_server.host}:{api_server.port}/api/similar-documents/{document_id}?language={test_case['language']}"
+        )
+        
+        assert similar_response.status_code == 200, f"Similar documents API should return 200 for document_id: {document_id}"
+        similar_data = similar_response.json()
+        log_handle.info(f"Similar documents response for document_id '{document_id}': {json_dumps(similar_data, truncate_fields=['vector_embedding'])}")
+        
+        # Step 4: Validate response has non-zero results
+        similar_results_count = similar_data.get("total_results", 0)
+        assert similar_results_count > 0, f"Expected non-zero similar documents for document_id: {document_id}, got {similar_results_count}"
+        
+        # Step 5: Validate response structure
+        # Validate each similar document has required fields
+        for doc in similar_data["results"]:
+            assert "document_id" in doc or "_id" in doc or "document_id" in doc, "Expected id field in similar document"
+            assert "filename" in doc, "Expected filename field in similar document"
+            assert "content_snippet" in doc
+        
+        log_handle.info(f"✓ {test_case['language']} similar documents test passed - document_id: {document_id}, found {similar_results_count} similar documents")
+    
+    log_handle.info("✓ All similar documents tests passed")
 
 
 def validate_result_schema(data, lexical_results):

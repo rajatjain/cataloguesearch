@@ -146,21 +146,6 @@ class SingleFileProcessor:
 
         return scan_meta
 
-    def _get_file_checksum(self) -> str:
-        """Generates a SHA256 checksum for a file's content."""
-        hasher = hashlib.sha256()
-        try:
-            with open(self._file_path, 'rb') as f:
-                while chunk := f.read(8192): # Read in 8KB chunks
-                    hasher.update(chunk)
-            return hasher.hexdigest()
-        except FileNotFoundError:
-            log_handle.warning(f"File not found for checksum calculation: {self._file_path}")
-            return ""
-        except Exception as e:
-            log_handle.error(f"Error calculating checksum for {self._file_path}: {e}")
-            return ""
-
     def _get_config_hash(self, config_data: dict) -> str:
         """Generates a SHA256 hash for a config dictionary."""
         # Ensure consistent order for hashing by sorting keys
@@ -223,7 +208,7 @@ class SingleFileProcessor:
                 self._save_state(
                     document_id,
                     {
-                        "file_path": self._file_path,
+                        "file_path": relative_pdf_path,
                         "last_indexed_timestamp": self._scan_time,
                         "file_checksum": "",
                         "config_hash": "",
@@ -292,7 +277,7 @@ class SingleFileProcessor:
 
         if not dry_run:
             self._save_state(document_id, {
-                "file_path": self._file_path,
+                "file_path": relative_path,
                 "last_indexed_timestamp": self._scan_time,
                 "file_checksum": "",
                 "config_hash": current_config_hash,
@@ -435,7 +420,7 @@ class Discovery:
                         log_handle.info(f"Indexing file {file_name}")
                     single_file_processor.index(dry_run)
 
-        self._index_state.garbage_collect()
+        self._index_state.garbage_collect(self.base_pdf_folder)
 
         # TODO(rajatjain): Delete files from OpenSearch index if they no longer exist in the
         # filesystem.

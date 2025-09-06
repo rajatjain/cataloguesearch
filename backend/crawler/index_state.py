@@ -122,7 +122,7 @@ class IndexState:
         conn.commit()
         conn.close()
 
-    def garbage_collect(self):
+    def garbage_collect(self, base_dir):
         """
         Deletes all the document_ids which no longer have files
         that exist in the filesystem.
@@ -137,7 +137,7 @@ class IndexState:
 
         for row in rows:
             document_id, file_path = row
-            if not os.path.exists(file_path):
+            if not os.path.exists(os.path.join(base_dir, file_path)):
                 c.execute("DELETE FROM indexed_files_state WHERE document_id = ?", (document_id,))
                 deleted_files.append(file_path)
 
@@ -145,50 +145,6 @@ class IndexState:
         conn.close()
         log_handle.info(f"Garbage Collect: Deleted {deleted_files} files from state.")
         return deleted_files
-
-    def get_metadata_cache(self) -> dict[str, list[str]]:
-        """
-        Retrieves cached metadata from the database.
-        Returns dict[str, list[str]] with metadata keys and their values.
-        """
-        conn = sqlite3.connect(self.state_db_path)
-        c = conn.cursor()
-        c.execute("SELECT metadata_key, metadata_values FROM metadata_cache")
-        rows = c.fetchall()
-        conn.close()
-
-        metadata = {}
-        for row in rows:
-            key = row[0]
-            values = json.loads(row[1])
-            metadata[key] = values
-
-        return metadata
-
-    def update_metadata_cache(self, metadata: dict[str, list[str]]):
-        """
-        Updates the metadata cache with new metadata.
-
-        Args:
-            metadata: Dictionary with metadata keys and their values
-        """
-        conn = sqlite3.connect(self.state_db_path)
-        c = conn.cursor()
-
-        # Clear existing metadata
-        c.execute("DELETE FROM metadata_cache")
-
-        # Insert new metadata
-        timestamp = datetime.now().isoformat()
-        for key, values in metadata.items():
-            c.execute("""
-                INSERT INTO metadata_cache (metadata_key, metadata_values, last_updated_timestamp)
-                VALUES (?, ?, ?)
-            """, (key, json.dumps(values), timestamp))
-
-        conn.commit()
-        conn.close()
-        log_handle.info(f"Updated metadata cache with {len(metadata)} keys")
 
     def calculate_ocr_checksum(self, relative_file_path: str, ocr_pages: list[int]) -> str:
         """
@@ -225,21 +181,6 @@ class IndexState:
         checksum_input = f"{relative_file_path}:{pages_str}"
 
         return hashlib.sha256(checksum_input.encode('utf-8')).hexdigest()
-
-    def has_metadata_cache(self) -> bool:
-        """
-        Checks if metadata cache exists and is not empty.
-
-        Returns:
-            bool: True if metadata cache has data, False otherwise
-        """
-        conn = sqlite3.connect(self.state_db_path)
-        c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM metadata_cache")
-        count = c.fetchone()[0]
-        conn.close()
-
-        return count > 0
 
     def delete_index_state(self):
         """
