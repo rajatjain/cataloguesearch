@@ -20,16 +20,23 @@ const OCRUtils = () => {
     const [bookmarks, setBookmarks] = useState([]);
     const [showBookmarks, setShowBookmarks] = useState(false);
     const [showBookmarkModal, setShowBookmarkModal] = useState(false);
-    
+
+    // New state for batch processing
+    const [batchJobId, setBatchJobId] = useState(null);
+    const [batchJobStatus, setBatchJobStatus] = useState(null);
+    const [batchProgress, setBatchProgress] = useState(0);
+    const [batchTotalPages, setBatchTotalPages] = useState(0);
+    const [batchZipFilename, setBatchZipFilename] = useState(null);
+
     const fileInputRef = useRef(null);
     const imageContainerRef = useRef(null);
+    const pollingIntervalRef = useRef(null);
 
     // PDF.js dynamic loading
     useEffect(() => {
         const loadPdfJs = async () => {
             if (!window.pdfjsLib) {
                 try {
-                    // Load PDF.js library dynamically
                     const script = document.createElement('script');
                     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
                     script.async = true;
@@ -46,7 +53,6 @@ const OCRUtils = () => {
                 }
             }
             
-            // Configure PDF.js worker after loading
             if (window.pdfjsLib) {
                 window.pdfjsLib.GlobalWorkerOptions.workerSrc = 
                     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -54,7 +60,25 @@ const OCRUtils = () => {
         };
 
         loadPdfJs();
+
+        // Cleanup polling on component unmount
+        return () => {
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+            }
+        };
     }, []);
+
+    const resetBatchState = () => {
+        setBatchJobId(null);
+        setBatchJobStatus(null);
+        setBatchProgress(0);
+        setBatchTotalPages(0);
+        setBatchZipFilename(null);
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+        }
+    };
 
     const handleFileSelect = async (event) => {
         const file = event.target.files[0];
@@ -63,6 +87,7 @@ const OCRUtils = () => {
         setSelectedFile(file);
         setOcrResults(null);
         setError(null);
+        resetBatchState();
         
         const fileType = file.type;
         setIsPDF(fileType === 'application/pdf');
@@ -92,7 +117,6 @@ const OCRUtils = () => {
             setTotalPages(pdf.numPages);
             setCurrentPage(1);
             
-            // Load bookmarks/outline
             try {
                 const outline = await pdf.getOutline();
                 if (outline && outline.length > 0) {
@@ -148,7 +172,6 @@ const OCRUtils = () => {
         if (newPage !== currentPage) {
             setCurrentPage(newPage);
             await renderPDFPage(pdfDoc, newPage);
-            // Clear previous OCR results when page changes
             setOcrResults(null);
         }
     };
@@ -188,11 +211,11 @@ const OCRUtils = () => {
         setIsLoading(true);
         setError(null);
         setOcrResults(null);
+        resetBatchState();
 
         try {
             let fileToProcess = selectedFile;
             
-            // If it's a PDF, convert current page to image
             if (isPDF) {
                 fileToProcess = await convertCurrentPageToImage();
                 if (!fileToProcess) {
@@ -226,6 +249,104 @@ const OCRUtils = () => {
         }
     };
 
+    const handleBatchOCRProcess = async () => {
+        if (!selectedFile || !isPDF) {
+            setError('Please select a PDF file for batch processing.');
+            return;
+        }
+
+        setIsLoading(true);
+        setError(null);
+        setOcrResults(null);
+        resetBatchState();
+
+        try {
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('language', language);
+
+            const response = await fetch(`${API_BASE_URL}/ocr/batch`, {
+                method: 'POST',
+                body: formData,
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || 'Failed to start batch job.');
+            }
+
+            setBatchJobId(data.job_id);
+            setBatchJobStatus('queued');
+
+        } catch (err) {
+            setError(`Failed to start batch OCR job: ${err.message}`);
+            setIsLoading(false);
+        }
+    };
+
+    const handleCancelBatchJob = async () => {
+        if (!batchJobId) return;
+
+        try {
+            setBatchJobStatus('canceling');
+            const response = await fetch(`${API_BASE_URL}/ocr/batch/cancel/${batchJobId}`, {
+                method: 'POST',
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.detail || 'Failed to cancel job.');
+            }
+
+            // The polling will handle the final state change
+        } catch (err) {
+            setError(`Error canceling job: ${err.message}`);
+        }
+    };
+
+    useEffect(() => {
+        if (batchJobId && (batchJobStatus === 'queued' || batchJobStatus === 'preparing' || batchJobStatus === 'processing' || batchJobStatus === 'canceling')) {
+            pollingIntervalRef.current = setInterval(async () => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/ocr/batch/status/${batchJobId}`);
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.detail || 'Failed to get job status.');
+                    }
+
+                    setBatchJobStatus(data.status);
+                    setBatchProgress(data.progress);
+                    setBatchTotalPages(data.total_pages);
+
+                    if (data.status === 'completed') {
+                        setBatchZipFilename(data.zip_filename);
+                    }
+
+                    if (data.status === 'completed' || data.status === 'failed' || data.status === 'canceled') {
+                        clearInterval(pollingIntervalRef.current);
+                        setIsLoading(false);
+                        if (data.status === 'failed') {
+                            setError(`Batch processing failed: ${data.error}`);
+                        }
+                    }
+                } catch (err) {
+                    setError(`Error polling for job status: ${err.message}`);
+                    clearInterval(pollingIntervalRef.current);
+                    setIsLoading(false);
+                }
+            }, 3000);
+        }
+
+        return () => {
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+            }
+        };
+    }, [batchJobId, batchJobStatus]);
+
+
     const clearHighlights = () => {
         if (imageContainerRef.current) {
             const highlights = imageContainerRef.current.querySelectorAll('.highlight-box');
@@ -239,9 +360,6 @@ const OCRUtils = () => {
         const img = imageContainerRef.current.querySelector('img');
         if (!img) return;
 
-        const imgRect = img.getBoundingClientRect();
-        const containerRect = imageContainerRef.current.getBoundingClientRect();
-        
         const scaleX = img.clientWidth / img.naturalWidth;
         const scaleY = img.clientHeight / img.naturalHeight;
 
@@ -280,7 +398,6 @@ const OCRUtils = () => {
             addHighlights(paragraph.boxes, true);
         }
         
-        // Update active paragraph styling
         const paragraphElements = document.querySelectorAll('.paragraph-item');
         paragraphElements.forEach(el => el.classList.remove('active'));
         
@@ -290,7 +407,6 @@ const OCRUtils = () => {
         }
     };
 
-    // Update highlights when showOutlines changes
     useEffect(() => {
         updateHighlights();
     }, [showOutlines, ocrResults]);
@@ -299,7 +415,6 @@ const OCRUtils = () => {
         if (!pdfDoc || !bookmark.dest) return;
         
         try {
-            // Handle different destination formats
             let dest = bookmark.dest;
             if (typeof dest === 'string') {
                 dest = await pdfDoc.getDestination(dest);
@@ -307,16 +422,15 @@ const OCRUtils = () => {
             
             if (dest && dest.length > 0) {
                 const pageRef = dest[0];
-                const pageNumber = await pdfDoc.getPageIndex(pageRef) + 1; // Convert to 1-based
+                const pageNumber = await pdfDoc.getPageIndex(pageRef) + 1;
                 
                 if (pageNumber !== currentPage) {
                     setCurrentPage(pageNumber);
                     await renderPDFPage(pdfDoc, pageNumber);
-                    setOcrResults(null); // Clear OCR results when navigating
+                    setOcrResults(null);
                 }
             }
             
-            // Close the modal after navigation
             setShowBookmarkModal(false);
         } catch (err) {
             console.error('Error navigating to bookmark:', err);
@@ -324,7 +438,7 @@ const OCRUtils = () => {
     };
 
     const BookmarkItem = ({ item, level = 0 }) => {
-        const [isExpanded, setIsExpanded] = useState(level < 2); // Auto-expand first 2 levels
+        const [isExpanded, setIsExpanded] = useState(level < 2);
         
         const hasChildren = item.items && item.items.length > 0;
         const indent = level * 16;
@@ -370,6 +484,18 @@ const OCRUtils = () => {
                         ))}
                     </div>
                 )}
+            </div>
+        );
+    };
+
+    const ProgressBar = ({ progress, total }) => {
+        const percentage = total > 0 ? Math.round((progress / total) * 100) : 0;
+        return (
+            <div className="w-full bg-slate-200 rounded-full h-2.5">
+                <div 
+                    className="bg-sky-600 h-2.5 rounded-full transition-all duration-500" 
+                    style={{ width: `${percentage}%` }}
+                ></div>
             </div>
         );
     };
@@ -527,7 +653,7 @@ const OCRUtils = () => {
                                 </div>
                             )}
 
-                            {/* Show bookmarks toggle for PDFs with bookmarks */}
+                            {/* Show bookmarks toggle */}
                             {isPDF && bookmarks.length > 0 && (
                                 <button
                                     onClick={() => setShowBookmarkModal(true)}
@@ -541,23 +667,78 @@ const OCRUtils = () => {
                             )}
                         </div>
 
-                        {/* Run OCR Button */}
-                        <button
-                            onClick={handleOCRProcess}
-                            disabled={!selectedFile || isLoading}
-                            className="bg-sky-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-sky-700 transition duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center"
-                        >
-                            {isLoading ? (
-                                <>
-                                    <Spinner />
-                                    <span className="ml-2">Processing...</span>
-                                </>
-                            ) : (
-                                'Run OCR'
+                        {/* Action Buttons */}
+                        <div className="flex items-center space-x-2">
+                            {isPDF && (
+                                <button
+                                    onClick={handleBatchOCRProcess}
+                                    disabled={!selectedFile || isLoading}
+                                    className="bg-green-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-700 transition duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center"
+                                >
+                                    {isLoading && batchJobId ? (
+                                        <>
+                                            <Spinner />
+                                            <span className="ml-2">Processing PDF...</span>
+                                        </>
+                                    ) : (
+                                        'Download Full PDF Text'
+                                    )}
+                                </button>
                             )}
-                        </button>
+                            <button
+                                onClick={handleOCRProcess}
+                                disabled={!selectedFile || isLoading}
+                                className="bg-sky-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-sky-700 transition duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center"
+                            >
+                                {isLoading && !batchJobId ? (
+                                    <>
+                                        <Spinner />
+                                        <span className="ml-2">Processing...</span>
+                                    </>
+                                ) : (
+                                    'Run OCR on Current Page'
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
+
+                {/* Batch Progress Bar */}
+                {batchJobId && (
+                    <div className="p-4 border-b border-slate-200">
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-medium text-slate-700">
+                                {batchJobStatus === 'queued' && 'Server at max limit, waiting for a slot to be freed....'}
+                                {batchJobStatus === 'preparing' && 'Preparing PDF for processing...'}
+                                {batchJobStatus === 'processing' && `Processing PDF... (${batchProgress} / ${batchTotalPages} pages)`}
+                                {batchJobStatus === 'canceling' && 'Canceling job...'}
+                                {batchJobStatus === 'canceled' && 'Job was canceled.'}
+                                {batchJobStatus === 'completed' && 'PDF processing complete!'}
+                                {batchJobStatus === 'failed' && 'PDF processing failed.'}
+                            </h3>
+                            {(batchJobStatus === 'processing' || batchJobStatus === 'queued' || batchJobStatus === 'preparing') && (
+                                <button
+                                    onClick={handleCancelBatchJob}
+                                    className="text-sm bg-red-500 text-white font-semibold py-1 px-3 rounded-md hover:bg-red-600 transition duration-200"
+                                >
+                                    Cancel
+                                </button>
+                            )}
+                        </div>
+                        {(batchJobStatus === 'processing' || batchJobStatus === 'queued' || batchJobStatus === 'preparing') && (
+                            <ProgressBar progress={batchProgress} total={batchTotalPages} />
+                        )}
+                        {batchJobStatus === 'completed' && (
+                             <a
+                                href={`${API_BASE_URL}/ocr/batch/download/${batchJobId}`}
+                                download={batchZipFilename || 'extracted_text.zip'}
+                                className="inline-block bg-sky-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-sky-700 transition duration-200"
+                            >
+                                Download Zip File
+                            </a>
+                        )}
+                    </div>
+                )}
 
                 {/* Error Display */}
                 {error && (
@@ -566,7 +747,7 @@ const OCRUtils = () => {
                     </div>
                 )}
 
-                {/* Content Panels - Full width of main container */}
+                {/* Content Panels */}
                 <div className="flex flex-col lg:flex-row">
                     {/* Image Preview Panel */}
                     <div className="flex-1 p-4">
