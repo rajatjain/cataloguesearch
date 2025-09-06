@@ -777,13 +777,13 @@ const OCRUtils = () => {
                         <h3 className="text-lg font-semibold text-slate-800 mb-3">Preview</h3>
                         <div 
                             ref={imageContainerRef}
-                            className="relative border border-slate-300 rounded-lg overflow-hidden bg-slate-50 min-h-[300px] w-full"
+                            className="relative border border-slate-300 rounded-lg overflow-hidden bg-slate-50 w-full"
                         >
                             {previewUrl ? (
                                 <img
                                     src={previewUrl}
                                     alt="Preview"
-                                    className="max-w-full max-h-[700px] object-contain"
+                                    className="w-full h-auto max-h-[700px] object-contain"
                                     onLoad={updateHighlights}
                                 />
                             ) : (
