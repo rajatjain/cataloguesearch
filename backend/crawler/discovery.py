@@ -208,7 +208,7 @@ class SingleFileProcessor:
                 self._save_state(
                     document_id,
                     {
-                        "file_path": self._file_path,
+                        "file_path": relative_pdf_path,
                         "last_indexed_timestamp": self._scan_time,
                         "file_checksum": "",
                         "config_hash": "",
@@ -277,7 +277,7 @@ class SingleFileProcessor:
 
         if not dry_run:
             self._save_state(document_id, {
-                "file_path": self._file_path,
+                "file_path": relative_path,
                 "last_indexed_timestamp": self._scan_time,
                 "file_checksum": "",
                 "config_hash": current_config_hash,
@@ -420,7 +420,7 @@ class Discovery:
                         log_handle.info(f"Indexing file {file_name}")
                     single_file_processor.index(dry_run)
 
-        self._index_state.garbage_collect()
+        self._index_state.garbage_collect(self.base_pdf_folder)
 
         # TODO(rajatjain): Delete files from OpenSearch index if they no longer exist in the
         # filesystem.

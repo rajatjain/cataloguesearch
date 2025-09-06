@@ -122,7 +122,7 @@ class IndexState:
         conn.commit()
         conn.close()
 
-    def garbage_collect(self):
+    def garbage_collect(self, base_dir):
         """
         Deletes all the document_ids which no longer have files
         that exist in the filesystem.
@@ -137,7 +137,7 @@ class IndexState:
 
         for row in rows:
             document_id, file_path = row
-            if not os.path.exists(file_path):
+            if not os.path.exists(os.path.join(base_dir, file_path)):
                 c.execute("DELETE FROM indexed_files_state WHERE document_id = ?", (document_id,))
                 deleted_files.append(file_path)
 
