@@ -165,6 +165,10 @@ export const Header = ({ currentPage }) => {
         );
     }
 
+    if (currentPage === 'ocr-utils') {
+        return null; // No header/banner for OCR Utils page
+    }
+
     // For 'home' and 'aagam-khoj' pages
     return (
         <div className="text-center py-6 mb-4">

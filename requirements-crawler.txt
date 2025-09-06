@@ -11,6 +11,7 @@ pdf2image==1.17.0            # Converts PDF files to images for OCR
 pytesseract==0.3.10          # Python wrapper for Google's Tesseract-OCR Engine
 Pillow==10.4.0               # Image processing library, required by pytesseract and pdf2image
 google-cloud-vision==3.10.2  # Google Cloud Vision API client for advanced OCR/image analysis
+opencv-python==4.8.1.78
 
 # Note: These libraries significantly increase Docker image size
 # Only include in crawler/processing containers, not API containers
