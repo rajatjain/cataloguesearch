@@ -69,6 +69,23 @@ const OCRUtils = () => {
         };
     }, []);
 
+    // Effect to handle Escape key for bookmark modal
+    useEffect(() => {
+        const handleEsc = (event) => {
+            if (event.key === 'Escape') {
+                setShowBookmarkModal(false);
+            }
+        };
+
+        if (showBookmarkModal) {
+            window.addEventListener('keydown', handleEsc);
+        }
+
+        return () => {
+            window.removeEventListener('keydown', handleEsc);
+        };
+    }, [showBookmarkModal]);
+
     const resetBatchState = () => {
         setBatchJobId(null);
         setBatchJobStatus(null);
@@ -504,8 +521,14 @@ const OCRUtils = () => {
         <div>
             {/* Bookmarks Modal */}
             {showBookmarkModal && bookmarks.length > 0 && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden">
+                <div 
+                    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+                    onClick={() => setShowBookmarkModal(false)}
+                >
+                    <div 
+                        className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col"
+                        onClick={e => e.stopPropagation()}
+                    >
                         <div className="flex items-center justify-between p-4 border-b border-slate-200">
                             <h3 className="text-lg font-semibold text-slate-800">Select Bookmark</h3>
                             <button
@@ -518,7 +541,7 @@ const OCRUtils = () => {
                                 </svg>
                             </button>
                         </div>
-                        <div className="p-4 overflow-y-auto max-h-[60vh]">
+                        <div className="p-4 overflow-y-auto max-h-[calc(80vh-65px)]">
                             <div className="space-y-1">
                                 {bookmarks.map((bookmark, index) => (
                                     <BookmarkItem key={index} item={bookmark} level={0} />
