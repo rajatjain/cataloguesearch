@@ -76,29 +76,6 @@ class PDFProcessor:
         return True
 
 
-    def _get_page_list(self, scan_config):
-        all_pages = set()
-
-        # Add pages from the list of ranges
-        pages_list = scan_config.get("page_list", [])
-        for page in pages_list:
-            start = page.get("start")
-            end = page.get("end")
-
-            # Add pages if both start and end exist
-            if start is not None and end is not None:
-                all_pages.update(range(start, end + 1))
-
-        # Add pages from the top-level range
-        start_page = scan_config.get("start_page")
-        end_page = scan_config.get("end_page")
-
-        if start_page is not None and end_page is not None:
-            all_pages.update(range(start_page, end_page + 1))
-
-        # 3. Return the final sorted list of unique pages
-        return sorted(list(all_pages))
-
     def _generate_paragraphs(
             self, pdf_file: str, page_list: list[int], scan_config: dict,
             language: str) -> list[tuple[int, list[str]]]:

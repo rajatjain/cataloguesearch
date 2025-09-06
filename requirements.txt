@@ -11,3 +11,6 @@
 # - Use requirements-api.txt for API containers (lightweight)
 # - Use requirements-crawler.txt for document processing containers
 # - Use this file for local development with full capabilities
+
+# Development/Testing only dependencies
+pytest-cov==5.0.0            # Coverage reporting for pytest

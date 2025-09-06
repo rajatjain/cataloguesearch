@@ -149,8 +149,6 @@ class DiscoveryDaemon:
             # Update metadata cache after discovery
             logging.info("Updating metadata cache...")
             metadata = get_metadata(self.config)
-            self.index_state.update_metadata_cache(metadata)
-            logging.info("Metadata cache updated successfully")
 
         except Exception as e:
             logging.error(f"Discovery failed: {e}")
@@ -202,8 +200,6 @@ def run_discovery_once(config: Config, crawl=False, index=False, dry_run=False):
         # Update metadata cache after discovery
         logging.info("Updating metadata cache...")
         metadata = get_metadata(config)
-        index_state.update_metadata_cache(metadata)
-        logging.info("Metadata cache updated successfully")
         end = datetime.now()
         total_secs = int((end - start).total_seconds())
         hh, rem = divmod(total_secs, 3600)

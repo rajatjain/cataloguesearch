@@ -146,21 +146,6 @@ class SingleFileProcessor:
 
         return scan_meta
 
-    def _get_file_checksum(self) -> str:
-        """Generates a SHA256 checksum for a file's content."""
-        hasher = hashlib.sha256()
-        try:
-            with open(self._file_path, 'rb') as f:
-                while chunk := f.read(8192): # Read in 8KB chunks
-                    hasher.update(chunk)
-            return hasher.hexdigest()
-        except FileNotFoundError:
-            log_handle.warning(f"File not found for checksum calculation: {self._file_path}")
-            return ""
-        except Exception as e:
-            log_handle.error(f"Error calculating checksum for {self._file_path}: {e}")
-            return ""
-
     def _get_config_hash(self, config_data: dict) -> str:
         """Generates a SHA256 hash for a config dictionary."""
         # Ensure consistent order for hashing by sorting keys

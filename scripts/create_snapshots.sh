@@ -1,14 +1,39 @@
 #!/bin/bash
 
 # Script to create OpenSearch snapshots and store them locally
-# Usage: ./create_snapshots.sh <local_directory_path>
+# Usage: ./create_snapshots.sh [--use-podman] <local_directory_path>
 
 set -e  # Exit on any error
 
+# Default to docker
+USE_PODMAN=false
+CONTAINER_TOOL="docker"
+COMPOSE_COMMAND="docker-compose"
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --use-podman)
+            USE_PODMAN=true
+            CONTAINER_TOOL="podman"
+            COMPOSE_COMMAND="podman-compose"
+            shift
+            ;;
+        -*)
+            echo "Unknown option $1"
+            exit 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
 # Check if local directory path is provided
 if [ $# -ne 1 ]; then
-    echo "Usage: $0 <local_directory_path>"
+    echo "Usage: $0 [--use-podman] <local_directory_path>"
     echo "Example: $0 /home/user/opensearch_snapshots"
+    echo "Example: $0 --use-podman /home/user/opensearch_snapshots"
     exit 1
 fi
 
@@ -23,7 +48,7 @@ if [ ! -w "$LOCAL_SNAPSHOTS_DIR" ]; then
     exit 1
 fi
 
-echo "Starting OpenSearch snapshot creation..."
+echo "Starting OpenSearch snapshot creation using $CONTAINER_TOOL..."
 echo "Local snapshots directory: $LOCAL_SNAPSHOTS_DIR"
 
 # Step 1: Clean up existing repository
@@ -37,7 +62,7 @@ echo "Step 2: Setting up snapshot directory..."
 # 2. Fix the mount and permissions
 # 3. Restart OpenSearch
 echo "Stopping OpenSearch temporarily to fix snapshot directory..."
-docker-compose stop opensearch
+$COMPOSE_COMMAND stop opensearch
 
 # Clear and setup the host directory properly
 rm -rf "$LOCAL_SNAPSHOTS_DIR"/*
@@ -46,7 +71,7 @@ chmod 755 "$LOCAL_SNAPSHOTS_DIR"
 
 # Restart OpenSearch
 echo "Restarting OpenSearch..."
-docker-compose start opensearch
+$COMPOSE_COMMAND start opensearch
 
 # Wait for OpenSearch to be ready
 echo "Waiting for OpenSearch to start..."
