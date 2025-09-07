@@ -52,7 +52,24 @@ class PDFProcessor:
         output_ocr_dir = f"{self._base_ocr_folder}/{os.path.splitext(relative_pdf_path)[0]}"
         log_handle.info(f"Output OCR directory: {output_ocr_dir}")
 
+        # Check if output directory exists and has all required pages
         if os.path.exists(output_ocr_dir):
+            existing_files = set()
+            for filename in os.listdir(output_ocr_dir):
+                if filename.startswith("page_") and filename.endswith(".txt"):
+                    # Extract page number from filename (page_0001.txt -> 1)
+                    try:
+                        page_num = int(filename[5:9])  # Extract 4-digit number
+                        existing_files.add(page_num)
+                    except ValueError:
+                        continue
+            
+            # If all required pages exist, return early
+            if set(pages_list).issubset(existing_files):
+                log_handle.info(f"All required pages already processed in {output_ocr_dir}")
+                return True
+            
+            # Otherwise, remove existing directory to reprocess
             shutil.rmtree(output_ocr_dir)
 
         os.makedirs(output_ocr_dir, exist_ok=True)
