@@ -294,7 +294,7 @@ const OCRUtils = () => {
             }
 
             setBatchJobId(data.job_id);
-            setBatchJobStatus('queued');
+            setBatchJobStatus(data.status || 'queued');
 
         } catch (err) {
             setError(`Failed to start batch OCR job: ${err.message}`);
@@ -777,17 +777,17 @@ const OCRUtils = () => {
                         <h3 className="text-lg font-semibold text-slate-800 mb-3">Preview</h3>
                         <div 
                             ref={imageContainerRef}
-                            className="relative border border-slate-300 rounded-lg overflow-hidden bg-slate-50 w-full"
+                            className="relative border border-slate-300 rounded-lg overflow-hidden bg-slate-50 w-full h-[700px]"
                         >
                             {previewUrl ? (
                                 <img
                                     src={previewUrl}
                                     alt="Preview"
-                                    className="w-full h-auto max-h-[700px] object-contain"
+                                    className="w-full h-full object-contain"
                                     onLoad={updateHighlights}
                                 />
                             ) : (
-                                <div className="flex items-center justify-center h-64 text-slate-500">
+                                <div className="flex items-center justify-center h-full text-slate-500">
                                     <div className="text-center">
                                         <svg className="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                                             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
