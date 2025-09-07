@@ -26,6 +26,17 @@ const WhatsNew = () => {
 
     const updates = [
         {
+            date: "September 7, 2025",
+            newContent: [
+                "Pravachans on Padmanandi Panchvinchati 1960 Series",
+                "Pravachans (compiled) on Kartikeya Anupreksha 1952 Series",
+                "Total Indexed Pravachans: ~2500"
+            ],
+            newFeatures: [
+                "No new features."
+            ]
+        },
+        {
             date: "August 29, 2025",
             newContent: [
                 "Pravachans on Purusharth Siddhi Upay 1966 Series",
