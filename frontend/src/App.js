@@ -10,6 +10,7 @@ import { FeedbackForm } from './components/Feedback';
 import About from './components/About';
 import WhatsNew from './components/WhatsNew';
 import UsageGuide from './components/UsageGuide';
+import OCRUtils from './components/OCRUtils';
 import { Spinner, ChevronUpIcon, ChevronDownIcon, ExpandIcon } from './components/SharedComponents';
 
 // Import API service
@@ -134,6 +135,7 @@ const AppContent = () => {
         if (path === '/feedback') return 'feedback';
         if (path === '/whats-new') return 'whats-new';
         if (path === '/usage-guide') return 'usage-guide';
+        if (path === '/ocr-utils') return 'ocr-utils';
         return 'home'; // Default to 'home' for root path
     });
     
@@ -148,6 +150,8 @@ const AppContent = () => {
             setCurrentPageState('whats-new');
         } else if (path === '/usage-guide') {
             setCurrentPageState('usage-guide');
+        } else if (path === '/ocr-utils') {
+            setCurrentPageState('ocr-utils');
         }
         // For root path, don't override the current selection between home/aagam-khoj
     }, [location.pathname]);
@@ -188,7 +192,8 @@ const AppContent = () => {
             'about': '/about',
             'feedback': '/feedback',
             'whats-new': '/whats-new',
-            'usage-guide': '/usage-guide'
+            'usage-guide': '/usage-guide',
+            'ocr-utils': '/ocr-utils'
         };
         navigate(routes[page] || '/');
     };
@@ -657,6 +662,12 @@ const AppContent = () => {
                             <UsageGuide />
                         </main>
                     )}
+
+                    {currentPage === 'ocr-utils' && (
+                        <main>
+                            <OCRUtils />
+                        </main>
+                    )}
                 </div>
             </div>
             
@@ -700,6 +711,7 @@ export default function App() {
                 <Route path="/feedback" element={<AppContent />} />
                 <Route path="/whats-new" element={<AppContent />} />
                 <Route path="/usage-guide" element={<AppContent />} />
+                <Route path="/ocr-utils" element={<AppContent />} />
             </Routes>
         </Router>
     );
