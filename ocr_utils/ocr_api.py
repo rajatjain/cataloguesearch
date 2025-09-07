@@ -4,6 +4,7 @@ import os
 import tempfile
 import logging
 import time
+import psutil
 from typing import List, Dict, Optional
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from starlette.background import BackgroundTask
@@ -87,10 +88,12 @@ def process_single_page(page_image, language: str, page_num: int, page_filename:
     if not job_info or job_info.get("cancel_requested"):
         return
 
+    temp_image_path = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_image_file:
-            page_image.save(temp_image_file.name, "PNG")
-            paragraphs = extract_and_split_paragraphs(temp_image_file.name, lang=language)
+            temp_image_path = temp_image_file.name
+            page_image.save(temp_image_path, "PNG")
+            paragraphs = extract_and_split_paragraphs(temp_image_path, lang=language)
             page_text = "\n\n----\n\n".join(paragraphs)
             with open(os.path.join(output_dir, page_filename), "w") as text_file:
                 text_file.write(page_text)
@@ -100,6 +103,19 @@ def process_single_page(page_image, language: str, page_num: int, page_filename:
                 jobs[job_id]["progress"] += 1
     except Exception as e:
         log_handle.error(f"Error processing page {page_num} for job {job_id}: {e}")
+    finally:
+        # Clean up temporary image file
+        if temp_image_path and os.path.exists(temp_image_path):
+            try:
+                os.unlink(temp_image_path)
+            except Exception:
+                pass
+
+# --- Helper function for memory monitoring ---
+def get_memory_usage():
+    """Get current memory usage in MB"""
+    process = psutil.Process()
+    return process.memory_info().rss / 1024 / 1024
 
 # --- Background Task ---
 def process_pdf_in_background(file_path: str, language: str, job_id: str, original_filename: str):
@@ -108,37 +124,91 @@ def process_pdf_in_background(file_path: str, language: str, job_id: str, origin
     
     with job_semaphore:
         try:
+            initial_memory = get_memory_usage()
+            log_handle.info(f"PDF processing started for job {job_id}. Initial memory: {initial_memory:.1f}MB")
+            
             job_info["status"] = "preparing"
             output_dir = tempfile.mkdtemp()
             job_info["output_dir"] = output_dir
 
-            images = convert_from_path(file_path)
-            job_info["status"] = "processing"
+            # Get total pages without loading all images into memory
+            from pdf2image.exceptions import PDFInfoNotInstalledError
+            try:
+                import fitz  # PyMuPDF
+                doc = fitz.open(file_path)
+                total_pages = doc.page_count
+                doc.close()
+            except ImportError:
+                # Fallback to pdf2image page count
+                images = convert_from_path(file_path, first_page=1, last_page=1)
+                total_pages = len(convert_from_path(file_path))
+                del images  # Free memory immediately
             
-            total_pages = len(images)
+            after_init_memory = get_memory_usage()
+            log_handle.info(f"Job {job_id}: PDF has {total_pages} pages. Memory: {after_init_memory:.1f}MB (+{after_init_memory-initial_memory:.1f}MB)")
+            
+            job_info["status"] = "processing"
             job_info["total_pages"] = total_pages
 
             page_format_string = "page_%04d.txt" if total_pages >= 1000 else "page_%03d.txt"
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                futures = [
-                    executor.submit(
-                        process_single_page,
-                        img,
-                        language,
-                        i + 1,
-                        page_format_string % (i + 1),
-                        output_dir,
-                        job_id
-                    ) for i, img in enumerate(images)
-                ]
+            # Track progress for memory logging every 10%
+            completed_count = 0
+            last_logged_percent = 0
+            batch_size = 10  # Process 10 pages at a time to limit memory usage
 
-                for future in concurrent.futures.as_completed(futures):
-                    if job_info.get("cancel_requested"):
-                        executor.shutdown(wait=False, cancel_futures=True)
-                        job_info["status"] = "canceled"
-                        log_handle.info(f"Job {job_id} was canceled.")
-                        return
+            # Process images in batches to reduce memory usage
+            for batch_start in range(0, total_pages, batch_size):
+                if job_info.get("cancel_requested"):
+                    job_info["status"] = "canceled"
+                    log_handle.info(f"Job {job_id} was canceled.")
+                    return
+                
+                batch_end = min(batch_start + batch_size, total_pages)
+                log_handle.info(f"Job {job_id}: Processing batch {batch_start+1}-{batch_end} of {total_pages}")
+                
+                # Convert only this batch of pages
+                batch_images = convert_from_path(file_path, first_page=batch_start+1, last_page=batch_end)
+                batch_memory = get_memory_usage()
+                log_handle.info(f"Job {job_id}: Loaded batch of {len(batch_images)} images. Memory: {batch_memory:.1f}MB")
+                
+                # Process this batch with limited concurrency
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:  # Reduced workers
+                    futures = [
+                        executor.submit(
+                            process_single_page,
+                            img,
+                            language,
+                            batch_start + i + 1,
+                            page_format_string % (batch_start + i + 1),
+                            output_dir,
+                            job_id
+                        ) for i, img in enumerate(batch_images)
+                    ]
+
+                    for future in concurrent.futures.as_completed(futures):
+                        if job_info.get("cancel_requested"):
+                            executor.shutdown(wait=False, cancel_futures=True)
+                            job_info["status"] = "canceled"
+                            log_handle.info(f"Job {job_id} was canceled.")
+                            return
+                        
+                        completed_count += 1
+                        current_percent = int((completed_count / total_pages) * 100)
+                        
+                        # Log memory usage every 10% completion
+                        if current_percent >= last_logged_percent + 10:
+                            current_memory = get_memory_usage()
+                            log_handle.info(f"Job {job_id}: {current_percent}% complete ({completed_count}/{total_pages} pages). Memory: {current_memory:.1f}MB")
+                            last_logged_percent = current_percent
+                
+                # Clear batch images from memory explicitly
+                del batch_images
+                import gc
+                gc.collect()
+                
+                after_batch_memory = get_memory_usage()
+                log_handle.info(f"Job {job_id}: Completed batch, memory after cleanup: {after_batch_memory:.1f}MB")
 
             if job_info.get("cancel_requested"):
                 job_info["status"] = "canceled"
