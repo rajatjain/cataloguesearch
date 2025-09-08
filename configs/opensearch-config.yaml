@@ -9,19 +9,19 @@ search_index:
         hindi_nasal_normalizer:
           type: mapping
           mappings:
-            # Convert all halant forms to anusvara
+            # N-based conjuncts (न)
             - "न्त => ंत"
             - "न्थ => ंथ"
             - "न्द => ंद"
             - "न्ध => ंध"
             - "न्न => ंन"
             - "न्स => ंस"
-            - "न्श => ंश"
+            - "न्શ => ंश"
             - "न्ह => ंह"
             - "न्य => ंय"
             - "न्व => ंव"
             - "न्ल => ंल"
-            - "न्र => ंर"
+            - "н्र => ंर"
             - "न्च => ंच"
             - "न्छ => ंछ"
             - "न्ज => ंज"
@@ -30,19 +30,63 @@ search_index:
             - "न्ख => ंख"
             - "न्ग => ंग"
             - "न्घ => ंघ"
+            # NN-based conjuncts (ण)
             - "ण्ट => ंट"
             - "ण्ठ => ंठ"
             - "ण्ड => ंड"
             - "ण्ढ => ंढ"
             - "ण्ण => ंण"
+            # M-based conjuncts (म)
             - "म्प => ंप"
             - "म्फ => ंफ"
             - "म्ब => ंब"
             - "म्भ => ंभ"
             - "म्म => ंम"
+            # Velar Nasal (ङ्) conjuncts
+            - "ङ्क => ंक"
+            - "ङ्ख => ंख"
+            - "ङ्ग => ंग"
+            - "ङ्घ => ंघ"
+            # Palatal Nasal (ञ्) conjuncts
+            - "ञ्च => ंच"
+            - "ञ्छ => ंछ"
+            - "ञ्ज => ंज"
+            - "ञ्झ => ंझ"
+
+        gujarati_nasal_normalizer:
+          type: mapping
+          mappings:
+            # N-based conjuncts (ન)
+            - "ન્ત => ંત"
+            - "ન્થ => ંથ"
+            - "ન્દ => ંદ"
+            - "ન્ધ => ંધ"
+            - "ન્ન =>ંન"
+            - "ન્સ => ંસ"
+            - "ન્શ => ંશ"
+            - "ન્ચ => ંચ"
+            - "न्छ => ंछ"
+            - "ન્જ => ંજ"
+            - "ન્ઝ => ંઝ"
+            - "ન્ક => ંક"
+            - "ન્ખ => ંખ"
+            - "ન્ગ => ંગ"
+            - "ન્ઘ => ંઘ"
+            # M-based conjuncts (મ)
+            - "મ્પ => ંપ"
+            - "મ્ફ => ंફ"
+            - "મ્બ => ંબ"
+            - "મ્ભ => ંભ"
+            - "મ્મ => ંમ"
+            # NN-based conjuncts (ણ)
+            - "ણ્ટ => ંટ"
+            - "ણ્ઠ => ંઠ"
+            - "ણ્ડ => ંડ"
+            - "ણ્ઢ => ંઢ"
+            - "ણ્ણ =>ંણ"
+
       analyzer:
         hindi_analyzer:
-          # UPDATED: Changed tokenizer from 'standard' to 'icu_tokenizer'
           tokenizer: icu_tokenizer
           char_filter:
             - hindi_nasal_normalizer
@@ -51,8 +95,9 @@ search_index:
             - indic_normalizer
             - hindi_stop
         gujarati_analyzer:
-          # It's good practice to use icu_tokenizer for Gujarati as well
           tokenizer: icu_tokenizer
+          char_filter:
+            - gujarati_nasal_normalizer
           filter:
             - lowercase
             - indic_normalizer
@@ -68,7 +113,6 @@ search_index:
           type: icu_normalizer
           name: nfkc_cf
 
-  # Mappings - IMPORTANT: Ensure search_analyzer is also set!
   mappings:
     properties:
       document_id:
@@ -82,11 +126,11 @@ search_index:
       text_content_hindi:
         type: text
         analyzer: hindi_analyzer
-        search_analyzer: hindi_analyzer  # Explicitly set search analyzer
+        search_analyzer: hindi_analyzer
       text_content_gujarati:
         type: text
         analyzer: gujarati_analyzer
-        search_analyzer: gujarati_analyzer  # Explicitly set search analyzer
+        search_analyzer: gujarati_analyzer
       metadata:
         type: object
       bookmarks:
@@ -106,12 +150,11 @@ search_index:
             ef_construction: 256
             m: 48
 
-# New index definition for optimized metadata lookups
 metadata_index:
   settings:
     number_of_shards: 1
     number_of_replicas: 0
   mappings:
     properties:
-      values: # This field will hold an array of unique string values for a given metadata key
+      values:
         type: keyword
