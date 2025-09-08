@@ -20,6 +20,7 @@ const OCRUtils = () => {
     const [bookmarks, setBookmarks] = useState([]);
     const [showBookmarks, setShowBookmarks] = useState(false);
     const [showBookmarkModal, setShowBookmarkModal] = useState(false);
+    const [useGoogleOCR, setUseGoogleOCR] = useState(false);
 
     // New state for batch processing
     const [batchJobId, setBatchJobId] = useState(null);
@@ -28,8 +29,12 @@ const OCRUtils = () => {
     const [batchTotalPages, setBatchTotalPages] = useState(0);
     const [batchZipFilename, setBatchZipFilename] = useState(null);
 
+    // New state for cropped image preview
+    const [croppedPreviewUrl, setCroppedPreviewUrl] = useState(null);
+
     const fileInputRef = useRef(null);
     const imageContainerRef = useRef(null);
+    const croppedImageContainerRef = useRef(null);
     const pollingIntervalRef = useRef(null);
 
     // PDF.js dynamic loading
@@ -105,6 +110,7 @@ const OCRUtils = () => {
         setOcrResults(null);
         setError(null);
         resetBatchState();
+        setCroppedPreviewUrl(null);
         
         const fileType = file.type;
         setIsPDF(fileType === 'application/pdf');
@@ -190,6 +196,7 @@ const OCRUtils = () => {
             setCurrentPage(newPage);
             await renderPDFPage(pdfDoc, newPage);
             setOcrResults(null);
+            setCroppedPreviewUrl(null);
         }
     };
 
@@ -228,6 +235,7 @@ const OCRUtils = () => {
         setIsLoading(true);
         setError(null);
         setOcrResults(null);
+        setCroppedPreviewUrl(null);
         resetBatchState();
 
         try {
@@ -245,6 +253,7 @@ const OCRUtils = () => {
             formData.append('language', language);
             formData.append('crop_top', cropTop);
             formData.append('crop_bottom', cropBottom);
+            formData.append('use_google_ocr', useGoogleOCR);
 
             const response = await fetch(`${API_BASE_URL}/ocr`, {
                 method: 'POST',
@@ -272,6 +281,35 @@ const OCRUtils = () => {
             return;
         }
 
+        // Check cost if Google OCR is enabled
+        if (useGoogleOCR) {
+            try {
+                const costResponse = await fetch(`${API_BASE_URL}/ocr/calculate-cost`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        total_pages: totalPages,
+                        use_google_ocr: true
+                    })
+                });
+
+                const costData = await costResponse.json();
+                if (!costResponse.ok) {
+                    throw new Error(costData.detail || 'Failed to calculate cost.');
+                }
+
+                const confirmMessage = `It'll cost ₹${costData.cost}. Continue?`;
+                if (!window.confirm(confirmMessage)) {
+                    return;
+                }
+            } catch (err) {
+                setError(`Failed to calculate cost: ${err.message}`);
+                return;
+            }
+        }
+
         setIsLoading(true);
         setError(null);
         setOcrResults(null);
@@ -281,6 +319,7 @@ const OCRUtils = () => {
             const formData = new FormData();
             formData.append('file', selectedFile);
             formData.append('language', language);
+            formData.append('use_google_ocr', useGoogleOCR);
 
             const response = await fetch(`${API_BASE_URL}/ocr/batch`, {
                 method: 'POST',
@@ -363,6 +402,59 @@ const OCRUtils = () => {
         };
     }, [batchJobId, batchJobStatus]);
 
+    const handlePreviewCroppedImage = async () => {
+        if (!selectedFile || cropTop === 0 && cropBottom === 0) return;
+
+        setError(null);
+
+        try {
+            let imageSource = selectedFile;
+            
+            if (isPDF) {
+                imageSource = await convertCurrentPageToImage();
+                if (!imageSource) {
+                    throw new Error('Failed to convert PDF page to image');
+                }
+            }
+
+            const img = new Image();
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            return new Promise((resolve, reject) => {
+                img.onload = () => {
+                    const { width, height } = img;
+                    
+                    const topCropPixels = Math.floor(height * cropTop / 100);
+                    const bottomCropPixels = Math.floor(height * cropBottom / 100);
+                    
+                    const croppedHeight = height - topCropPixels - bottomCropPixels;
+                    
+                    canvas.width = width;
+                    canvas.height = croppedHeight;
+                    
+                    ctx.drawImage(img, 0, topCropPixels, width, croppedHeight, 0, 0, width, croppedHeight);
+                    
+                    const croppedDataUrl = canvas.toDataURL('image/png');
+                    setCroppedPreviewUrl(croppedDataUrl);
+                    setOcrResults(null);
+                    resolve();
+                };
+                
+                img.onerror = () => reject(new Error('Failed to load image'));
+                
+                if (isPDF) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => img.src = e.target.result;
+                    reader.readAsDataURL(imageSource);
+                } else {
+                    img.src = URL.createObjectURL(imageSource);
+                }
+            });
+        } catch (err) {
+            setError(`Failed to generate cropped preview: ${err.message}`);
+        }
+    };
 
     const clearHighlights = () => {
         if (imageContainerRef.current) {
@@ -653,6 +745,17 @@ const OCRUtils = () => {
                                 Show text outlines
                             </label>
 
+                            {/* Google OCR Toggle */}
+                            <label className="flex items-center text-sm text-slate-700">
+                                <input
+                                    type="checkbox"
+                                    checked={useGoogleOCR}
+                                    onChange={(e) => setUseGoogleOCR(e.target.checked)}
+                                    className="mr-2 h-4 w-4 text-sky-600 focus:ring-sky-500 border-slate-300 rounded"
+                                />
+                                Use Google OCR (₹0.13 per page)
+                            </label>
+
                             {/* PDF Navigation */}
                             {isPDF && pdfDoc && (
                                 <div className="flex items-center space-x-2 text-sm">
@@ -692,6 +795,15 @@ const OCRUtils = () => {
 
                         {/* Action Buttons */}
                         <div className="flex items-center space-x-2">
+                            {(cropTop > 0 || cropBottom > 0) && selectedFile && (
+                                <button
+                                    onClick={handlePreviewCroppedImage}
+                                    disabled={isLoading}
+                                    className="bg-orange-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-orange-700 transition duration-200 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center"
+                                >
+                                    Preview Cropped Image
+                                </button>
+                            )}
                             {isPDF && (
                                 <button
                                     onClick={handleBatchOCRProcess}
@@ -770,9 +882,9 @@ const OCRUtils = () => {
                     </div>
                 )}
 
-                {/* Content Panels */}
+                {/* Content Panels - Only show 2 panels at a time */}
                 <div className="flex flex-col lg:flex-row">
-                    {/* Image Preview Panel */}
+                    {/* Image Preview Panel - Always shown */}
                     <div className="flex-1 p-4">
                         <h3 className="text-lg font-semibold text-slate-800 mb-3">Preview</h3>
                         <div 
@@ -799,42 +911,75 @@ const OCRUtils = () => {
                         </div>
                     </div>
 
-                    {/* Results Panel */}
-                    <div className="flex-1 p-4 border-l border-slate-200">
-                        <h3 className="text-lg font-semibold text-slate-800 mb-3">OCR Results</h3>
-                        <div className="space-y-3 max-h-[700px] overflow-y-auto">
-                            {ocrResults?.paragraphs?.length > 0 ? (
-                                ocrResults.paragraphs.map((paragraph, index) => (
-                                    <div
-                                        key={index}
-                                        data-paragraph-index={index}
-                                        onClick={() => handleParagraphClick(paragraph, index)}
-                                        className="paragraph-item bg-slate-50 border border-slate-200 rounded-lg p-3 cursor-pointer hover:bg-slate-100 transition-colors"
-                                    >
-                                        <div className="text-xs text-slate-500 font-semibold mb-2">
-                                            Paragraph {index + 1}
+                    {/* Conditional Second Panel: Show OCR Results OR Cropped Preview */}
+                    {ocrResults ? (
+                        /* Results Panel - Show when OCR results exist */
+                        <div className="flex-1 p-4 border-l border-slate-200">
+                            <h3 className="text-lg font-semibold text-slate-800 mb-3">OCR Results</h3>
+                            <div className="space-y-3 max-h-[700px] overflow-y-auto">
+                                {ocrResults?.paragraphs?.length > 0 ? (
+                                    ocrResults.paragraphs.map((paragraph, index) => (
+                                        <div
+                                            key={index}
+                                            data-paragraph-index={index}
+                                            onClick={() => handleParagraphClick(paragraph, index)}
+                                            className="paragraph-item bg-slate-50 border border-slate-200 rounded-lg p-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                        >
+                                            <div className="text-xs text-slate-500 font-semibold mb-2">
+                                                Paragraph {index + 1}
+                                            </div>
+                                            <div className="text-sm text-slate-800 whitespace-pre-wrap font-mono">
+                                                {paragraph.text}
+                                            </div>
                                         </div>
-                                        <div className="text-sm text-slate-800 whitespace-pre-wrap font-mono">
-                                            {paragraph.text}
-                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-8 text-slate-500">
+                                        No text detected in the image.
                                     </div>
-                                ))
-                            ) : ocrResults ? (
-                                <div className="text-center py-8 text-slate-500">
-                                    No text detected in the image.
-                                </div>
-                            ) : (
-                                <div className="flex items-center justify-center h-64 text-slate-500 border border-slate-300 rounded-lg bg-slate-50">
-                                    <div className="text-center">
-                                        <svg className="mx-auto h-12 w-12 text-slate-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        <p className="mt-2">Upload a file and run OCR to see extracted text here</p>
-                                    </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        /* Cropped Image Preview Panel - Show when no OCR results */
+                        <div className="flex-1 p-4 border-l border-slate-200">
+                            <h3 className="text-lg font-semibold text-slate-800 mb-3">
+                                {croppedPreviewUrl ? 'Cropped Preview' : 'Cropped Preview / OCR Results'}
+                            </h3>
+                            <div 
+                                ref={croppedImageContainerRef}
+                                className="relative border border-slate-300 rounded-lg overflow-hidden bg-slate-50 w-full h-[700px]"
+                            >
+                                {croppedPreviewUrl ? (
+                                    <img
+                                        src={croppedPreviewUrl}
+                                        alt="Cropped Preview"
+                                        className="w-full h-full object-contain"
+                                    />
+                                ) : (
+                                    <div className="flex items-center justify-center h-full text-slate-500">
+                                        <div className="text-center">
+                                            <svg className="mx-auto h-12 w-12 text-slate-400 mb-3" stroke="currentColor" fill="none" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            <p className="mt-2 mb-4">
+                                                {(cropTop > 0 || cropBottom > 0) && selectedFile 
+                                                    ? 'Click "Preview Cropped Image" to see cropped version'
+                                                    : 'Set crop values and select a file to preview cropped image'
+                                                }
+                                            </p>
+                                            <div className="border-t border-slate-300 pt-4">
+                                                <svg className="mx-auto h-12 w-12 text-slate-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                                <p className="text-slate-400 text-sm">Or run OCR to see extracted text results</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <style>{`

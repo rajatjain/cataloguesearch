@@ -21,7 +21,7 @@ import shutil
 import concurrent.futures
 import threading
 
-from .extract_text import extract_and_split_paragraphs
+from .ocr import OCR, TesseractOCR, GoogleOCR
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -82,8 +82,18 @@ class BatchStatusResponse(BaseModel):
     zip_filename: Optional[str] = None
     error: Optional[str] = None
 
+class CostCalculationRequest(BaseModel):
+    total_pages: int
+    use_google_ocr: bool = False
+
+class CostCalculationResponse(BaseModel):
+    cost: str
+    pages: int
+    currency: str = "₹"
+
 # --- Helper function for parallel processing ---
-def process_single_page(page_image, language: str, page_num: int, page_filename: str, output_dir: str, job_id: str):
+def process_single_page(page_image, language: str, page_num: int, page_filename: str, output_dir: str, job_id: str,
+                        use_google_ocr: bool = False):
     job_info = jobs.get(job_id)
     if not job_info or job_info.get("cancel_requested"):
         return
@@ -93,7 +103,13 @@ def process_single_page(page_image, language: str, page_num: int, page_filename:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_image_file:
             temp_image_path = temp_image_file.name
             page_image.save(temp_image_path, "PNG")
-            paragraphs = extract_and_split_paragraphs(temp_image_path, lang=language)
+            
+            if use_google_ocr:
+                ocr_engine = GoogleOCR()
+            else:
+                ocr_engine = TesseractOCR()
+            
+            paragraphs = ocr_engine.extract_text(temp_image_path, lang=language)
             page_text = "\n\n----\n\n".join(paragraphs)
             with open(os.path.join(output_dir, page_filename), "w") as text_file:
                 text_file.write(page_text)
@@ -118,7 +134,8 @@ def get_memory_usage():
     return process.memory_info().rss / 1024 / 1024
 
 # --- Background Task ---
-def process_pdf_in_background(file_path: str, language: str, job_id: str, original_filename: str):
+def process_pdf_in_background(file_path: str, language: str, job_id: str, original_filename: str,
+                              use_google_ocr: bool = False):
     job_info = jobs[job_id]
     output_dir = None
     
@@ -182,7 +199,8 @@ def process_pdf_in_background(file_path: str, language: str, job_id: str, origin
                             batch_start + i + 1,
                             page_format_string % (batch_start + i + 1),
                             output_dir,
-                            job_id
+                            job_id,
+                            use_google_ocr
                         ) for i, img in enumerate(batch_images)
                     ]
 
@@ -275,7 +293,8 @@ def cleanup_old_jobs():
 async def process_ocr_batch(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="PDF file to process"),
-    language: str = Form("hin", description="Language code for OCR (hin, guj, eng)")
+    language: str = Form("hin", description="Language code for OCR (hin, guj, eng)"),
+    use_google_ocr: bool = Form(False, description="Use Google Vision OCR instead of Tesseract")
 ):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported for batch processing")
@@ -300,7 +319,7 @@ async def process_ocr_batch(
         "completion_time": None
     }
 
-    background_tasks.add_task(process_pdf_in_background, temp_path, language, job_id, file.filename)
+    background_tasks.add_task(process_pdf_in_background, temp_path, language, job_id, file.filename, use_google_ocr)
     return BatchJobResponse(job_id=job_id)
 
 @app.post("/api/ocr/batch/cancel/{job_id}")
@@ -347,7 +366,8 @@ async def process_ocr(
     image: UploadFile = File(..., description="Image file to process"),
     language: str = Form("hin", description="Language code for OCR (hin, guj, eng)"),
     crop_top: int = Form(0, description="Percentage to crop from top (0-50)"),
-    crop_bottom: int = Form(0, description="Percentage to crop from bottom (0-50)")
+    crop_bottom: int = Form(0, description="Percentage to crop from bottom (0-50)"),
+    use_google_ocr: bool = Form(False, description="Use Google Vision OCR instead of Tesseract")
 ):
     if not image.filename:
         raise HTTPException(status_code=400, detail="No image file selected")
@@ -370,7 +390,12 @@ async def process_ocr(
             with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as cropped_temp:
                 pil_image.save(cropped_temp.name)
                 cropped_temp_path = cropped_temp.name
-        text_paragraphs = extract_and_split_paragraphs(cropped_temp_path, lang=language)
+        if use_google_ocr:
+            ocr_engine = GoogleOCR()
+        else:
+            ocr_engine = TesseractOCR()
+        
+        text_paragraphs = ocr_engine.extract_text(cropped_temp_path, lang=language)
         opencv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
         config_boxes = f'--oem 3 --psm 3 -l {language}'
         ocr_data = pytesseract.image_to_data(opencv_image, config=config_boxes, output_type=pytesseract.Output.DICT)
@@ -416,6 +441,19 @@ async def health_check():
     except Exception as e:
         log_handle.error(f"Health check failed: {e}")
         return HealthResponse(status="unhealthy", error=str(e))
+
+@app.post("/api/ocr/calculate-cost", response_model=CostCalculationResponse)
+async def calculate_ocr_cost(request: CostCalculationRequest):
+    """Calculate the cost of Google OCR processing for given number of pages."""
+    if not request.use_google_ocr:
+        return CostCalculationResponse(cost="0.00", pages=request.total_pages)
+    
+    cost_per_page = 0.13
+    total_cost = request.total_pages * cost_per_page
+    return CostCalculationResponse(
+        cost=f"{total_cost:.2f}",
+        pages=request.total_pages
+    )
 
 if __name__ == '__main__':
     import uvicorn
