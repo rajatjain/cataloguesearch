@@ -66,11 +66,17 @@ const ShareModal = ({ result, query, currentFilters, language, searchType, onClo
                         <div className="text-sm text-slate-600 mb-2">
                             <strong>Query:</strong> "{query}"
                         </div>
-                        <div className="text-sm text-slate-700 mb-2">
-                            <strong>From:</strong> {shareData.text ? shareData.text.split('\n\nFrom: ')[1]?.split('\n\nSearch more at:')[0] : 'Loading...'}
+                        <div className="text-sm text-slate-700 mb-2 italic whitespace-pre-line">
+                            <strong>Extract:</strong> "{result?.content_snippet ? result.content_snippet.replace(/<[^>]*>/g, '').trim() : 'Loading...'}"
                         </div>
-                        <div className="text-sm text-slate-700 italic whitespace-pre-line">
-                            {shareData.text ? `"${shareData.text.split('\n\nFrom:')[0].replace(/^"/, '').replace(/"$/, '')}"` : 'Content preview'}
+                        <div className="text-sm text-slate-700 mb-2">
+                            <strong>Granth:</strong> {result?.metadata?.Granth || 'Unknown Source'}
+                        </div>
+                        <div className="text-sm text-slate-700 mb-2">
+                            <strong>प्रवचनकार:</strong> {result?.Pravachankar || 'Unknown'}
+                        </div>
+                        <div className="text-sm text-slate-700">
+                            <strong>Pravachan Details:</strong> {result?.metadata?.Series && `${result.metadata.Series}, `}{result?.original_filename ? result.original_filename.split('/').pop() : result?.filename || ''}, Page {result?.page_number || 'Unknown'}
                         </div>
                     </div>
                     

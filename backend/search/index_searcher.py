@@ -222,7 +222,8 @@ class IndexSearcher:
 
             original_filename = source.get('original_filename')
             filename = os.path.basename(original_filename)
-            extracted.append({
+
+            result = {
                 "document_id": document_id,
                 "original_filename": source.get('original_filename'),
                 "filename": filename,
@@ -233,7 +234,10 @@ class IndexSearcher:
                 "bookmarks": source.get(self._bookmark_field, {}),
                 "metadata": source.get(self._metadata_prefix, {}),
                 "file_url": metadata.get("file_url", "")
-            })
+            }
+            if "Kanji" in metadata.get("Pravachankar", {}):
+                result["Pravachankar"] = "पूज्य गुरुदेव श्री कांजी स्वामी, सोनगढ़"
+            extracted.append(result)
         return extracted
 
     def perform_lexical_search(
