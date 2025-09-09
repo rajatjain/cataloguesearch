@@ -11,21 +11,22 @@ export const formatShareContent = (query, result, shareUrl) => {
     const series = result?.metadata?.Series || '';
     const pageNumber = result?.page_number || '';
     const filename = result?.original_filename ? result.original_filename.split('/').pop() : '';
+    const pravachankar = result?.Pravachankar || 'Unknown';
     
     // Clean content snippet - remove HTML tags and don't truncate
     const cleanContent = result?.content_snippet 
         ? result.content_snippet.replace(/<[^>]*>/g, '').trim()
         : 'Search result from Aagam-Khoj';
     
-    // Build source info with filename
-    let sourceInfo = granth;
-    if (series) sourceInfo += ` - ${series}`;
-    if (filename) sourceInfo += ` (${filename})`;
-    sourceInfo += `, Page ${pageNumber}`;
+    // Build pravachan details
+    let pravachanDetails = '';
+    if (series) pravachanDetails += `${series}, `;
+    pravachanDetails += filename;
+    pravachanDetails += `, Page ${pageNumber}`;
     
     return {
         title: `Found in Aagam-Khoj: "${query}"`,
-        text: `Query: ${query}\n\n"${cleanContent}"\n\nFrom: ${sourceInfo}\n\nSearch more at: ${shareUrl}`,
+        text: `Query: ${query}\n\nExtract: "${cleanContent}"\n\nGranth: ${granth}\n\nप्रवचनकार: ${pravachankar}\n\nPravachan Details: ${pravachanDetails}\n\nSearch more at: ${shareUrl}`,
         url: shareUrl
     };
 };

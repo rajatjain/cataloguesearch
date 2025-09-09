@@ -502,11 +502,6 @@ const OCRUtils = () => {
     };
 
     const handleParagraphClick = (paragraph, index) => {
-        clearHighlights();
-        if (paragraph.boxes && paragraph.boxes.length > 0) {
-            addHighlights(paragraph.boxes, true);
-        }
-        
         const paragraphElements = document.querySelectorAll('.paragraph-item');
         paragraphElements.forEach(el => el.classList.remove('active'));
         
@@ -514,6 +509,15 @@ const OCRUtils = () => {
         if (clickedElement) {
             clickedElement.classList.add('active');
         }
+    };
+
+    const handleCopyText = (text, event) => {
+        event.stopPropagation();
+        navigator.clipboard.writeText(text).then(() => {
+            // Visual feedback could be added here
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+        });
     };
 
     useEffect(() => {
@@ -923,10 +927,21 @@ const OCRUtils = () => {
                                             key={index}
                                             data-paragraph-index={index}
                                             onClick={() => handleParagraphClick(paragraph, index)}
-                                            className="paragraph-item bg-slate-50 border border-slate-200 rounded-lg p-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                                            className="paragraph-item bg-slate-50 border border-slate-200 rounded-lg p-3 cursor-pointer hover:bg-slate-100 transition-colors relative"
                                         >
-                                            <div className="text-xs text-slate-500 font-semibold mb-2">
-                                                Paragraph {index + 1}
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="text-xs text-slate-500 font-semibold">
+                                                    Paragraph {index + 1}
+                                                </div>
+                                                <button
+                                                    onClick={(e) => handleCopyText(paragraph.text, e)}
+                                                    className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded transition-colors"
+                                                    title="Copy paragraph text"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                    </svg>
+                                                </button>
                                             </div>
                                             <div className="text-sm text-slate-800 whitespace-pre-wrap font-mono">
                                                 {paragraph.text}
