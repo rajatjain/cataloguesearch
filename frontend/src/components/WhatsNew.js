@@ -33,7 +33,8 @@ const WhatsNew = () => {
                 "Total Indexed Pravachans: ~2500"
             ],
             newFeatures: [
-                "No new features."
+                "Page load automatically focuses on search-box for ease of use",
+                "Use \"/\" shortcut to focus on the search box"
             ]
         },
         {
