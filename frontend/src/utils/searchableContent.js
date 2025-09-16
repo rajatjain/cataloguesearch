@@ -29,7 +29,7 @@ export const searchableContent = {
       granth: "Niyamsaar",
       series: "1971",
       count: 202,
-      status: "in_progress"
+      status: "searchable"
     },
     {
       granth: "Panchastikaya",

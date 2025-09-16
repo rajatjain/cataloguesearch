@@ -104,25 +104,13 @@ Download and set up the Indic NLP resources for advanced language processing.
 
 
 ### Google Vision API Setup
-For advanced OCR capabilities:
+For advanced OCR capabilities (not required in the base setup)
 
 1. Install Google Cloud SDK following the [official installation guide](https://cloud.google.com/sdk/docs/install)
 2. Set up authentication:
     ```bash
     export GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/service-account-file.json"
     ```
-
-### OpenSearch Setup
-Start the required OpenSearch containers:
-
-```bash
-python scripts/opensearch_controller.py --start
-```
-
-To stop the containers:
-```bash
-python scripts/opensearch_controller.py --stop
-```
 
 ### Frontend Setup
 Navigate to the frontend directory and install Node.js dependencies:
@@ -136,6 +124,14 @@ npm start
 ### Running Tests
 Execute the test suite:
 
+#### Starting OpenSearch
+Executing the tests reuqire OpenSearch to run locally on port 19200. That is done via `docker-compose.test.yml`. 
+
+```bash
+docker-compose -f docker-compose.test.yml up
+```
+
+#### Start running the tests
 ```bash
 pytest
 ```
