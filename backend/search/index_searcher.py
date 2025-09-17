@@ -163,7 +163,7 @@ class IndexSearcher:
 
     def _build_vector_query(
             self, embedding: List[float],
-            categories: Dict[str, List[str]], size: int) -> Dict[str, Any]:
+            categories: Dict[str, List[str]], size: int, language: str = None) -> Dict[str, Any]:
         knn_query = {
             self._vector_field: {
                 "vector": embedding,
@@ -171,15 +171,28 @@ class IndexSearcher:
             }
         }
 
+        # Build category filters
         category_filters = self._build_category_filters(categories)
-        if category_filters:
+        
+        # Add language filter if specified
+        all_filters = category_filters[:]
+        if language and language != 'all':
+            language_filter = {
+                "term": {
+                    f"{self._metadata_prefix}.language.keyword": language
+                }
+            }
+            all_filters.append(language_filter)
+            log_handle.debug(f"Added language filter for: {language}")
+        
+        if all_filters:
             # For filtered vector search, add filters directly to the knn query
             knn_query[self._vector_field]["filter"] = {
                 "bool": {
-                    "filter": category_filters
+                    "filter": all_filters
                 }
             }
-            log_handle.debug(f"Added {len(category_filters)} category filters to vector query.")
+            log_handle.debug(f"Added {len(all_filters)} total filters to vector query.")
         query_body = {
             "size": size,
             "query": {
@@ -274,7 +287,7 @@ class IndexSearcher:
         initial_fetch_size = rerank_top_k
         from_ = 0 if rerank else (page_number - 1) * page_size
 
-        query_body = self._build_vector_query(embedding, categories, initial_fetch_size)
+        query_body = self._build_vector_query(embedding, categories, initial_fetch_size, language)
         log_handle.debug(f"Vector query: {query_body}")
         try:
             response = self._opensearch_client.search(

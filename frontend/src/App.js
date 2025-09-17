@@ -169,8 +169,7 @@ const AppContent = () => {
         setLanguage('hindi');
         setExactMatch(false);
         setExcludeWords('');
-        setSearchType('speed');
-        setShowFilters(false);
+        setShowFilters(true);
         setSearchData(null);
         setIsLoading(false);
         setActiveTab('keyword');
@@ -209,8 +208,8 @@ const AppContent = () => {
     const [language, setLanguage] = useState('hindi');
     const [exactMatch, setExactMatch] = useState(false);
     const [excludeWords, setExcludeWords] = useState('');
-    const [searchType, setSearchType] = useState('speed');
-    const [showFilters, setShowFilters] = useState(false);
+    const [searchType] = useState('relevance'); // Always use better relevance
+    const [showFilters, setShowFilters] = useState(true);
     const [metadata, setMetadata] = useState({});
     const [searchData, setSearchData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -308,39 +307,6 @@ const AppContent = () => {
         setIsLoading(false);
     }, [query, activeFilters, language, exactMatch, excludeWords, searchType]);
 
-    const handleSwitchToRelevanceSearch = useCallback(async () => {
-        setSearchType('relevance'); // Set for future searches
-
-        if (!query.trim()) {
-            return;
-        }
-        setIsLoading(true);
-        setKeywordPage(1);
-        setVectorPage(1);
-        setSimilarDocumentsData(null);
-        setSourceDocForSimilarity(null);
-
-        const requestPayload = {
-            query,
-            exact_match: exactMatch,
-            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
-            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
-            language: language,
-            page_number: 1,
-            page_size: PAGE_SIZE,
-            enable_reranking: true // Explicitly enable for this search
-        };
-
-        const data = await api.search(requestPayload);
-        setSearchData(data);
-
-        if (data.results && data.results.length > 0) {
-            setActiveTab('keyword');
-        } else {
-            setActiveTab('vector');
-        }
-        setIsLoading(false);
-    }, [query, activeFilters, language, exactMatch, excludeWords]);
 
     const handleFindSimilar = async (sourceDoc) => {
         setIsLoading(true); 
@@ -514,26 +480,22 @@ const AppContent = () => {
                                 {/* Filters section that shows/hides */}
                                 {showFilters && (
                                     <div className="mt-4 border-t border-slate-200 pt-4">
-                                        <div className="space-y-4">
-                                            <div className="flex gap-8">
-                                                <MetadataFilters
-                                                    metadata={metadata}
-                                                    activeFilters={activeFilters}
-                                                    onAddFilter={addFilter}
-                                                    onRemoveFilter={removeFilter}
-                                                />
-                                                <AdvancedSearch
-                                                    exactMatch={exactMatch}
-                                                    setExactMatch={setExactMatch}
-                                                    excludeWords={excludeWords}
-                                                    setExcludeWords={setExcludeWords}
-                                                />
-                                            </div>
+                                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                            <MetadataFilters
+                                                metadata={metadata}
+                                                activeFilters={activeFilters}
+                                                onAddFilter={addFilter}
+                                                onRemoveFilter={removeFilter}
+                                            />
                                             <SearchOptions
                                                 language={language}
                                                 setLanguage={setLanguage}
-                                                searchType={searchType}
-                                                setSearchType={setSearchType}
+                                            />
+                                            <AdvancedSearch
+                                                exactMatch={exactMatch}
+                                                setExactMatch={setExactMatch}
+                                                excludeWords={excludeWords}
+                                                setExcludeWords={setExcludeWords}
                                             />
                                         </div>
                                     </div>
@@ -579,32 +541,20 @@ const AppContent = () => {
                                     )}
                                     {activeTab === 'vector' && (
                                         searchData?.vector_results.length > 0 ? (
-                                            <>
-                                                {searchType === 'speed' && (
-                                                    <div className="bg-sky-100 border border-sky-300 text-sky-800 text-sm rounded-md p-3 mb-4 flex items-center justify-between">
-                                                        <span>
-                                                            Search with slower, but better relevance. (note that this is a beta feature).
-                                                        </span>
-                                                        <button onClick={handleSwitchToRelevanceSearch} className="font-semibold underline hover:text-sky-900 whitespace-nowrap ml-4 transition-colors">
-                                                            Enable and Re-run Search
-                                                        </button>
-                                                    </div>
-                                                )}
-                                                <ResultsList 
-                                                    results={searchData.vector_results} 
-                                                    totalResults={searchData.total_vector_results} 
-                                                    pageSize={PAGE_SIZE} 
-                                                    currentPage={vectorPage} 
-                                                    onPageChange={handlePageChange} 
-                                                    resultType="vector" 
-                                                    onFindSimilar={handleFindSimilar} 
-                                                    onExpand={handleExpand} 
-                                                    searchType={searchType}
-                                                    query={query}
-                                                    currentFilters={activeFilters}
-                                                    language={language} 
-                                                />
-                                            </>
+                                            <ResultsList 
+                                                results={searchData.vector_results} 
+                                                totalResults={searchData.total_vector_results} 
+                                                pageSize={PAGE_SIZE} 
+                                                currentPage={vectorPage} 
+                                                onPageChange={handlePageChange} 
+                                                resultType="vector" 
+                                                onFindSimilar={handleFindSimilar} 
+                                                onExpand={handleExpand} 
+                                                searchType={searchType}
+                                                query={query}
+                                                currentFilters={activeFilters}
+                                                language={language} 
+                                            />
                                         ) : searchData && (
                                             <div className="text-center py-8 text-base text-slate-500 bg-white rounded-b-md border-t-0">
                                                 No results found. Try a different query.

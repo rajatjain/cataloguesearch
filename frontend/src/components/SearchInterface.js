@@ -70,7 +70,7 @@ export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemove
     };
     
     return (
-        <div className="w-1/2 space-y-3">
+        <div className="space-y-3">
             <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Filter by Category</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <select 
@@ -111,7 +111,7 @@ export const AdvancedSearch = ({ exactMatch, setExactMatch, excludeWords, setExc
     const [showExcludeWordsTooltip, setShowExcludeWordsTooltip] = useState(false);
 
     return (
-        <div className="w-1/2 space-y-3">
+        <div className="space-y-3">
             <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Advanced Search</h3>
             <div className="space-y-3">
                 <div className="relative">
@@ -168,7 +168,7 @@ export const AdvancedSearch = ({ exactMatch, setExactMatch, excludeWords, setExc
                         value={excludeWords}
                         onChange={(e) => setExcludeWords(e.target.value)}
                         placeholder="word1, word2, word3..."
-                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded-md text-slate-800 text-base focus:ring-1 focus:ring-sky-500 font-sans"
+                        className="w-1/2 p-2 bg-slate-50 border border-slate-300 rounded-md text-slate-800 text-base focus:ring-1 focus:ring-sky-500 font-sans"
                     />
                 </div>
             </div>
@@ -176,15 +176,15 @@ export const AdvancedSearch = ({ exactMatch, setExactMatch, excludeWords, setExc
     );
 };
 
-export const SearchOptions = ({ language, setLanguage, searchType, setSearchType }) => {
+export const SearchOptions = ({ language, setLanguage }) => {
     const languageOptions = [
         { value: 'hindi', label: 'Hindi', disabled: false },
-        { value: 'gujarati', label: 'Gujarati', disabled: true }
+        { value: 'gujarati', label: 'Gujarati', disabled: false }
     ];
     
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-200">
-             <div>
+        <div>
+            <div>
                 <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Language</h3>
                 <div className="flex gap-4">
                     {languageOptions.map(lang => (
@@ -205,38 +205,7 @@ export const SearchOptions = ({ language, setLanguage, searchType, setSearchType
                         </label>
                     ))}
                 </div>
-             </div>
-             <div>
-                <h3 className="text-sm font-semibold mb-2 text-slate-600 uppercase tracking-wider">Search Type</h3>
-                <div className="flex flex-col gap-2">
-                    <label className="flex items-center gap-2 text-slate-700">
-                        <input
-                            type="radio"
-                            name="searchType"
-                            value="relevance"
-                            checked={searchType === 'relevance'}
-                            onChange={(e) => setSearchType(e.target.value)}
-                            className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500"
-                        />
-                        <span className="text-base font-medium flex items-center">
-                            Better Relevance <span className="text-sm text-slate-500">(slower)</span><BetaBadge />
-                        </span>
-                    </label>
-                    <label className="flex items-center gap-2 text-slate-700">
-                        <input
-                            type="radio"
-                            name="searchType"
-                            value="speed"
-                            checked={searchType === 'speed'}
-                            onChange={(e) => setSearchType(e.target.value)}
-                            className="form-radio h-4 w-4 text-sky-600 focus:ring-sky-500"
-                        />
-                        <span className="text-base font-medium">
-                            Better Speed <span className="text-sm text-slate-500">(slightly less relevant)</span>
-                        </span>
-                    </label>
-                </div>
-             </div>
+            </div>
         </div>
     );
 };
