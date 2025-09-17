@@ -11,6 +11,8 @@ import About from './components/About';
 import WhatsNew from './components/WhatsNew';
 import UsageGuide from './components/UsageGuide';
 import OCRUtils from './components/OCRUtils';
+import SearchIndex from './components/SearchIndex';
+import SearchableContentWidget from './components/SearchableContentWidget';
 import { Spinner, ChevronUpIcon, ChevronDownIcon, ExpandIcon } from './components/SharedComponents';
 
 // Import API service
@@ -136,6 +138,7 @@ const AppContent = () => {
         if (path === '/whats-new') return 'whats-new';
         if (path === '/usage-guide') return 'usage-guide';
         if (path === '/ocr-utils') return 'ocr-utils';
+        if (path === '/search-index') return 'search-index';
         return 'home'; // Default to 'home' for root path
     });
     
@@ -152,8 +155,11 @@ const AppContent = () => {
             setCurrentPageState('usage-guide');
         } else if (path === '/ocr-utils') {
             setCurrentPageState('ocr-utils');
+        } else if (path === '/search-index') {
+            setCurrentPageState('search-index');
+        } else if (path === '/') {
+            setCurrentPageState('home');
         }
-        // For root path, don't override the current selection between home/aagam-khoj
     }, [location.pathname]);
     
     // Reset function to clear all search state
@@ -193,7 +199,8 @@ const AppContent = () => {
             'feedback': '/feedback',
             'whats-new': '/whats-new',
             'usage-guide': '/usage-guide',
-            'ocr-utils': '/ocr-utils'
+            'ocr-utils': '/ocr-utils',
+            'search-index': '/search-index'
         };
         navigate(routes[page] || '/');
     };
@@ -461,6 +468,7 @@ const AppContent = () => {
 
                     {showSearchInterface && (
                         <main>
+                            <SearchableContentWidget />
                             <div className="bg-white p-3 md:p-4 rounded-lg shadow-sm border border-slate-200 mb-4">
                                 {/* Row 1: Search Bar and Button */}
                                 <div className="flex items-center gap-2">
@@ -668,6 +676,12 @@ const AppContent = () => {
                             <OCRUtils />
                         </main>
                     )}
+
+                    {currentPage === 'search-index' && (
+                        <main>
+                            <SearchIndex />
+                        </main>
+                    )}
                 </div>
             </div>
             
@@ -712,6 +726,7 @@ export default function App() {
                 <Route path="/whats-new" element={<AppContent />} />
                 <Route path="/usage-guide" element={<AppContent />} />
                 <Route path="/ocr-utils" element={<AppContent />} />
+                <Route path="/search-index" element={<AppContent />} />
             </Routes>
         </Router>
     );

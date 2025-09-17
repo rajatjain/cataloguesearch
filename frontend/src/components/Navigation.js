@@ -10,6 +10,7 @@ export const Navigation = ({ currentPage, setCurrentPage }) => {
     const menuItems = [
         { id: 'home', label: 'Home', showSearch: true, path: '/' },
         { id: 'about', label: 'About', showSearch: false, path: '/about' },
+        { id: 'search-index', label: 'Content', showSearch: false, path: '/search-index' },
         { id: 'usage-guide', label: 'Usage Guide', showSearch: false, path: '/usage-guide' },
         { id: 'whats-new', label: 'What\'s New?', showSearch: false, path: '/whats-new' },
         { id: 'feedback', label: 'Feedback', showSearch: false, path: '/feedback' }
@@ -160,6 +161,27 @@ export const Header = ({ currentPage }) => {
                         className="h-full object-contain"
                         onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/1080x160/f1f5f9/475569?text=Aagam+Khoj' }}
                     />
+                </div>
+            </div>
+        );
+    }
+
+    if (currentPage === 'search-index') {
+        return (
+            <div className="text-center py-6 mb-4">
+                <div className="bg-slate-100 h-32 md:h-40 flex items-center justify-center mb-4 overflow-hidden">
+                    <img
+                        src="/images/banner.jpg"
+                        alt="Swa-Lakshya Banner"
+                        className="h-full object-contain"
+                        onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/1080x160/f1f5f9/475569?text=Aagam+Khoj' }}
+                    />
+                </div>
+                <div className="h-32 md:h-40 flex flex-col items-center justify-center">
+                    <h1 className="text-4xl font-bold text-slate-800 mb-4">Searchable Content Index</h1>
+                    <div className="max-w-lg mx-auto text-slate-600 space-y-4">
+                        <p>Browse all available pravachans and spiritual content that you can search through.</p>
+                    </div>
                 </div>
             </div>
         );

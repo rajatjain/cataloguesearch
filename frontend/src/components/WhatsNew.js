@@ -30,7 +30,8 @@ const WhatsNew = () => {
             newContent: [
                 "Pravachans on Padmanandi Panchvinchati 1960 Series",
                 "Pravachans (compiled) on Kartikeya Anupreksha 1952 Series",
-                "Total Indexed Pravachans: ~2500"
+                "Pravachans on Niyamsaar 1971 Series",
+                "Total Indexed Pravachans: ~2600"
             ],
             newFeatures: [
                 "Page load automatically focuses on search-box for ease of use",
