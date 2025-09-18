@@ -60,12 +60,14 @@ case $ACTION in
     "restart-api")
         echo "Rebuilding and restarting only the API service..."
         docker-compose --env-file "$ENV_FILE" build cataloguesearch-api
+        docker-compose --env-file "$ENV_FILE" down cataloguesearch-api
         docker-compose --env-file "$ENV_FILE" up -d --no-deps cataloguesearch-api
         echo "API service restarted. Available at: http://localhost:8000"
         ;;
     "restart")
         echo "Rebuilding and restarting all services..."
         docker-compose --env-file "$ENV_FILE" build
+        docker-compose --env-file "$ENV_FILE" down
         docker-compose --env-file "$ENV_FILE" up -d
         echo "All services restarted."
         ;;
@@ -76,6 +78,7 @@ case $ACTION in
     "restart-frontend")
         echo "Rebuilding and restarting only the frontend service..."
         docker-compose --env-file "$ENV_FILE" build cataloguesearch-frontend
+        docker-compose --env-file "$ENV_FILE" down cataloguesearch-frontend
         docker-compose --env-file "$ENV_FILE" up -d --no-deps cataloguesearch-frontend
         echo "Frontend service restarted. Available at: http://localhost:3000"
         ;;
@@ -94,11 +97,13 @@ case $ACTION in
         
         # Start API first, then frontend
         echo "Starting API service..."
+        docker-compose --env-file "$ENV_FILE" down cataloguesearch-api
         docker-compose --env-file "$ENV_FILE" up -d --no-deps cataloguesearch-api
         echo "Waiting for API to stabilize..."
         sleep 5
         
         echo "Starting frontend service..."
+        docker-compose --env-file "$ENV_FILE" down cataloguesearch-frontend
         docker-compose --env-file "$ENV_FILE" up -d --no-deps cataloguesearch-frontend
         
         echo ""

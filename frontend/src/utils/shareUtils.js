@@ -6,7 +6,7 @@ export const generateShareURL = () => {
 };
 
 // Format share content for different platforms
-export const formatShareContent = (query, result, shareUrl) => {
+export const formatShareContent = (query, result, shareUrl, language = 'hindi') => {
     const granth = result?.metadata?.Granth || 'Unknown Source';
     const series = result?.metadata?.Series || '';
     const pageNumber = result?.page_number || '';
@@ -24,9 +24,12 @@ export const formatShareContent = (query, result, shareUrl) => {
     pravachanDetails += filename;
     pravachanDetails += `, Page ${pageNumber}`;
     
+    // Language-specific labels
+    const pravachankarLabel = language === 'gujarati' ? 'પ્રવચનકાર' : 'प्रवचनकार';
+    
     return {
         title: `Found in Aagam-Khoj: "${query}"`,
-        text: `Query: ${query}\n\nExtract: "${cleanContent}"\n\nGranth: ${granth}\n\nप्रवचनकार: ${pravachankar}\n\nPravachan Details: ${pravachanDetails}\n\nSearch more at: ${shareUrl}`,
+        text: `Query: ${query}\n\nExtract: "${cleanContent}"\n\nGranth: ${granth}\n\n${pravachankarLabel}: ${pravachankar}\n\nPravachan Details: ${pravachanDetails}\n\nSearch more at: ${shareUrl}`,
         url: shareUrl
     };
 };

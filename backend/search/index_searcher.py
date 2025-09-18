@@ -177,13 +177,17 @@ class IndexSearcher:
         # Add language filter if specified
         all_filters = category_filters[:]
         if language and language != 'all':
+            # Convert language name to language code for filtering
+            language_code_map = {"hindi": "hi", "gujarati": "gu"}
+            language_code = language_code_map.get(language, language)
+            
             language_filter = {
                 "term": {
-                    f"{self._metadata_prefix}.language.keyword": language
+                    "language": language_code
                 }
             }
             all_filters.append(language_filter)
-            log_handle.debug(f"Added language filter for: {language}")
+            log_handle.debug(f"Added language filter for: {language} (code: {language_code})")
         
         if all_filters:
             # For filtered vector search, add filters directly to the knn query
@@ -249,7 +253,11 @@ class IndexSearcher:
                 "file_url": metadata.get("file_url", "")
             }
             if "Kanji" in metadata.get("Pravachankar", {}):
-                result["Pravachankar"] = "पूज्य गुरुदेव श्री कांजी स्वामी, सोनगढ़"
+                # Set Pravachankar text based on language
+                if language in ['gujarati', 'gu']:
+                    result["Pravachankar"] = "પૂજ્ય ગુરુદેવશ્રી કાંજી સ્વામી, સોનગઢ"
+                else:
+                    result["Pravachankar"] = "पूज्य गुरुदेव श्री कांजी स्वामी, सोनगढ़"
             extracted.append(result)
         return extracted
 

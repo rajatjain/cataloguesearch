@@ -13,11 +13,11 @@ const ShareModal = ({ result, query, currentFilters, language, searchType, onClo
 
     useEffect(() => {
         const url = generateShareURL();
-        const data = formatShareContent(query, result, url);
+        const data = formatShareContent(query, result, url, language);
         
         setShareData(data);
         
-    }, [result, query]);
+    }, [result, query, language]);
 
     useEffect(() => {
         const handleEsc = (event) => {
@@ -73,7 +73,7 @@ const ShareModal = ({ result, query, currentFilters, language, searchType, onClo
                             <strong>Granth:</strong> {result?.metadata?.Granth || 'Unknown Source'}
                         </div>
                         <div className="text-sm text-slate-700 mb-2">
-                            <strong>प्रवचनकार:</strong> {result?.Pravachankar || 'Unknown'}
+                            <strong>{language === 'gujarati' ? 'પ્રવચનકાર:' : 'प्रवचनकार:'}</strong> {result?.Pravachankar || 'Unknown'}
                         </div>
                         <div className="text-sm text-slate-700">
                             <strong>Pravachan Details:</strong> {result?.metadata?.Series && `${result.metadata.Series}, `}{result?.original_filename ? result.original_filename.split('/').pop() : result?.filename || ''}, Page {result?.page_number || 'Unknown'}
