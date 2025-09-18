@@ -201,16 +201,18 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
     return _CLIENT
 
 
-def get_metadata(config: Config) -> dict[str, list[str]]:
+def get_metadata(config: Config) -> dict[str, dict[str, list[str]]]:
     """
-    Retrieves all metadata from the dedicated metadata index.
+    Retrieves all metadata from the dedicated metadata index grouped by language.
     This is much more efficient than scanning the main document index.
 
     Args:
         config: Config object containing OpenSearch settings
 
     Returns:
-        dict[str, list[str]]: Dictionary with metadata keys and their unique, sorted values.
+        dict[str, dict[str, list[str]]]: Dictionary with language keys, each containing
+        metadata keys and their unique, sorted values.
+        Format: {"hindi": {"author": ["value1", "value2"]}, "gujarati": {"author": ["value3"]}}
     """
     client = get_opensearch_client(config)
     metadata_index = config.OPENSEARCH_METADATA_INDEX_NAME
@@ -218,7 +220,7 @@ def get_metadata(config: Config) -> dict[str, list[str]]:
     if not client.indices.exists(metadata_index):
         log_handle.warning(
             f"Metadata index '{metadata_index}' does not exist. Returning empty metadata.")
-        return {}
+        return {"hindi": {}, "gujarati": {}}
 
     # Query to get all documents from the metadata index.
     query_body = {
@@ -232,24 +234,43 @@ def get_metadata(config: Config) -> dict[str, list[str]]:
             body=query_body
         )
 
-        result = {}
+        # Initialize language-specific dictionaries
+        result = {"hindi": {}, "gujarati": {}}
+        
         for hit in response.get('hits', {}).get('hits', []):
-            # The document ID is the metadata key (e.g., "author")
-            key = hit.get('_id')
+            source = hit.get('_source', {})
+            
+            # Get key from source (new structure) or fall back to document ID (old structure)
+            key = source.get('key')
+            if not key:
+                # Backward compatibility: extract key from document ID
+                doc_id = hit.get('_id')
+                if '_' in doc_id:
+                    key = '_'.join(doc_id.split('_')[:-1])  # Remove language suffix
+                else:
+                    key = doc_id  # Old format without language
+            
             # The values are stored in the 'values' field of the source
-            values = hit.get('_source', {}).get('values', [])
+            values = source.get('values', [])
+            # Get language, default to "hindi" for backward compatibility
+            language = source.get('language', 'hindi')
 
             if key and values:
+                # Ensure language key exists in result
+                if language not in result:
+                    result[language] = {}
+                
                 # The values should already be sorted from the indexing process
-                result[key] = values
+                result[language][key] = values
 
         log_handle.info(
-            f"Metadata retrieved from '{metadata_index}': {len(result)} unique keys found")
+            f"Metadata retrieved from '{metadata_index}': "
+            f"Hindi: {len(result['hindi'])} keys, Gujarati: {len(result['gujarati'])} keys")
         return result
     except (ConnectionError, ValueError, OSError) as e:
         log_handle.error(
             f"Error retrieving metadata from index '{metadata_index}': {e}", exc_info=True)
-        return {}
+        return {"hindi": {}, "gujarati": {}}
 
 def delete_documents_by_filename(config: Config, original_filename: str):
     """

@@ -210,6 +210,7 @@ const AppContent = () => {
     const [excludeWords, setExcludeWords] = useState('');
     const [searchType] = useState('relevance'); // Always use better relevance
     const [showFilters, setShowFilters] = useState(true);
+    const [allMetadata, setAllMetadata] = useState({});
     const [metadata, setMetadata] = useState({});
     const [searchData, setSearchData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -226,8 +227,21 @@ const AppContent = () => {
     const PAGE_SIZE = 20;
 
     useEffect(() => { 
-        api.getMetadata().then(data => setMetadata(data)); 
+        api.getMetadata().then(data => {
+            setAllMetadata(data);
+            // Set initial metadata based on default language
+            setMetadata(data[language] || {});
+        }); 
     }, []);
+
+    // Update metadata when language changes
+    useEffect(() => {
+        if (allMetadata && allMetadata[language]) {
+            setMetadata(allMetadata[language]);
+            // Clear existing filters when language changes as they may not be valid for the new language
+            setActiveFilters([]);
+        }
+    }, [language, allMetadata]);
 
     useEffect(() => {
         try {
