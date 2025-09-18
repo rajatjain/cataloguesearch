@@ -82,7 +82,7 @@ async def initialize():
         for language, lang_metadata in metadata.items():
             filtered_metadata[language] = {
                 key: values for key, values in lang_metadata.items()
-                if key in ["Granth", "Anuyog", "Year"]
+                if key in config.FILTERED_METADATA_FIELDS
             }
         app.state.metadata_cache["data"] = filtered_metadata
         app.state.metadata_cache["timestamp"] = time.time()
@@ -100,6 +100,7 @@ async def get_metadata_api(request: Request):
     Uses in-memory cache with 30-minute TTL, computes from OpenSearch if cache is expired.
     """
     try:
+        config = Config()
         current_time = time.time()
         cache = request.app.state.metadata_cache
 
@@ -118,7 +119,7 @@ async def get_metadata_api(request: Request):
         for language, lang_metadata in metadata.items():
             filtered_metadata[language] = {
                 key: values for key, values in lang_metadata.items()
-                if key in ["Granth", "Anuyog", "Year"]
+                if key in config.FILTERED_METADATA_FIELDS
             }
 
         # Update cache with filtered data
