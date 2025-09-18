@@ -1,3 +1,6 @@
+from backend.utils import json_dumps
+
+
 class Verse:
     """Verse defines all the content of a single Verse within a Granth (scripture). The structure
     of the Verse is as follows:
@@ -41,8 +44,8 @@ class Verse:
             Translation: {self._translation}
             Language: {self._language}
             Meaning: {self._meaning}
-            Teeka: {len(self._teeka)} paragraphs
-            Bhavarth: {len(self._bhavarth)} paragraphs
+            Teeka: {json_dumps(self._teeka)}
+            Bhavarth: {json_dumps(self._bhavarth)}
             Page Num: {self._page_num}
         """
         return verse_preview

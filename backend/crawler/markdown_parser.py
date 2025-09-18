@@ -145,9 +145,9 @@ class MarkdownParser:
             
             if element.name == 'p':
                 text = element.get_text().strip()
-                if text and not text.startswith('*'):  # Skip footnote-like content
+                if text:
                     verse_lines.append(text)
-        
+
         return '\n'.join(verse_lines)
     
     def _extract_sections(self, content_elements: List) -> dict:
