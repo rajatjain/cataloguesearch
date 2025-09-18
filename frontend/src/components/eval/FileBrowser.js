@@ -379,35 +379,6 @@ const FileBrowser = ({ isOpen, onClose, onFolderSelect, basePaths, baseDirectory
                     )}
                 </div>
 
-                {/* Footer */}
-                <div className="p-4 border-t border-slate-200 bg-slate-50">
-                    <div className="flex items-center justify-between">
-                        <div className="text-sm text-slate-600">
-                            {basePaths && basePdfHandle && (
-                                <div>
-                                    <div><strong>Source:</strong> {currentPath ? `${basePaths.base_ocr_path}/${currentPath}` : basePaths.base_ocr_path}</div>
-                                    <div><strong>Target:</strong> {currentPath ? `${basePaths.base_text_path}/${currentPath}` : basePaths.base_text_path}</div>
-                                </div>
-                            )}
-                        </div>
-                        
-                        <div className="flex space-x-2">
-                            <button
-                                onClick={onClose}
-                                className="px-4 py-2 text-sm border border-slate-300 text-slate-700 rounded-md hover:bg-slate-50 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSelectFolder}
-                                disabled={!basePdfHandle || !basePaths}
-                                className="px-4 py-2 text-sm bg-sky-600 text-white rounded-md hover:bg-sky-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
-                            >
-                                Select This Folder
-                            </button>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     );

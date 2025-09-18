@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Spinner } from '../SharedComponents';
 import { api } from '../../services/api';
 import FileBrowser from './FileBrowser';
+import BookmarksModal from '../BookmarksModal';
 import { 
     storeDirectoryHandles, 
     getStoredDirectoryHandles, 
@@ -30,6 +31,39 @@ const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, 
         text: null
     });
     const [permissionsGranted, setPermissionsGranted] = useState(false);
+    
+    // Bookmarks functionality
+    const [bookmarks, setBookmarks] = useState([]);
+    const [showBookmarksModal, setShowBookmarksModal] = useState(false);
+    const [pdfDoc, setPdfDoc] = useState(null);
+    
+    // PDF.js loading
+    useEffect(() => {
+        const loadPdfJs = async () => {
+            if (!window.pdfjsLib) {
+                try {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+                    script.async = true;
+                    
+                    await new Promise((resolve, reject) => {
+                        script.onload = resolve;
+                        script.onerror = reject;
+                        document.head.appendChild(script);
+                    });
+                } catch (error) {
+                    console.error('Failed to load PDF.js:', error);
+                }
+            }
+            
+            if (window.pdfjsLib) {
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc = 
+                    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            }
+        };
+
+        loadPdfJs();
+    }, []);
 
     // Load persisted directory handles on component mount
     useEffect(() => {
@@ -328,6 +362,106 @@ Please select the SOURCE directory (${selection.sourcePath})`;
             : '';
     };
 
+    // Load bookmarks from the selected PDF file
+    const loadPDFBookmarks = async () => {
+        if (!selectedFolder?.selectedPDFFile || !baseDirectoryHandles.pdf) return;
+
+        try {
+            console.log('Loading bookmarks for:', selectedFolder);
+            
+            // The relativePath includes the full path to the PDF directory
+            // We need to navigate to the parent directory and then get the PDF file
+            const pathParts = selectedFolder.relativePath.split('/');
+            const pdfDirectory = pathParts.slice(0, -1).join('/'); // Remove the last part (PDF name without extension)
+            
+            console.log('PDF directory path:', pdfDirectory);
+            console.log('PDF file name:', selectedFolder.selectedPDFFile);
+            
+            const pdfDirHandle = await navigateToPath(
+                baseDirectoryHandles.pdf, 
+                pdfDirectory
+            );
+            
+            if (!pdfDirHandle) {
+                console.error('Could not navigate to PDF directory:', pdfDirectory);
+                return;
+            }
+            
+            const pdfFileHandle = await pdfDirHandle.getFileHandle(selectedFolder.selectedPDFFile);
+            const pdfFile = await pdfFileHandle.getFile();
+            const arrayBuffer = await pdfFile.arrayBuffer();
+            
+            if (window.pdfjsLib) {
+                const loadingTask = window.pdfjsLib.getDocument(arrayBuffer);
+                const pdf = await loadingTask.promise;
+                setPdfDoc(pdf);
+                
+                // Extract bookmarks
+                const outline = await pdf.getOutline();
+                console.log('PDF outline result:', outline);
+                if (outline && outline.length > 0) {
+                    setBookmarks(outline);
+                    console.log('Bookmarks loaded:', outline.length, outline);
+                } else {
+                    setBookmarks([]);
+                    console.log('No bookmarks found in PDF');
+                }
+            }
+        } catch (err) {
+            console.error('Error loading PDF bookmarks:', err);
+            setBookmarks([]);
+        }
+    };
+
+    // Handle bookmark click to navigate to page
+    const handleBookmarkClick = async (bookmark) => {
+        if (!pdfDoc || !bookmark.dest) return;
+
+        try {
+            let dest = bookmark.dest;
+            
+            // If dest is a string, get the actual destination
+            if (typeof dest === 'string') {
+                dest = await pdfDoc.getDestination(dest);
+            }
+            
+            if (dest && dest[0]) {
+                const pageRef = dest[0];
+                const pageIndex = await pdfDoc.getPageIndex(pageRef);
+                const pageNumber = pageIndex + 1; // PDF pages are 1-indexed
+                
+                console.log(`Bookmark "${bookmark.title}" points to page ${pageNumber}`);
+                
+                // Jump to the corresponding page file
+                jumpToPageByNumber(pageNumber);
+            }
+        } catch (err) {
+            console.error('Error navigating to bookmark:', err);
+        }
+    };
+
+    // Jump to a specific page number (helper function)
+    const jumpToPageByNumber = (pageNumber) => {
+        const fileName = `page_${String(pageNumber).padStart(4, '0')}.txt`;
+        const foundIndex = fileList.indexOf(fileName);
+
+        if (foundIndex !== -1) {
+            setCurrentIndex(foundIndex);
+            displayFiles(fileName);
+            setJumpPageNumber(pageNumber.toString());
+        } else {
+            setError(`Page ${pageNumber} (${fileName}) not found in the comparison files.`);
+            setTimeout(() => setError(null), 3000);
+        }
+    };
+
+    // Load bookmarks when a PDF is selected and directories are set up
+    useEffect(() => {
+        if (selectedFolder?.selectedPDFFile && permissionsGranted && sourceHandle && targetHandle) {
+            loadPDFBookmarks();
+        }
+    }, [selectedFolder, permissionsGranted, sourceHandle, targetHandle]);
+
     // Show directory selection if no directories selected
     if (!sourceHandle || !targetHandle) {
         return (
@@ -390,7 +524,9 @@ Please select the SOURCE directory (${selection.sourcePath})`;
                                 ? ' Comparisons will start automatically!' 
                                 : ' You\'ll need to manually select directories for each comparison.'}
                         </p>
-                        {selectedFolder && (
+                        
+                        {/* Only show detailed folder info when permissions are NOT granted (manual mode) */}
+                        {!permissionsGranted && selectedFolder && (
                             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-left">
                                 <h4 className="font-semibold text-blue-800 mb-2">
                                     {selectedFolder.selectedPDFFile ? 'Selected PDF File:' : 'Selected Folder:'}
@@ -434,7 +570,12 @@ Please select the SOURCE directory (${selection.sourcePath})`;
                 {/* Header */}
                 <div className="p-4 border-b border-slate-200">
                     <h2 className="text-2xl font-bold text-slate-800 mb-2">Paragraph Generation Evaluation</h2>
-                    <p className="text-slate-600">Comparing: {sourceHandle?.name} vs {targetHandle?.name}</p>
+                    <p className="text-slate-600">
+                        {selectedFolder?.selectedPDFFile 
+                            ? `Comparing: ${selectedFolder.relativePath}/${selectedFolder.selectedPDFFile}`
+                            : `Comparing: ${sourceHandle?.name} vs ${targetHandle?.name}`
+                        }
+                    </p>
                 </div>
 
             {/* Controls */}
@@ -465,8 +606,27 @@ Please select the SOURCE directory (${selection.sourcePath})`;
                         </button>
                     </div>
 
-                    {/* Jump Controls */}
+                    {/* Jump Controls and Bookmarks */}
                     <div className="flex items-center space-x-2">
+                        {/* Bookmarks Button - Show when PDF is selected */}
+                        {selectedFolder?.selectedPDFFile && (
+                            <button
+                                onClick={() => setShowBookmarksModal(true)}
+                                className={`px-3 py-1 text-sm rounded-md hover:bg-purple-700 transition-colors flex items-center ${
+                                    bookmarks.length > 0 
+                                        ? 'bg-purple-600 text-white' 
+                                        : 'bg-gray-400 text-white cursor-not-allowed'
+                                }`}
+                                title={bookmarks.length > 0 ? `Show bookmarks (${bookmarks.length} found)` : "No bookmarks found in PDF"}
+                                disabled={bookmarks.length === 0}
+                            >
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                </svg>
+                                Bookmarks {bookmarks.length > 0 ? `(${bookmarks.length})` : '(0)'}
+                            </button>
+                        )}
+                        
                         <label className="text-sm font-medium text-slate-700">
                             Jump to Page:
                         </label>
@@ -564,6 +724,17 @@ Please select the SOURCE directory (${selection.sourcePath})`;
                     </svg>
                     <p>No 'page_xxxx.txt' files found in the selected directories.</p>
                 </div>
+            )}
+
+            {/* Bookmarks Modal */}
+            {showBookmarksModal && (
+                <BookmarksModal
+                    isOpen={showBookmarksModal}
+                    onClose={() => setShowBookmarksModal(false)}
+                    bookmarks={bookmarks}
+                    onBookmarkClick={handleBookmarkClick}
+                    title={selectedFolder?.selectedPDFFile ? `Bookmarks - ${selectedFolder.selectedPDFFile}` : "PDF Bookmarks"}
+                />
             )}
         </div>
     );

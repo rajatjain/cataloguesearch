@@ -11,6 +11,11 @@ const UIEval = () => {
     const [selectedFolder, setSelectedFolder] = useState(null);
     const [baseDirectoryHandles, setBaseDirectoryHandles] = useState(null);
 
+    // Debug activeTab changes
+    useEffect(() => {
+        console.log('activeTab changed to:', activeTab);
+    }, [activeTab]);
+
     // Load base paths from API
     useEffect(() => {
         const loadBasePaths = async () => {
@@ -67,12 +72,22 @@ const UIEval = () => {
 
     const NavButton = ({ id, label, isActive, onClick }) => (
         <button
-            onClick={() => onClick(id)}
+            onClick={(e) => {
+                console.log('NavButton clicked:', id, 'Current activeTab:', activeTab);
+                e.preventDefault();
+                e.stopPropagation();
+                onClick(id);
+                console.log('After onClick, activeTab should be:', id);
+            }}
+            onMouseDown={(e) => {
+                console.log('NavButton mousedown:', id);
+            }}
             className={`px-4 py-2 font-medium text-sm rounded-md transition-colors ${
                 isActive 
                     ? 'bg-sky-600 text-white' 
                     : 'text-slate-700 hover:bg-slate-100 border border-slate-300'
             }`}
+            style={{ pointerEvents: 'auto', zIndex: 1 }}
         >
             {label}
         </button>
@@ -81,13 +96,15 @@ const UIEval = () => {
     return (
         <div className="min-h-screen bg-slate-50">
             {/* File Browser Modal */}
-            <FileBrowser 
-                isOpen={showFileBrowser}
-                onClose={handleCloseFileBrowser}
-                onFolderSelect={handleFolderSelect}
-                basePaths={basePaths}
-                baseDirectoryHandles={baseDirectoryHandles}
-            />
+            {showFileBrowser && (
+                <FileBrowser 
+                    isOpen={showFileBrowser}
+                    onClose={handleCloseFileBrowser}
+                    onFolderSelect={handleFolderSelect}
+                    basePaths={basePaths}
+                    baseDirectoryHandles={baseDirectoryHandles}
+                />
+            )}
             
             <div className="container mx-auto p-4 md:p-5">
                 <div className="max-w-[1200px] mx-auto">
@@ -229,7 +246,7 @@ const UIEval = () => {
                             />
                         )}
 
-                        {activeTab === 'paragraph-eval' && (
+                        {activeTab === 'paragraph-eval' && basePaths && (
                             <ParagraphGenEval 
                                 showFileBrowser={showFileBrowser}
                                 onCloseFileBrowser={handleCloseFileBrowser}
