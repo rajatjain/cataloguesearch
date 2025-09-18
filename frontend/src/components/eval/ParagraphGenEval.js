@@ -79,7 +79,7 @@ const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, 
                         if (onBaseDirectoryHandlesChange) {
                             onBaseDirectoryHandlesChange(stored);
                         }
-                        console.log('Successfully restored directory handles from storage');
+                        // console.log('Successfully restored directory handles from storage');
                     } else {
                         console.log('Stored handles no longer have permission, clearing storage');
                         await clearStoredDirectoryHandles();
