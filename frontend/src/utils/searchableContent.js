@@ -96,6 +96,18 @@ export const searchableContent = {
       series: "1952",
       count: null,
       status: "searchable"
+    },
+    {
+        granth: "Bahinshree Nu Vachanamrut",
+        series: 1978,
+        count: 181,
+        status: "in_progress"
+    },
+    {
+        granth: "Pravachan Navneet",
+        series: 1977,
+        count: 142,
+        status: "planned"
     }
   ],
   gujarati: [
@@ -104,6 +116,18 @@ export const searchableContent = {
       series: "1966-68 (15th time)",
       count: 595,
       status: "searchable"
+    },
+    {
+      granth: "Pravachansaar",
+      series: "1968-69",
+      count: 280,
+      status: "in_progress"
+    },
+    {
+        granth: "Samaysaar",
+        series: "1975 (18th time)",
+        count: 535,
+        status: "planned"
     }
   ]
 };

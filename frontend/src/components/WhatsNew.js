@@ -26,6 +26,17 @@ const WhatsNew = () => {
 
     const updates = [
         {
+            date: "September 19, 2025",
+            newContent: [
+                "Gujarati Pravachans on Samaysar 1966 (15th time) Series",
+                "Total Indexed Pravachans: ~3200"
+            ],
+            newFeatures: [
+                "NEW! Support for Search Gujarati Pravachans is added!",
+                "A new Content page is added that details all the searchable content that is available."
+            ]
+        },
+        {
             date: "September 7, 2025",
             newContent: [
                 "Pravachans on Padmanandi Panchvinchati 1960 Series",

@@ -28,21 +28,34 @@ const SearchIndex = () => {
     return [...content].sort((a, b) => {
       let aValue, bValue;
       
-      if (sortConfig.key === 'name') {
-        aValue = a.granth;
-        bValue = b.granth;
-        const result = aValue.localeCompare(bValue);
-        return sortConfig.direction === 'asc' ? result : -result;
-      } else if (sortConfig.key === 'year') {
-        aValue = extractYear(a.series);
-        bValue = extractYear(b.series);
-        const result = aValue - bValue;
-        return sortConfig.direction === 'asc' ? result : -result;
-      } else if (sortConfig.key === 'count') {
-        aValue = a.count || 0;
-        bValue = b.count || 0;
-        const result = aValue - bValue;
-        return sortConfig.direction === 'asc' ? result : -result;
+      // For Year, Granth, and Count sorting, always prioritize status first
+      if (sortConfig.key === 'name' || sortConfig.key === 'year' || sortConfig.key === 'count') {
+        // First sort by status: searchable first, in_progress last
+        const statusOrder = { 'searchable': 1, 'in_progress': 2, 'planned': 3 };
+        const aStatus = statusOrder[a.status] || 99;
+        const bStatus = statusOrder[b.status] || 99;
+        
+        if (aStatus !== bStatus) {
+          return aStatus - bStatus;
+        }
+        
+        // If status is the same, then sort by the requested field
+        if (sortConfig.key === 'name') {
+          aValue = a.granth;
+          bValue = b.granth;
+          const result = aValue.localeCompare(bValue);
+          return sortConfig.direction === 'asc' ? result : -result;
+        } else if (sortConfig.key === 'year') {
+          aValue = extractYear(a.series);
+          bValue = extractYear(b.series);
+          const result = aValue - bValue;
+          return sortConfig.direction === 'asc' ? result : -result;
+        } else if (sortConfig.key === 'count') {
+          aValue = a.count || 0;
+          bValue = b.count || 0;
+          const result = aValue - bValue;
+          return sortConfig.direction === 'asc' ? result : -result;
+        }
       } else if (sortConfig.key === 'status') {
         // Define sort order for status: searchable, in_progress, planned
         const statusOrder = { 'searchable': 1, 'in_progress': 2, 'planned': 3 };
@@ -114,12 +127,8 @@ const SearchIndex = () => {
                 >
                   Count{getSortIcon('count')}
                 </th>
-                <th 
-                  className={getSortHeaderClass('status')}
-                  onClick={() => handleSort('status')}
-                  style={{ cursor: 'pointer' }}
-                >
-                  Status{getSortIcon('status')}
+                <th>
+                  Status
                 </th>
               </tr>
             </thead>
