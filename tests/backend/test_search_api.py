@@ -524,7 +524,35 @@ def test_is_lexical_query(api_server):
     # Should have vector results
     assert data_4["total_vector_results"] > 0, "Expected vector results for 'સોનગઢનો ઇતિહાસ?'"
     
-    log_handle.info(f"is_lexical_query test passed - Hindi lexical: {data_1['total_results']}, Hindi vector: {data_2['total_vector_results']}, Gujarati lexical: {data_3['total_results']}, Gujarati vector: {data_4['total_vector_results']} results")
+    # Test case 5: "हंपी के बारे में कुछ बताइए" - should trigger vector search
+    # (has question phrase "कुछ बताइए", so is_lexical_query should return False)
+    search_payload_5 = {
+        "query": "हंपी के बारे में कुछ बताइए",
+        "language": "hi",
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "page_size": 10,
+        "page_number": 1,
+        "enable_reranking": True
+    }
+    
+    response_5 = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload_5
+    )
+    
+    assert response_5.status_code == 200
+    data_5 = response_5.json()
+    log_handle.info(f"Response for 'हंपी के बारे में कुछ बताइए': {json_dumps(data_5, truncate_fields=['vector_embedding'])}")
+    
+    # Validate response structure for vector search
+    validate_result_schema(data_5, False)
+    
+    # Should have vector results
+    assert data_5["total_vector_results"] > 0, "Expected vector results for 'हंपी के बारे में कुछ बताइए'"
+    
+    log_handle.info(f"is_lexical_query test passed - Hindi lexical: {data_1['total_results']}, Hindi vector: {data_2['total_vector_results']}, Gujarati lexical: {data_3['total_results']}, Gujarati vector: {data_4['total_vector_results']}, Hindi question: {data_5['total_vector_results']} results")
 
 
 def test_api_spell_suggestion_search(api_server):
@@ -772,6 +800,39 @@ def test_get_similar_documents(api_server):
         log_handle.info(f"✓ {test_case['language']} similar documents test passed - document_id: {document_id}, found {similar_results_count} similar documents")
     
     log_handle.info("✓ All similar documents tests passed")
+
+
+def test_cache_invalidation(api_server):
+    """
+    Tests cache invalidation by:
+    1. Calling metadata to populate cache
+    2. Invalidating cache
+    3. Calling metadata again and comparing - should be no change in data
+    """
+    # First call to populate cache
+    response1 = requests.get(f"http://{api_server.host}:{api_server.port}/api/metadata")
+    assert response1.status_code == 200
+    metadata_before = response1.json()
+    log_handle.info(f"before: {json_dumps(metadata_before)}")
+    
+    # Invalidate cache
+    invalidate_response = requests.post(f"http://{api_server.host}:{api_server.port}/api/cache/invalidate")
+    assert invalidate_response.status_code == 200
+    assert invalidate_response.json()["status"] == "success"
+    assert "Cache invalidated successfully" in invalidate_response.json()["message"]
+    
+    # Second call after cache invalidation
+    response2 = requests.get(f"http://{api_server.host}:{api_server.port}/api/metadata")
+    assert response2.status_code == 200
+    metadata_after = response2.json()
+    log_handle.info(f"after: {json_dumps(metadata_after)}")
+    
+    # Data should be the same (no change in underlying OpenSearch data)
+    assert metadata_before == metadata_after
+    assert "hindi" in metadata_after
+    assert "gujarati" in metadata_after
+    
+    log_handle.info("✓ Cache invalidation test passed - metadata consistent after cache invalidation")
 
 
 def validate_result_schema(data, lexical_results):

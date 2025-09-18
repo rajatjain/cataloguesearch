@@ -75,3 +75,37 @@ def test_quantized_8bit_batch_embeddings(initialise):  # pylint: disable=unused-
     assert isinstance(embedding_model, Quantized8BitEmbeddingModel)
     assert isinstance(embedding_model, BaseEmbeddingModel)  # Quantized8Bit inherits from Base
     assert not isinstance(embedding_model, FP16EmbeddingModel)
+
+def test_embedding_model_docker_environment(monkeypatch, initialise):
+    """Test embedding model loading when is_docker_environment() returns True"""
+    # Reset the global _DEVICE to force re-evaluation of device selection
+    import backend.common.embedding_models
+    backend.common.embedding_models._DEVICE = None
+    backend.common.embedding_models._MODELS = {}
+    
+    # Set ENVIRONMENT to 'local' to make is_docker_environment() return True
+    monkeypatch.setenv("ENVIRONMENT", "local")
+    
+    # Create new config instance - should now have is_docker_environment() = True
+    config = Config()
+    assert Config.is_docker_environment() == True
+    
+    # Test embedding model loading in docker environment
+    embedding_model = get_embedding_model_factory(config)
+    assert embedding_model is not None
+    
+    # Test that it can generate embeddings
+    test_text = "Test text for embedding in docker environment"
+    embedding = embedding_model.get_embedding(test_text)
+    assert embedding is not None
+    assert len(embedding) > 0
+    assert isinstance(embedding, list)
+    
+    # Test with Hindi text to ensure multilingual support works in docker
+    hindi_text = "यह एक परीक्षण वाक्य है"
+    hindi_embedding = embedding_model.get_embedding(hindi_text)
+    assert hindi_embedding is not None
+    assert len(hindi_embedding) > 0
+    assert len(hindi_embedding) == len(embedding)  # Should have same dimension
+    
+    log_handle.info("Embedding model works correctly in docker environment")

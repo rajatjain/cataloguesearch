@@ -132,6 +132,22 @@ async def get_metadata_api(request: Request):
         log_handle.exception(f"Error retrieving metadata: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
+@app.post("/api/cache/invalidate")
+async def invalidate_cache(request: Request):
+    """
+    Invalidates the metadata cache by clearing cached data.
+    """
+    try:
+        cache = request.app.state.metadata_cache
+        cache["data"] = None
+        cache["timestamp"] = 0
+        
+        log_handle.info("Metadata cache invalidated successfully")
+        return {"message": "Cache invalidated successfully", "status": "success"}
+    except Exception as e:
+        log_handle.exception(f"Error invalidating cache: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
 class SearchRequest(BaseModel):
     """
     Pydantic model for the search request payload.

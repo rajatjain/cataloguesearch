@@ -476,12 +476,6 @@ class IndexSearcher:
             log_handle.info(f"Context: {json_dumps(context, truncate_fields=['vector_embedding'])}")
             return context
 
-        except NotFoundError:
-            log_handle.error(f"Document with chunk_id '{chunk_id}' not found.")
-            return {}
-        except (ValueError, TypeError) as e:
-            log_handle.error(f"Could not process context for chunk_id '{chunk_id}': {e}")
-            return {}
         except Exception as exc:
             log_handle.error(
                 f"An unexpected error occurred getting paragraph context for {chunk_id}: {exc}",
@@ -505,7 +499,6 @@ class IndexSearcher:
             A list of corrected query strings. Returns an empty list if no corrections are found.
         """
         if not text:
-            print("Input text cannot be empty.")
             return []
 
         client = get_opensearch_client(self._config)
@@ -575,14 +568,8 @@ class IndexSearcher:
 
             return final_suggestions
 
-        except NotFoundError:
-            print(f"Error: Index '{index_name}' not found.")
-            return []
-        except ConnectionError as e:
-            print(f"Error: Could not connect to OpenSearch. {e}")
-            return []
         except Exception as e:
-            print(f"An unexpected error occurred: {e}")
+            traceback.print_exc()
             return []
 
     def is_lexical_query(self, query_string: str) -> bool:
