@@ -1,6 +1,5 @@
 import logging
 import os
-import re
 import shutil
 import traceback
 import uuid
@@ -237,23 +236,20 @@ class PDFProcessor:
         page_num, image, language_code = args
         try:
             # 1. --- Image Preprocessing ---
-            # Convert the image to grayscale for better processing.
-            processed_image = image.convert('L')
-
-            # Apply a binary threshold to create a clean, high-contrast
-            # black and white image. This is often the most critical step.
-            # The '180' is a threshold value; you may need to tune it (127 is a common default).
-            processed_image = processed_image.point(lambda x: 0 if x < 180 else 255, '1')
+            # Convert the image to RGB for better processing
+            if image.mode != 'RGB':
+                processed_image = image.convert('RGB')
+            else:
+                processed_image = image
 
             # 2. --- Perform OCR ---
             # Use the preprocessed image and your existing configuration.
-            config = f'--psm 3 -l {language_code}'
+            config = f'--psm 6 -l {language_code}'
             text = pytesseract.image_to_string(processed_image, config=config)
 
             # 3. --- Clean Up Text ---
-            # Split text into paragraphs and clean them up.
-            raw_paragraphs = re.split(r'\n\s*\n', text)
-            paragraphs = [p.strip().replace('\n', ' ') for p in raw_paragraphs if p.strip()]
+            # Split text into paragraphs and clean them up
+            paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
 
             return page_num, paragraphs
 

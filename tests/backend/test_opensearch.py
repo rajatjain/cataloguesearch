@@ -292,7 +292,10 @@ class TestMetadataOperations:
         
         metadata = get_metadata(config)
         assert isinstance(metadata, dict)
-        assert len(metadata) == 0
+        assert "hindi" in metadata
+        assert "gujarati" in metadata
+        assert len(metadata["hindi"]) == 0
+        assert len(metadata["gujarati"]) == 0
 
     def test_get_metadata_nonexistent_index(self):
         """Test get_metadata when metadata index doesn't exist."""
@@ -302,36 +305,85 @@ class TestMetadataOperations:
         # Don't create indices
         metadata = get_metadata(config)
         assert isinstance(metadata, dict)
-        assert len(metadata) == 0
+        assert "hindi" in metadata
+        assert "gujarati" in metadata
+        assert len(metadata["hindi"]) == 0
+        assert len(metadata["gujarati"]) == 0
 
     def test_get_metadata_with_data(self, clean_opensearch_client):
-        """Test get_metadata with sample data."""
+        """Test get_metadata with sample data including both Hindi and Gujarati."""
         client, config = clean_opensearch_client
         
-        # Insert sample metadata
-        sample_metadata = {
-            "author": {"values": ["John Doe", "Jane Smith"]},
-            "category": {"values": ["Science", "Technology"]}
-        }
+        # Insert sample metadata for both languages using new format
+        sample_metadata = [
+            # Hindi metadata
+            {
+                "id": "author_hindi",
+                "body": {
+                    "key": "author",
+                    "language": "hindi",
+                    "values": ["राजचन्द्र जी", "कुन्दकुन्द आचार्य"]
+                }
+            },
+            {
+                "id": "category_hindi", 
+                "body": {
+                    "key": "category",
+                    "language": "hindi",
+                    "values": ["प्रवचन", "व्याख्यान"]
+                }
+            },
+            # Gujarati metadata
+            {
+                "id": "author_gujarati",
+                "body": {
+                    "key": "author", 
+                    "language": "gujarati",
+                    "values": ["રાજચંદ્ર જી", "કુંદકુંદ આચાર્ય"]
+                }
+            },
+            {
+                "id": "category_gujarati",
+                "body": {
+                    "key": "category",
+                    "language": "gujarati", 
+                    "values": ["પ્રવચન"]
+                }
+            }
+        ]
         
         metadata_index = config.OPENSEARCH_METADATA_INDEX_NAME
-        for key, value in sample_metadata.items():
+        for item in sample_metadata:
             client.index(
                 index=metadata_index,
-                id=key,
-                body=value,
+                id=item["id"],
+                body=item["body"],
                 refresh=True
             )
         
         # Retrieve metadata
         metadata = get_metadata(config)
         
+        # Validate structure
         assert isinstance(metadata, dict)
-        assert len(metadata) == 2
-        assert "author" in metadata
-        assert "category" in metadata
-        assert metadata["author"] == ["John Doe", "Jane Smith"]
-        assert metadata["category"] == ["Science", "Technology"]
+        assert "hindi" in metadata
+        assert "gujarati" in metadata
+        
+        # Validate Hindi metadata
+        meta_hindi = metadata["hindi"]
+        assert len(meta_hindi) == 2
+        assert "author" in meta_hindi
+        assert "category" in meta_hindi
+        assert meta_hindi["author"] == ["राजचन्द्र जी", "कुन्दकुन्द आचार्य"]
+        assert meta_hindi["category"] == ["प्रवचन", "व्याख्यान"]
+        
+        # Validate Gujarati metadata
+        meta_gujarati = metadata["gujarati"]
+        assert len(meta_gujarati) == 2
+        assert "author" in meta_gujarati
+        assert "category" in meta_gujarati
+        assert meta_gujarati["author"] == ["રાજચંદ્ર જી", "કુંદકુંદ આચાર્ય"]
+        assert meta_gujarati["category"] == ["પ્રવચન"]
 
 
 class TestDocumentOperations:

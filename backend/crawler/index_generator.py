@@ -256,24 +256,34 @@ class IndexGenerator:
         """
         Updates the dedicated metadata index with new values from a document.
         Uses a scripted upsert for efficiency and atomicity.
+        Now includes language information for each metadata entry.
         """
         if not metadata:
             return
 
-        log_handle.info(f"Updating metadata index for keys: {list(metadata.keys())}")
+        # Extract language, default to "hindi" for backward compatibility
+        language = metadata.get("language", "hindi")
+        log_handle.info(f"Updating metadata index for keys: {list(metadata.keys())} with language: {language}")
 
         actions = []
         for key, value in metadata.items():
             if not value:
                 continue
+            
+            # Skip file_url as it's not useful for metadata filtering
+            if key == 'file_url':
+                continue
 
             # Ensure new_values is a list of strings
             new_values = [str(v) for v in value] if isinstance(value, list) else [str(value)]
 
+            # Create unique document ID per language: key_language
+            doc_id = f"{key}_{language}"
+            
             action = {
                 "_op_type": "update",
                 "_index": self._metadata_index_name,
-                "_id": key,
+                "_id": doc_id,
                 "script": {
                     "source": """
                         boolean changed = false;
@@ -286,17 +296,23 @@ class IndexGenerator:
                         if (changed) {
                             Collections.sort(ctx._source.values);
                         }
+                        ctx._source.language = params.language;
+                        ctx._source.key = params.key;
                     """,
                     "lang": "painless",
-                    "params": {"newValues": new_values}
+                    "params": {"newValues": new_values, "language": language, "key": key}
                 },
-                "upsert": {"values": sorted(new_values)}
+                "upsert": {
+                    "key": key,
+                    "values": sorted(new_values),
+                    "language": language
+                }
             }
             actions.append(action)
 
         if actions:
             helpers.bulk(self._opensearch_client, actions, stats_only=True, raise_on_error=False)
-            log_handle.info(f"Successfully sent {len(actions)} updates to the metadata index.")
+            log_handle.info(f"Successfully sent {len(actions)} updates to the metadata index for language {language}.")
 
     def _get_paras(self, page_text_paths: list[str]) -> list[tuple[int, str]]:
         """

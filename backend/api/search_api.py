@@ -77,10 +77,13 @@ async def initialize():
     try:
         log_handle.info("Populating metadata cache at startup...")
         metadata = get_metadata(config)
-        filtered_metadata = {
-            key: values for key, values in metadata.items()
-            if key in config.FILTERED_METADATA_FIELDS
-        }
+        # Filter metadata for each language
+        filtered_metadata = {}
+        for language, lang_metadata in metadata.items():
+            filtered_metadata[language] = {
+                key: values for key, values in lang_metadata.items()
+                if key in config.FILTERED_METADATA_FIELDS
+            }
         app.state.metadata_cache["data"] = filtered_metadata
         app.state.metadata_cache["timestamp"] = time.time()
         log_handle.info(f"Metadata cache populated with {json_dumps(metadata)}")
@@ -97,6 +100,7 @@ async def get_metadata_api(request: Request):
     Uses in-memory cache with 30-minute TTL, computes from OpenSearch if cache is expired.
     """
     try:
+        config = Config()
         current_time = time.time()
         cache = request.app.state.metadata_cache
 
@@ -110,11 +114,13 @@ async def get_metadata_api(request: Request):
         log_handle.info("Cache expired or empty, fetching metadata from OpenSearch")
         metadata = get_metadata(request.app.state.config)
 
-        # Filter to only return Granth, Anuyog, Year fields
-        filtered_metadata = {
-            key: values for key, values in metadata.items()
-            if key in ["Granth", "Anuyog", "Year"]
-        }
+        # Filter to only return Granth, Anuyog, Year fields for each language
+        filtered_metadata = {}
+        for language, lang_metadata in metadata.items():
+            filtered_metadata[language] = {
+                key: values for key, values in lang_metadata.items()
+                if key in config.FILTERED_METADATA_FIELDS
+            }
 
         # Update cache with filtered data
         cache["data"] = filtered_metadata

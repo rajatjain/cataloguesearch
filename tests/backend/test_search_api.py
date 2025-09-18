@@ -233,14 +233,23 @@ def test_api_metadata_endpoint(api_server):
     data = response.json()
     assert isinstance(data, dict)
     
-    # Check that metadata contains expected keys (filtered to Granth, Anuyog, Year)
-    expected_keys = {"type", "language", "category"}
+    # Check new language-specific structure
+    expected_language_keys = {"hindi", "gujarati"}
     actual_keys = set(data.keys())
     
-    # At least one of the expected keys should be present
-    assert len(expected_keys.intersection(actual_keys)) > 0
+    # Should have both language keys
+    assert expected_language_keys.issubset(actual_keys), f"Expected language keys {expected_language_keys} in metadata, got {actual_keys}"
     
-    log_handle.info(f"API metadata test passed - received keys: {list(data.keys())}")
+    # Each language should have its own metadata dictionary
+    for language in expected_language_keys:
+        lang_metadata = data[language]
+        assert isinstance(lang_metadata, dict), f"Expected dict for {language} metadata"
+        
+        # Each language metadata can have various keys like Granth, Anuyog, Year, etc.
+        # Just verify it's a dict structure - specific keys depend on indexed data
+        log_handle.info(f"{language} metadata keys: {list(lang_metadata.keys())}")
+    
+    log_handle.info(f"API metadata test passed - received language-specific structure with keys: {list(data.keys())}")
 
 
 def test_api_exact_phrase_search(api_server):
