@@ -4,36 +4,82 @@ import { searchableContent, getSearchableStats, getContentByStatus } from '../ut
 import './SearchIndex.css';
 
 const SearchIndex = () => {
-  const [selectedLanguage, setSelectedLanguage] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
   const stats = getSearchableStats();
 
-  const getFilteredContent = () => {
-    let contentByStatus;
-    
-    if (selectedStatus === 'all') {
-      contentByStatus = {
-        hindi: searchableContent.hindi,
-        gujarati: searchableContent.gujarati
-      };
-    } else {
-      contentByStatus = getContentByStatus(selectedStatus);
+  // Extract year from series string for sorting
+  const extractYear = (series) => {
+    // Extract first year from patterns like "1978-80", "1979-80", "1966", etc.
+    const yearMatch = series.match(/(\d{4})/);
+    return yearMatch ? parseInt(yearMatch[1]) : 0;
+  };
+
+  // Handle sort functionality
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
     }
-    
-    if (selectedLanguage === 'all') {
-      return {
-        hindi: contentByStatus.hindi,
-        gujarati: contentByStatus.gujarati
-      };
+    setSortConfig({ key, direction });
+  };
+
+  // Sort content based on sort configuration
+  const sortContent = (content) => {
+    return [...content].sort((a, b) => {
+      let aValue, bValue;
+      
+      if (sortConfig.key === 'name') {
+        aValue = a.granth;
+        bValue = b.granth;
+        const result = aValue.localeCompare(bValue);
+        return sortConfig.direction === 'asc' ? result : -result;
+      } else if (sortConfig.key === 'year') {
+        aValue = extractYear(a.series);
+        bValue = extractYear(b.series);
+        const result = aValue - bValue;
+        return sortConfig.direction === 'asc' ? result : -result;
+      } else if (sortConfig.key === 'count') {
+        aValue = a.count || 0;
+        bValue = b.count || 0;
+        const result = aValue - bValue;
+        return sortConfig.direction === 'asc' ? result : -result;
+      } else if (sortConfig.key === 'status') {
+        // Define sort order for status: searchable, in_progress, planned
+        const statusOrder = { 'searchable': 1, 'in_progress': 2, 'planned': 3 };
+        aValue = statusOrder[a.status] || 99;
+        bValue = statusOrder[b.status] || 99;
+        const result = aValue - bValue;
+        return sortConfig.direction === 'asc' ? result : -result;
+      }
+      return 0;
+    });
+  };
+
+  // Get sort indicator icon
+  const getSortIcon = (columnKey) => {
+    if (sortConfig.key !== columnKey) {
+      return <span style={{ color: '#ccc', fontSize: '0.8em' }}> ⇅</span>;
     }
-    
+    const color = '#2563eb'; // Blue for active sort
+    return sortConfig.direction === 'asc' ? 
+      <span style={{ color, fontSize: '0.9em' }}> ▲</span> : 
+      <span style={{ color, fontSize: '0.9em' }}> ▼</span>;
+  };
+
+  // Get CSS class for sort headers
+  const getSortHeaderClass = (columnKey) => {
+    return sortConfig.key === columnKey ? 'sortable-header active-sort' : 'sortable-header';
+  };
+
+  const getContent = () => {
+    // Always show all content from both languages
     return {
-      hindi: selectedLanguage === 'hindi' ? contentByStatus.hindi : [],
-      gujarati: selectedLanguage === 'gujarati' ? contentByStatus.gujarati : []
+      hindi: sortContent(searchableContent.hindi),
+      gujarati: sortContent(searchableContent.gujarati)
     };
   };
 
-  const filteredContent = getFilteredContent();
+  const content = getContent();
 
   const renderContentTable = (content, language) => {
     if (!content || content.length === 0) return null;
@@ -47,10 +93,34 @@ const SearchIndex = () => {
           <table className="content-table">
             <thead>
               <tr>
-                <th>Granth</th>
-                <th>Year/Series</th>
-                <th>Count</th>
-                <th>Status</th>
+                <th 
+                  className={getSortHeaderClass('name')}
+                  onClick={() => handleSort('name')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  Granth{getSortIcon('name')}
+                </th>
+                <th 
+                  className={getSortHeaderClass('year')}
+                  onClick={() => handleSort('year')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  Year/Series{getSortIcon('year')}
+                </th>
+                <th 
+                  className={getSortHeaderClass('count')}
+                  onClick={() => handleSort('count')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  Count{getSortIcon('count')}
+                </th>
+                <th 
+                  className={getSortHeaderClass('status')}
+                  onClick={() => handleSort('status')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  Status{getSortIcon('status')}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -89,45 +159,20 @@ const SearchIndex = () => {
           <div className="overview-number">{getContentByStatus('searchable').hindi.length + getContentByStatus('searchable').gujarati.length}</div>
           <div className="overview-label">Pravachan Series Available</div>
         </div>
-        <div className="overview-card">
-          <div className="overview-number">{getContentByStatus('in_progress').hindi.length + getContentByStatus('in_progress').gujarati.length}</div>
-          <div className="overview-label">Pravachan Series in Progress</div>
-        </div>
-      </div>
-
-      <div className="filters-section">
-        <div className="filter-group">
-          <label htmlFor="language-filter">Language:</label>
-          <select 
-            id="language-filter"
-            value={selectedLanguage} 
-            onChange={(e) => setSelectedLanguage(e.target.value)}
-            className="filter-select"
-          >
-            <option value="all">All Languages</option>
-            <option value="hindi">Hindi</option>
-            <option value="gujarati">Gujarati</option>
-          </select>
-        </div>
-        
-        <div className="filter-group">
-          <label htmlFor="status-filter">Status:</label>
-          <select 
-            id="status-filter"
-            value={selectedStatus} 
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="filter-select"
-          >
-            <option value="all">All</option>
-            <option value="searchable">Searchable</option>
-            <option value="in_progress">In Progress</option>
-          </select>
-        </div>
+        {(() => {
+          const inProgressCount = getContentByStatus('in_progress').hindi.length + getContentByStatus('in_progress').gujarati.length;
+          return inProgressCount > 0 ? (
+            <div className="overview-card">
+              <div className="overview-number">{inProgressCount}</div>
+              <div className="overview-label">Pravachan Series in Progress</div>
+            </div>
+          ) : null;
+        })()}
       </div>
 
       <div className="content-tables">
-        {renderContentTable(filteredContent.hindi, 'hindi')}
-        {renderContentTable(filteredContent.gujarati, 'gujarati')}
+        {renderContentTable(content.hindi, 'hindi')}
+        {renderContentTable(content.gujarati, 'gujarati')}
       </div>
 
       <div className="page-footer">

@@ -12,7 +12,7 @@ const SearchableContentWidget = () => {
         <div className="widget-info">
           <h4>📚 Content Available</h4>
           <div className="widget-stats">
-            {stats.grandTotal.toLocaleString()} pravachans across {stats.hindiSeries + stats.gujaratiSeries} series
+            {stats.grandTotal.toLocaleString()} Pravachans across {stats.hindiSeries + stats.gujaratiSeries} Series
           </div>
         </div>
         

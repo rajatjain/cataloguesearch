@@ -24,29 +24,32 @@
 
 .stats-overview {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 200px));
   gap: 20px;
   margin-bottom: 30px;
+  justify-content: center;
 }
 
 .overview-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #667eea 0%, #5a67d8 100%);
   color: white;
-  padding: 20px;
+  padding: 15px;
   border-radius: 10px;
   text-align: center;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  max-width: 200px;
 }
 
 .overview-number {
-  font-size: 2rem;
+  font-size: 1.6rem;
   font-weight: bold;
   margin-bottom: 5px;
 }
 
 .overview-label {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   opacity: 0.9;
+  line-height: 1.2;
 }
 
 .filters-section {
@@ -138,6 +141,22 @@
   color: #2d3748;
   border-bottom: 2px solid #e2e8f0;
   vertical-align: middle;
+}
+
+/* Sortable header styles */
+.sortable-header {
+  transition: background-color 0.2s ease;
+  user-select: none;
+}
+
+.sortable-header:hover {
+  background-color: #edf2f7;
+}
+
+.active-sort {
+  background-color: #e3f2fd !important;
+  font-weight: bold;
+  color: #1565c0;
 }
 
 .content-table td {

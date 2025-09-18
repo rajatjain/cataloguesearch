@@ -103,7 +103,7 @@ export const searchableContent = {
       granth: "Samaysaar",
       series: "1966-68 (15th time)",
       count: 595,
-      status: "in_progress"
+      status: "searchable"
     }
   ]
 };
