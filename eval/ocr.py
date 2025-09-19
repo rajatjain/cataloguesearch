@@ -27,7 +27,7 @@ if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
 from backend.crawler.pdf_processor import PDFProcessor
-from config import Config
+from backend.config import Config
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

@@ -97,11 +97,12 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
     // Effect to handle file selection from file browser
     useEffect(() => {
         if (propSelectedFile && propSelectedFile.selectedPDFFile && 
-            (!selectedFile || (selectedFile.name !== propSelectedFile.selectedPDFFile && selectedFile.size === undefined))) {
+            (!selectedFile || selectedFile.name !== propSelectedFile.selectedPDFFile)) {
             const handleBrowserFileSelection = async () => {
                 try {
                     if (propSelectedFile.selectedPDFFile && baseDirectoryHandles?.pdf) {
-                        setError(null);
+                        // Reset all state to start fresh
+                        resetAllState();
                         setIsLoading(true);
                         
                         // Navigate to the PDF file using the relative path
@@ -122,9 +123,6 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                         
                         // Set the selected file and load it
                         setSelectedFile(pdfFile);
-                        setOcrResults(null);
-                        resetBatchState();
-                        setCroppedPreviewUrl(null);
                         setIsPDF(true);
                         
                         // Load the PDF
@@ -156,6 +154,33 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
         }
     };
 
+    const resetAllState = () => {
+        // Reset file state
+        setSelectedFile(null);
+        setIsPDF(false);
+        setPdfDoc(null);
+        setPreviewUrl(null);
+        setCurrentPage(1);
+        setTotalPages(1);
+        setBookmarks([]);
+        setShowBookmarks(false);
+        setShowBookmarkModal(false);
+        
+        // Reset OCR state
+        setOcrResults(null);
+        setCroppedPreviewUrl(null);
+        setError(null);
+        setIsLoading(false);
+        
+        // Reset batch state
+        resetBatchState();
+        
+        // Reset file input
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
     const handleFileSelect = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -165,12 +190,11 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
             onFileSelect(null);
         }
 
+        // Reset all state to start fresh
+        resetAllState();
+
+        // Set the new file and load it
         setSelectedFile(file);
-        setOcrResults(null);
-        setError(null);
-        resetBatchState();
-        setCroppedPreviewUrl(null);
-        
         const fileType = file.type;
         setIsPDF(fileType === 'application/pdf');
 
@@ -718,9 +742,9 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
 
                 {/* Controls */}
                 <div className="p-4 border-b border-slate-200 bg-slate-50">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-3">
                         {/* File Input */}
-                        <div className="col-span-2">
+                        <div className="col-span-1 md:col-span-2 lg:col-span-3">
                             <label className="block text-sm font-medium text-slate-700 mb-2">
                                 File Selection
                             </label>
@@ -740,10 +764,10 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                                         className="block w-full text-sm text-slate-500 border border-slate-300 rounded-md px-3 py-2 cursor-pointer bg-white hover:bg-slate-50 transition-colors"
                                     >
                                         <span className="inline-flex items-center">
-                                            <span className="bg-sky-50 text-sky-700 font-semibold px-4 py-2 rounded-md mr-4 hover:bg-sky-100">
-                                                Upload a file
+                                            <span className="bg-sky-50 text-sky-700 font-semibold px-2 py-1 rounded-md mr-2 hover:bg-sky-100 text-xs">
+                                                Upload
                                             </span>
-                                            <span className="text-slate-500">
+                                            <span className="text-slate-500 text-xs truncate">
                                                 {selectedFile ? selectedFile.name : 'No file selected'}
                                             </span>
                                         </span>
@@ -752,13 +776,13 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                                 
                                 {/* File Browser Info */}
                                 {propSelectedFile && (
-                                    <div className={`p-2 border rounded-md text-sm ${
+                                    <div className={`p-1 border rounded-md text-xs ${
                                         selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
                                             ? 'bg-green-50 border-green-200' 
                                             : 'bg-blue-50 border-blue-200'
                                     }`}>
                                         <div className="flex items-center">
-                                            <svg className={`w-4 h-4 mr-2 ${
+                                            <svg className={`w-3 h-3 mr-1 ${
                                                 selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
                                                     ? 'text-green-600' 
                                                     : 'text-blue-600'
@@ -769,28 +793,23 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-5l-2-2H5a2 2 0 00-2 2z" />
                                                 )}
                                             </svg>
-                                            <span className={`font-medium ${
+                                            <span className={`font-medium truncate ${
                                                 selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
                                                     ? 'text-green-800' 
                                                     : 'text-blue-800'
                                             }`}>
                                                 {selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
-                                                    ? 'File Browser - Loaded:' 
-                                                    : 'File Browser Selection:'}
+                                                    ? 'Browser:' 
+                                                    : 'Browser:'}
+                                                {' '}
+                                                {propSelectedFile.selectedPDFFile || 'Unknown'}
                                             </span>
                                         </div>
-                                        <div className={`mt-1 ${
-                                            selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
-                                                ? 'text-green-700' 
-                                                : 'text-blue-700'
-                                        }`}>
-                                            {propSelectedFile.selectedPDFFile || 'Unknown file'}
-                                        </div>
                                         {!(selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile) && (
-                                            <div className="text-xs text-blue-600 mt-1">
+                                            <div className="text-xs text-blue-600">
                                                 {baseDirectoryHandles?.pdf 
-                                                    ? 'Loading file...' 
-                                                    : 'Grant directory permissions on Home tab first'}
+                                                    ? 'Loading...' 
+                                                    : 'Need permissions'}
                                             </div>
                                         )}
                                     </div>
