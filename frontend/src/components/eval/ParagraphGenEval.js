@@ -3,6 +3,7 @@ import { Spinner } from '../SharedComponents';
 import { api } from '../../services/api';
 import FileBrowser from './FileBrowser';
 import BookmarksModal from '../BookmarksModal';
+import ShowBookmarksButton from '../ShowBookmarksButton';
 import { 
     storeDirectoryHandles, 
     getStoredDirectoryHandles, 
@@ -587,24 +588,11 @@ Please select the SOURCE directory (${selection.sourcePath})`;
 
                     {/* Jump Controls and Bookmarks */}
                     <div className="flex items-center space-x-2">
-                        {/* Bookmarks Button - Show when PDF is selected */}
-                        {selectedFolder?.selectedPDFFile && (
-                            <button
-                                onClick={() => setShowBookmarksModal(true)}
-                                className={`px-3 py-1 text-sm rounded-md hover:bg-purple-700 transition-colors flex items-center ${
-                                    bookmarks.length > 0 
-                                        ? 'bg-purple-600 text-white' 
-                                        : 'bg-gray-400 text-white cursor-not-allowed'
-                                }`}
-                                title={bookmarks.length > 0 ? `Show bookmarks (${bookmarks.length} found)` : "No bookmarks found in PDF"}
-                                disabled={bookmarks.length === 0}
-                            >
-                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                                </svg>
-                                Bookmarks {bookmarks.length > 0 ? `(${bookmarks.length})` : '(0)'}
-                            </button>
-                        )}
+                        {/* Show Bookmarks Button */}
+                        <ShowBookmarksButton 
+                            hasBookmarks={selectedFolder?.selectedPDFFile && bookmarks.length > 0}
+                            onClick={() => setShowBookmarksModal(true)}
+                        />
                         
                         <label className="text-sm font-medium text-slate-700">
                             Jump to Page:

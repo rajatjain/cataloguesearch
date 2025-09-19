@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Spinner } from './SharedComponents';
+import ShowBookmarksButton from './ShowBookmarksButton';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '/api';
 
@@ -28,6 +29,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
     const [batchProgress, setBatchProgress] = useState(0);
     const [batchTotalPages, setBatchTotalPages] = useState(0);
     const [batchZipFilename, setBatchZipFilename] = useState(null);
+    const [batchElapsedTime, setBatchElapsedTime] = useState(null);
 
     // New state for cropped image preview
     const [croppedPreviewUrl, setCroppedPreviewUrl] = useState(null);
@@ -36,6 +38,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
     const imageContainerRef = useRef(null);
     const croppedImageContainerRef = useRef(null);
     const pollingIntervalRef = useRef(null);
+    const manualUploadRef = useRef(false);
 
     // PDF.js dynamic loading
     useEffect(() => {
@@ -94,7 +97,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
     // Effect to handle file selection from file browser
     useEffect(() => {
         if (propSelectedFile && propSelectedFile.selectedPDFFile && 
-            (!selectedFile || selectedFile.name !== propSelectedFile.selectedPDFFile)) {
+            (!selectedFile || (selectedFile.name !== propSelectedFile.selectedPDFFile && selectedFile.size === undefined))) {
             const handleBrowserFileSelection = async () => {
                 try {
                     if (propSelectedFile.selectedPDFFile && baseDirectoryHandles?.pdf) {
@@ -147,6 +150,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
         setBatchProgress(0);
         setBatchTotalPages(0);
         setBatchZipFilename(null);
+        setBatchElapsedTime(null);
         if (pollingIntervalRef.current) {
             clearInterval(pollingIntervalRef.current);
         }
@@ -155,6 +159,11 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
     const handleFileSelect = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
+
+        // Clear file browser selection when manual upload is used
+        if (onFileSelect) {
+            onFileSelect(null);
+        }
 
         setSelectedFile(file);
         setOcrResults(null);
@@ -334,7 +343,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
         // Check cost if Google OCR is enabled
         if (useGoogleOCR) {
             try {
-                const costResponse = await fetch(`${API_BASE_URL}/ocr/calculate-cost`, {
+                const costResponse = await fetch(`${API_BASE_URL}/eval/ocr/calculate-cost`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -371,7 +380,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
             formData.append('language', language);
             formData.append('use_google_ocr', useGoogleOCR);
 
-            const response = await fetch(`${API_BASE_URL}/ocr/batch`, {
+            const response = await fetch(`${API_BASE_URL}/eval/ocr/batch`, {
                 method: 'POST',
                 body: formData,
             });
@@ -396,7 +405,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
 
         try {
             setBatchJobStatus('canceling');
-            const response = await fetch(`${API_BASE_URL}/ocr/batch/cancel/${batchJobId}`, {
+            const response = await fetch(`${API_BASE_URL}/eval/ocr/batch/cancel/${batchJobId}`, {
                 method: 'POST',
             });
 
@@ -415,7 +424,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
         if (batchJobId && (batchJobStatus === 'queued' || batchJobStatus === 'preparing' || batchJobStatus === 'processing' || batchJobStatus === 'canceling')) {
             pollingIntervalRef.current = setInterval(async () => {
                 try {
-                    const response = await fetch(`${API_BASE_URL}/ocr/batch/status/${batchJobId}`);
+                    const response = await fetch(`${API_BASE_URL}/eval/ocr/batch/status/${batchJobId}`);
                     const data = await response.json();
 
                     if (!response.ok) {
@@ -425,6 +434,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                     setBatchJobStatus(data.status);
                     setBatchProgress(data.progress);
                     setBatchTotalPages(data.total_pages);
+                    setBatchElapsedTime(data.elapsed_time_formatted);
 
                     if (data.status === 'completed') {
                         setBatchZipFilename(data.zip_filename);
@@ -883,17 +893,10 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                             )}
 
                             {/* Show bookmarks toggle */}
-                            {isPDF && bookmarks.length > 0 && (
-                                <button
-                                    onClick={() => setShowBookmarkModal(true)}
-                                    className="text-sm text-sky-600 hover:text-sky-800 flex items-center"
-                                >
-                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                                    </svg>
-                                    Show Bookmarks
-                                </button>
-                            )}
+                            <ShowBookmarksButton 
+                                hasBookmarks={isPDF && bookmarks.length > 0}
+                                onClick={() => setShowBookmarkModal(true)}
+                            />
                         </div>
 
                         {/* Action Buttons */}
@@ -945,15 +948,22 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                 {batchJobId && (
                     <div className="p-4 border-b border-slate-200">
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-medium text-slate-700">
-                                {batchJobStatus === 'queued' && 'Server at max limit, waiting for a slot to be freed....'}
-                                {batchJobStatus === 'preparing' && 'Preparing PDF for processing...'}
-                                {batchJobStatus === 'processing' && `Processing PDF... (${batchProgress} / ${batchTotalPages} pages)`}
-                                {batchJobStatus === 'canceling' && 'Canceling job...'}
-                                {batchJobStatus === 'canceled' && 'Job was canceled.'}
-                                {batchJobStatus === 'completed' && 'PDF processing complete!'}
-                                {batchJobStatus === 'failed' && 'PDF processing failed.'}
-                            </h3>
+                            <div className="flex items-center space-x-3">
+                                <h3 className="text-sm font-medium text-slate-700">
+                                    {batchJobStatus === 'queued' && 'Server at max limit, waiting for a slot to be freed....'}
+                                    {batchJobStatus === 'preparing' && 'Preparing PDF for processing...'}
+                                    {batchJobStatus === 'processing' && `Processing PDF... (${batchProgress} / ${batchTotalPages} pages)`}
+                                    {batchJobStatus === 'canceling' && 'Canceling job...'}
+                                    {batchJobStatus === 'canceled' && 'Job was canceled.'}
+                                    {batchJobStatus === 'completed' && 'PDF processing complete!'}
+                                    {batchJobStatus === 'failed' && 'PDF processing failed.'}
+                                </h3>
+                                {batchElapsedTime && (
+                                    <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
+                                        {batchElapsedTime}
+                                    </span>
+                                )}
+                            </div>
                             {(batchJobStatus === 'processing' || batchJobStatus === 'queued' || batchJobStatus === 'preparing') && (
                                 <button
                                     onClick={handleCancelBatchJob}
@@ -968,7 +978,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                         )}
                         {batchJobStatus === 'completed' && (
                              <a
-                                href={`${API_BASE_URL}/ocr/batch/download/${batchJobId}`}
+                                href={`${API_BASE_URL}/eval/ocr/batch/download/${batchJobId}`}
                                 download={batchZipFilename || 'extracted_text.zip'}
                                 className="inline-block bg-sky-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-sky-700 transition duration-200"
                             >
