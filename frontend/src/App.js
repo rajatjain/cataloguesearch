@@ -12,6 +12,7 @@ import WhatsNew from './components/WhatsNew';
 import UsageGuide from './components/UsageGuide';
 import OCRUtils from './components/OCRUtils';
 import SearchIndex from './components/SearchIndex';
+import UIEval from './components/eval/UIEval';
 import SearchableContentWidget from './components/SearchableContentWidget';
 import { Spinner, ChevronUpIcon, ChevronDownIcon, ExpandIcon } from './components/SharedComponents';
 
@@ -139,6 +140,7 @@ const AppContent = () => {
         if (path === '/usage-guide') return 'usage-guide';
         if (path === '/ocr-utils') return 'ocr-utils';
         if (path === '/search-index') return 'search-index';
+        if (path === '/ui-eval') return 'ui-eval';
         return 'home'; // Default to 'home' for root path
     });
     
@@ -157,6 +159,8 @@ const AppContent = () => {
             setCurrentPageState('ocr-utils');
         } else if (path === '/search-index') {
             setCurrentPageState('search-index');
+        } else if (path === '/ui-eval') {
+            setCurrentPageState('ui-eval');
         } else if (path === '/') {
             setCurrentPageState('home');
         }
@@ -199,7 +203,8 @@ const AppContent = () => {
             'whats-new': '/whats-new',
             'usage-guide': '/usage-guide',
             'ocr-utils': '/ocr-utils',
-            'search-index': '/search-index'
+            'search-index': '/search-index',
+            'ui-eval': '/ui-eval'
         };
         navigate(routes[page] || '/');
     };
@@ -646,6 +651,12 @@ const AppContent = () => {
                             <SearchIndex />
                         </main>
                     )}
+
+                    {currentPage === 'ui-eval' && (
+                        <main>
+                            <UIEval />
+                        </main>
+                    )}
                 </div>
             </div>
             
@@ -691,6 +702,7 @@ export default function App() {
                 <Route path="/usage-guide" element={<AppContent />} />
                 <Route path="/ocr-utils" element={<AppContent />} />
                 <Route path="/search-index" element={<AppContent />} />
+                <Route path="/ui-eval" element={<AppContent />} />
             </Routes>
         </Router>
     );

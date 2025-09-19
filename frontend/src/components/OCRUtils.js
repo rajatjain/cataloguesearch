@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Spinner } from './SharedComponents';
+import ShowBookmarksButton from './ShowBookmarksButton';
 
-const API_BASE_URL = 'http://localhost:8500/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '/api';
 
-const OCRUtils = () => {
+const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, baseDirectoryHandles }) => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [language, setLanguage] = useState('hin');
     const [cropTop, setCropTop] = useState(0);
@@ -28,6 +29,7 @@ const OCRUtils = () => {
     const [batchProgress, setBatchProgress] = useState(0);
     const [batchTotalPages, setBatchTotalPages] = useState(0);
     const [batchZipFilename, setBatchZipFilename] = useState(null);
+    const [batchElapsedTime, setBatchElapsedTime] = useState(null);
 
     // New state for cropped image preview
     const [croppedPreviewUrl, setCroppedPreviewUrl] = useState(null);
@@ -36,6 +38,7 @@ const OCRUtils = () => {
     const imageContainerRef = useRef(null);
     const croppedImageContainerRef = useRef(null);
     const pollingIntervalRef = useRef(null);
+    const manualUploadRef = useRef(false);
 
     // PDF.js dynamic loading
     useEffect(() => {
@@ -91,14 +94,90 @@ const OCRUtils = () => {
         };
     }, [showBookmarkModal]);
 
+    // Effect to handle file selection from file browser
+    useEffect(() => {
+        if (propSelectedFile && propSelectedFile.selectedPDFFile && 
+            (!selectedFile || selectedFile.name !== propSelectedFile.selectedPDFFile)) {
+            const handleBrowserFileSelection = async () => {
+                try {
+                    if (propSelectedFile.selectedPDFFile && baseDirectoryHandles?.pdf) {
+                        // Reset all state to start fresh
+                        resetAllState();
+                        setIsLoading(true);
+                        
+                        // Navigate to the PDF file using the relative path
+                        const pathParts = propSelectedFile.relativePath.split('/');
+                        const pdfDirectory = pathParts.slice(0, -1).join('/'); // Remove the last part (PDF name without extension)
+                        
+                        // Navigate to the PDF directory
+                        let currentHandle = baseDirectoryHandles.pdf;
+                        const pathSegments = pdfDirectory.split('/').filter(segment => segment.length > 0);
+                        
+                        for (const segment of pathSegments) {
+                            currentHandle = await currentHandle.getDirectoryHandle(segment);
+                        }
+                        
+                        // Get the PDF file handle
+                        const pdfFileHandle = await currentHandle.getFileHandle(propSelectedFile.selectedPDFFile);
+                        const pdfFile = await pdfFileHandle.getFile();
+                        
+                        // Set the selected file and load it
+                        setSelectedFile(pdfFile);
+                        setIsPDF(true);
+                        
+                        // Load the PDF
+                        await loadPDF(pdfFile);
+                        
+                        setIsLoading(false);
+                    } else if (propSelectedFile.selectedPDFFile) {
+                        setError('Directory permissions not granted. Please grant permissions on the Home tab first.');
+                    }
+                } catch (err) {
+                    setError(`Error loading file from browser: ${err.message}`);
+                    setIsLoading(false);
+                }
+            };
+
+            handleBrowserFileSelection();
+        }
+    }, [propSelectedFile, baseDirectoryHandles]);
+
     const resetBatchState = () => {
         setBatchJobId(null);
         setBatchJobStatus(null);
         setBatchProgress(0);
         setBatchTotalPages(0);
         setBatchZipFilename(null);
+        setBatchElapsedTime(null);
         if (pollingIntervalRef.current) {
             clearInterval(pollingIntervalRef.current);
+        }
+    };
+
+    const resetAllState = () => {
+        // Reset file state
+        setSelectedFile(null);
+        setIsPDF(false);
+        setPdfDoc(null);
+        setPreviewUrl(null);
+        setCurrentPage(1);
+        setTotalPages(1);
+        setBookmarks([]);
+        setShowBookmarks(false);
+        setShowBookmarkModal(false);
+        
+        // Reset OCR state
+        setOcrResults(null);
+        setCroppedPreviewUrl(null);
+        setError(null);
+        setIsLoading(false);
+        
+        // Reset batch state
+        resetBatchState();
+        
+        // Reset file input
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
         }
     };
 
@@ -106,12 +185,16 @@ const OCRUtils = () => {
         const file = event.target.files[0];
         if (!file) return;
 
+        // Clear file browser selection when manual upload is used
+        if (onFileSelect) {
+            onFileSelect(null);
+        }
+
+        // Reset all state to start fresh
+        resetAllState();
+
+        // Set the new file and load it
         setSelectedFile(file);
-        setOcrResults(null);
-        setError(null);
-        resetBatchState();
-        setCroppedPreviewUrl(null);
-        
         const fileType = file.type;
         setIsPDF(fileType === 'application/pdf');
 
@@ -255,7 +338,7 @@ const OCRUtils = () => {
             formData.append('crop_bottom', cropBottom);
             formData.append('use_google_ocr', useGoogleOCR);
 
-            const response = await fetch(`${API_BASE_URL}/ocr`, {
+            const response = await fetch(`${API_BASE_URL}/eval/ocr`, {
                 method: 'POST',
                 body: formData,
             });
@@ -284,7 +367,7 @@ const OCRUtils = () => {
         // Check cost if Google OCR is enabled
         if (useGoogleOCR) {
             try {
-                const costResponse = await fetch(`${API_BASE_URL}/ocr/calculate-cost`, {
+                const costResponse = await fetch(`${API_BASE_URL}/eval/ocr/calculate-cost`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -321,7 +404,7 @@ const OCRUtils = () => {
             formData.append('language', language);
             formData.append('use_google_ocr', useGoogleOCR);
 
-            const response = await fetch(`${API_BASE_URL}/ocr/batch`, {
+            const response = await fetch(`${API_BASE_URL}/eval/ocr/batch`, {
                 method: 'POST',
                 body: formData,
             });
@@ -346,7 +429,7 @@ const OCRUtils = () => {
 
         try {
             setBatchJobStatus('canceling');
-            const response = await fetch(`${API_BASE_URL}/ocr/batch/cancel/${batchJobId}`, {
+            const response = await fetch(`${API_BASE_URL}/eval/ocr/batch/cancel/${batchJobId}`, {
                 method: 'POST',
             });
 
@@ -365,7 +448,7 @@ const OCRUtils = () => {
         if (batchJobId && (batchJobStatus === 'queued' || batchJobStatus === 'preparing' || batchJobStatus === 'processing' || batchJobStatus === 'canceling')) {
             pollingIntervalRef.current = setInterval(async () => {
                 try {
-                    const response = await fetch(`${API_BASE_URL}/ocr/batch/status/${batchJobId}`);
+                    const response = await fetch(`${API_BASE_URL}/eval/ocr/batch/status/${batchJobId}`);
                     const data = await response.json();
 
                     if (!response.ok) {
@@ -375,6 +458,7 @@ const OCRUtils = () => {
                     setBatchJobStatus(data.status);
                     setBatchProgress(data.progress);
                     setBatchTotalPages(data.total_pages);
+                    setBatchElapsedTime(data.elapsed_time_formatted);
 
                     if (data.status === 'completed') {
                         setBatchZipFilename(data.zip_filename);
@@ -658,34 +742,78 @@ const OCRUtils = () => {
 
                 {/* Controls */}
                 <div className="p-4 border-b border-slate-200 bg-slate-50">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-3">
                         {/* File Input */}
-                        <div>
+                        <div className="col-span-1 md:col-span-2 lg:col-span-3">
                             <label className="block text-sm font-medium text-slate-700 mb-2">
-                                Select File
+                                File Selection
                             </label>
-                            <div className="relative">
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*,application/pdf"
-                                    onChange={handleFileSelect}
-                                    className="sr-only"
-                                    id="file-upload"
-                                />
-                                <label
-                                    htmlFor="file-upload"
-                                    className="block w-full text-sm text-slate-500 border border-slate-300 rounded-md px-3 py-2 cursor-pointer bg-white hover:bg-slate-50 transition-colors"
-                                >
-                                    <span className="inline-flex items-center">
-                                        <span className="bg-sky-50 text-sky-700 font-semibold px-4 py-2 rounded-md mr-4 hover:bg-sky-100">
-                                            Upload a file
+                            <div className="space-y-2">
+                                {/* File Upload Option */}
+                                <div className="relative">
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*,application/pdf"
+                                        onChange={handleFileSelect}
+                                        className="sr-only"
+                                        id="file-upload"
+                                    />
+                                    <label
+                                        htmlFor="file-upload"
+                                        className="block w-full text-sm text-slate-500 border border-slate-300 rounded-md px-3 py-2 cursor-pointer bg-white hover:bg-slate-50 transition-colors"
+                                    >
+                                        <span className="inline-flex items-center">
+                                            <span className="bg-sky-50 text-sky-700 font-semibold px-2 py-1 rounded-md mr-2 hover:bg-sky-100 text-xs">
+                                                Upload
+                                            </span>
+                                            <span className="text-slate-500 text-xs truncate">
+                                                {selectedFile ? selectedFile.name : 'No file selected'}
+                                            </span>
                                         </span>
-                                        <span className="text-slate-500">
-                                            {selectedFile ? selectedFile.name : 'No file selected'}
-                                        </span>
-                                    </span>
-                                </label>
+                                    </label>
+                                </div>
+                                
+                                {/* File Browser Info */}
+                                {propSelectedFile && (
+                                    <div className={`p-1 border rounded-md text-xs ${
+                                        selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
+                                            ? 'bg-green-50 border-green-200' 
+                                            : 'bg-blue-50 border-blue-200'
+                                    }`}>
+                                        <div className="flex items-center">
+                                            <svg className={`w-3 h-3 mr-1 ${
+                                                selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
+                                                    ? 'text-green-600' 
+                                                    : 'text-blue-600'
+                                            }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                {selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile ? (
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                ) : (
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-5l-2-2H5a2 2 0 00-2 2z" />
+                                                )}
+                                            </svg>
+                                            <span className={`font-medium truncate ${
+                                                selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
+                                                    ? 'text-green-800' 
+                                                    : 'text-blue-800'
+                                            }`}>
+                                                {selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
+                                                    ? 'Browser:' 
+                                                    : 'Browser:'}
+                                                {' '}
+                                                {propSelectedFile.selectedPDFFile || 'Unknown'}
+                                            </span>
+                                        </div>
+                                        {!(selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile) && (
+                                            <div className="text-xs text-blue-600">
+                                                {baseDirectoryHandles?.pdf 
+                                                    ? 'Loading...' 
+                                                    : 'Need permissions'}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -784,17 +912,10 @@ const OCRUtils = () => {
                             )}
 
                             {/* Show bookmarks toggle */}
-                            {isPDF && bookmarks.length > 0 && (
-                                <button
-                                    onClick={() => setShowBookmarkModal(true)}
-                                    className="text-sm text-sky-600 hover:text-sky-800 flex items-center"
-                                >
-                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                                    </svg>
-                                    Show Bookmarks
-                                </button>
-                            )}
+                            <ShowBookmarksButton 
+                                hasBookmarks={isPDF && bookmarks.length > 0}
+                                onClick={() => setShowBookmarkModal(true)}
+                            />
                         </div>
 
                         {/* Action Buttons */}
@@ -846,15 +967,22 @@ const OCRUtils = () => {
                 {batchJobId && (
                     <div className="p-4 border-b border-slate-200">
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-medium text-slate-700">
-                                {batchJobStatus === 'queued' && 'Server at max limit, waiting for a slot to be freed....'}
-                                {batchJobStatus === 'preparing' && 'Preparing PDF for processing...'}
-                                {batchJobStatus === 'processing' && `Processing PDF... (${batchProgress} / ${batchTotalPages} pages)`}
-                                {batchJobStatus === 'canceling' && 'Canceling job...'}
-                                {batchJobStatus === 'canceled' && 'Job was canceled.'}
-                                {batchJobStatus === 'completed' && 'PDF processing complete!'}
-                                {batchJobStatus === 'failed' && 'PDF processing failed.'}
-                            </h3>
+                            <div className="flex items-center space-x-3">
+                                <h3 className="text-sm font-medium text-slate-700">
+                                    {batchJobStatus === 'queued' && 'Server at max limit, waiting for a slot to be freed....'}
+                                    {batchJobStatus === 'preparing' && 'Preparing PDF for processing...'}
+                                    {batchJobStatus === 'processing' && `Processing PDF... (${batchProgress} / ${batchTotalPages} pages)`}
+                                    {batchJobStatus === 'canceling' && 'Canceling job...'}
+                                    {batchJobStatus === 'canceled' && 'Job was canceled.'}
+                                    {batchJobStatus === 'completed' && 'PDF processing complete!'}
+                                    {batchJobStatus === 'failed' && 'PDF processing failed.'}
+                                </h3>
+                                {batchElapsedTime && (
+                                    <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
+                                        {batchElapsedTime}
+                                    </span>
+                                )}
+                            </div>
                             {(batchJobStatus === 'processing' || batchJobStatus === 'queued' || batchJobStatus === 'preparing') && (
                                 <button
                                     onClick={handleCancelBatchJob}
@@ -869,7 +997,7 @@ const OCRUtils = () => {
                         )}
                         {batchJobStatus === 'completed' && (
                              <a
-                                href={`${API_BASE_URL}/ocr/batch/download/${batchJobId}`}
+                                href={`${API_BASE_URL}/eval/ocr/batch/download/${batchJobId}`}
                                 download={batchZipFilename || 'extracted_text.zip'}
                                 className="inline-block bg-sky-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-sky-700 transition duration-200"
                             >
