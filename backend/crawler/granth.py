@@ -49,6 +49,21 @@ class Verse:
             Page Num: {self._page_num}
         """
         return verse_preview
+    
+    def get_http_response(self):
+        """Convert Verse to dictionary for HTTP response"""
+        return {
+            "seq_num": self._seq_num,
+            "verse": self._verse,
+            "type": self._type,
+            "type_num": self._type_num,
+            "translation": self._translation,
+            "language": self._language,
+            "meaning": self._meaning,
+            "teeka": self._teeka,
+            "bhavarth": self._bhavarth,
+            "page_num": self._page_num
+        }
 
 class GranthMetadata:
     def __init__(
@@ -62,6 +77,16 @@ class GranthMetadata:
     
     def __str__(self):
         return f"GranthMetadata(anuyog='{self._anuyog}', lang='{self._language}', author='{self._author}', teekakar='{self._teekakar}')"
+    
+    def get_http_response(self):
+        """Convert GranthMetadata to dictionary for HTTP response"""
+        return {
+            "anuyog": self._anuyog,
+            "language": self._language,
+            "author": self._author,
+            "teekakar": self._teekakar,
+            "file_url": self._file_url
+        }
 
 
 class Granth:
@@ -79,3 +104,12 @@ class Granth:
     
     def __str__(self):
         return f"Granth(name='{self._name}', verses={len(self._verses)}, metadata={self._metadata})"
+    
+    def get_http_response(self):
+        """Convert Granth to dictionary for HTTP response"""
+        return {
+            "name": self._name,
+            "original_filename": self._original_filename,
+            "metadata": self._metadata.get_http_response(),
+            "verses": [verse.get_http_response() for verse in self._verses]
+        }

@@ -20,6 +20,26 @@ class MarkdownParser:
         self.md = markdown.Markdown()
         self.base_folder = base_folder
     
+    def clean_text(self, text: str) -> str:
+        """Clean text by removing/replacing special characters like NBSP."""
+        if not text:
+            return text
+        
+        # Replace common problematic characters
+        text = text.replace('\u00A0', ' ')  # Non-breaking space (NBSP)
+        text = text.replace('\u200B', '')   # Zero-width space
+        text = text.replace('\u2009', ' ')  # Thin space
+        text = text.replace('\u202F', ' ')  # Narrow no-break space
+        text = text.replace('\uFEFF', '')   # Zero-width no-break space (BOM)
+        
+        # Replace multiple spaces with single space
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Strip leading/trailing whitespace
+        text = text.strip()
+        
+        return text
+    
     def parse_file(self, file_path: str) -> Granth:
         """Parse a markdown file and return a Granth object."""
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -81,7 +101,7 @@ class MarkdownParser:
     def _extract_single_verse(self, h1_tag, seq_num: int, soup: BeautifulSoup) -> Optional[Verse]:
         """Extract a single verse from an H1 tag and its following content."""
         # Extract type and type_num from H1 text
-        h1_text = h1_tag.get_text().strip()
+        h1_text = self.clean_text(h1_tag.get_text())
         verse_type, type_num = self._parse_verse_header(h1_text)
         
         if not verse_type:
@@ -113,14 +133,14 @@ class MarkdownParser:
 
         return Verse(
             seq_num=seq_num,
-            verse=verse_text,
+            verse=self.clean_text(verse_text),
             type=verse_type,
             type_num=type_num,
-            translation=translation,
+            translation=self.clean_text(translation),
             language="Hindi",
-            meaning=meaning,
-            teeka=teeka,
-            bhavarth=bhavarth,
+            meaning=self.clean_text(meaning),
+            teeka=[self.clean_text(t) for t in teeka],
+            bhavarth=[self.clean_text(b) for b in bhavarth],
             page_num=page_num
         )
     
@@ -144,7 +164,7 @@ class MarkdownParser:
                 break  # Stop at first section header
             
             if element.name == 'p':
-                text = element.get_text().strip()
+                text = self.clean_text(element.get_text())
                 if text:
                     verse_lines.append(text)
 
@@ -163,11 +183,11 @@ class MarkdownParser:
                     sections[current_section] = current_content
                 
                 # Start new section
-                current_section = element.get_text().strip()
+                current_section = self.clean_text(element.get_text())
                 current_content = []
             
             elif current_section and element.name in ['p', 'ul', 'ol', 'blockquote']:
-                text = element.get_text().strip()
+                text = self.clean_text(element.get_text())
                 if text:
                     current_content.append(text)
         
@@ -196,7 +216,7 @@ class MarkdownParser:
         """Extract page number from 'Page <num>' section headers."""
         for section_name in sections.keys():
             # Match "Page <number>" pattern
-            match = re.match(r'^Page\s+(\d+)$', section_name, re.IGNORECASE)
+            match = re.match(r'^Page\s+Number\s+(\d+)$', section_name, re.IGNORECASE)
             if match:
                 return int(match.group(1))
         return None

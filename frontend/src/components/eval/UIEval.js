@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import OCRUtils from '../OCRUtils';
 import ParagraphGenEval from './ParagraphGenEval';
+import ScriptureEval from './ScriptureEval';
 import FileBrowser from './FileBrowser';
 import { storeDirectoryHandles, getStoredDirectoryHandles, validateDirectoryHandles } from '../../utils/directoryHandlers';
 
@@ -85,10 +86,14 @@ const UIEval = () => {
     const handleFolderSelect = (folderSelection) => {
         setSelectedFolder(folderSelection);
         
-        // If a PDF file was selected, also set it as the selected file for OCRUtils
-        if (folderSelection && folderSelection.selectedPDFFile) {
+        // Set selected file for different file types
+        if (folderSelection && (folderSelection.selectedPDFFile || folderSelection.fileType === 'markdown')) {
             setSelectedFile(folderSelection);
-            console.log('PDF file selected for OCR:', folderSelection.selectedPDFFile);
+            if (folderSelection.selectedPDFFile) {
+                console.log('PDF file selected for OCR:', folderSelection.selectedPDFFile);
+            } else if (folderSelection.fileType === 'markdown') {
+                console.log('Markdown file selected for Scripture Eval:', folderSelection.selectedFileName);
+            }
         }
         
         setShowFileBrowser(false);
@@ -178,6 +183,7 @@ const UIEval = () => {
                     onFolderSelect={handleFolderSelect}
                     basePaths={basePaths}
                     baseDirectoryHandles={baseDirectoryHandles}
+                    currentTab={activeTab}
                 />
             )}
             
@@ -212,10 +218,16 @@ const UIEval = () => {
                                         isActive={activeTab === 'paragraph-eval'} 
                                         onClick={setActiveTab} 
                                     />
+                                    <NavButton 
+                                        id="scripture-eval" 
+                                        label="Scripture Eval" 
+                                        isActive={activeTab === 'scripture-eval'} 
+                                        onClick={setActiveTab} 
+                                    />
                                 </div>
 
                                 {/* File Browser Button */}
-                                {(activeTab === 'ocr-eval' || activeTab === 'paragraph-eval') && (
+                                {(activeTab === 'ocr-eval' || activeTab === 'paragraph-eval' || activeTab === 'scripture-eval') && (
                                     <button
                                         onClick={handleBrowseFiles}
                                         className="bg-green-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-700 transition-colors flex items-center"
@@ -385,6 +397,15 @@ const UIEval = () => {
                                 onCloseFileBrowser={handleCloseFileBrowser}
                                 basePaths={basePaths}
                                 selectedFolder={selectedFolder}
+                                baseDirectoryHandles={baseDirectoryHandles}
+                            />
+                        )}
+
+                        {activeTab === 'scripture-eval' && basePaths && (
+                            <ScriptureEval 
+                                selectedFile={selectedFile} 
+                                onFileSelect={handleFileSelect}
+                                basePaths={basePaths}
                                 baseDirectoryHandles={baseDirectoryHandles}
                             />
                         )}

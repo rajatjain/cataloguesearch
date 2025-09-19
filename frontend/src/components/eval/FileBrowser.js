@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Spinner } from '../SharedComponents';
 
-const FileBrowser = ({ isOpen, onClose, onFolderSelect, basePaths, baseDirectoryHandles }) => {
+const FileBrowser = ({ isOpen, onClose, onFolderSelect, basePaths, baseDirectoryHandles, currentTab }) => {
     const [currentPath, setCurrentPath] = useState('');
     const [directories, setDirectories] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -46,13 +46,25 @@ const FileBrowser = ({ isOpen, onClose, onFolderSelect, basePaths, baseDirectory
                         path: path ? `${path}/${name}` : name,
                         type: 'directory'
                     });
-                } else if (handle.kind === 'file' && name.toLowerCase().endsWith('.pdf')) {
-                    items.push({
-                        name,
-                        handle,
-                        path: path ? `${path}/${name}` : name,
-                        type: 'file'
-                    });
+                } else if (handle.kind === 'file') {
+                    // Show different file types based on current tab
+                    if (currentTab === 'scripture-eval' && name.toLowerCase().endsWith('.md')) {
+                        items.push({
+                            name,
+                            handle,
+                            path: path ? `${path}/${name}` : name,
+                            type: 'file',
+                            fileType: 'markdown'
+                        });
+                    } else if ((currentTab === 'ocr-eval' || currentTab === 'paragraph-eval') && name.toLowerCase().endsWith('.pdf')) {
+                        items.push({
+                            name,
+                            handle,
+                            path: path ? `${path}/${name}` : name,
+                            type: 'file',
+                            fileType: 'pdf'
+                        });
+                    }
                 }
             }
             
@@ -82,43 +94,60 @@ const FileBrowser = ({ isOpen, onClose, onFolderSelect, basePaths, baseDirectory
             setPathHistory([...pathHistory, newPath]);
             await loadDirectory(item.handle, newPath);
         } else if (item.type === 'file') {
-            // Select PDF file
-            handleSelectPDFFile(item);
+            // Select file (PDF or Markdown)
+            handleSelectFile(item);
         }
     };
 
-    const handleSelectPDFFile = (pdfFile) => {
+    const handleSelectFile = (file) => {
         if (basePaths && basePdfHandle) {
-            // Get the PDF file path relative to base_pdf_folder
-            const pdfFilePath = pdfFile.path;
-            
-            // Remove .pdf extension to get directory name
-            const pdfFileName = pdfFile.name.replace(/\.pdf$/i, '');
-            const pdfDirPath = pdfFilePath.replace(/\/[^/]+\.pdf$/i, '');
-            
-            // Create the directory path by replacing the file with directory name
-            const relativeDirPath = pdfDirPath ? `${pdfDirPath}/${pdfFileName}` : pdfFileName;
-            
-            // Construct source and target paths
-            const sourcePath = `${basePaths.base_ocr_path}/${relativeDirPath}`;
-            const targetPath = `${basePaths.base_text_path}/${relativeDirPath}`;
-            
-            console.log('PDF file selected:', {
-                pdfFilePath,
-                pdfFileName,
-                relativeDirPath,
-                sourcePath,
-                targetPath
-            });
-            
-            onFolderSelect({
-                relativePath: relativeDirPath,
-                sourcePath,
-                targetPath,
-                selectedFolderName: pdfFileName,
-                selectedPDFFile: pdfFile.name
-            });
-            onClose();
+            if (file.fileType === 'markdown') {
+                // Handle markdown file selection for Scripture Eval
+                const markdownFilePath = file.path;
+                
+                console.log('Markdown file selected:', {
+                    markdownFilePath,
+                    fileName: file.name
+                });
+                
+                onFolderSelect({
+                    relativePath: markdownFilePath,
+                    selectedFileName: file.name,
+                    fileType: 'markdown'
+                });
+                onClose();
+            } else if (file.fileType === 'pdf') {
+                // Handle PDF file selection for OCR/Paragraph Eval
+                const pdfFilePath = file.path;
+                
+                // Remove .pdf extension to get directory name
+                const pdfFileName = file.name.replace(/\.pdf$/i, '');
+                const pdfDirPath = pdfFilePath.replace(/\/[^/]+\.pdf$/i, '');
+                
+                // Create the directory path by replacing the file with directory name
+                const relativeDirPath = pdfDirPath ? `${pdfDirPath}/${pdfFileName}` : pdfFileName;
+                
+                // Construct source and target paths
+                const sourcePath = `${basePaths.base_ocr_path}/${relativeDirPath}`;
+                const targetPath = `${basePaths.base_text_path}/${relativeDirPath}`;
+                
+                console.log('PDF file selected:', {
+                    pdfFilePath,
+                    pdfFileName,
+                    relativeDirPath,
+                    sourcePath,
+                    targetPath
+                });
+                
+                onFolderSelect({
+                    relativePath: relativeDirPath,
+                    sourcePath,
+                    targetPath,
+                    selectedFolderName: pdfFileName,
+                    selectedPDFFile: file.name
+                });
+                onClose();
+            }
         }
     };
 
@@ -342,14 +371,18 @@ const FileBrowser = ({ isOpen, onClose, onFolderSelect, basePaths, baseDirectory
                                     <svg className="mx-auto h-12 w-12 text-slate-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-5l-2-2H5a2 2 0 00-2 2z" />
                                     </svg>
-                                    <p>No subdirectories found</p>
+                                    <p>
+                                        {currentTab === 'scripture-eval' 
+                                            ? 'No directories or .md files found' 
+                                            : 'No subdirectories or PDF files found'}
+                                    </p>
                                 </div>
                             ) : (
                                 directories.map((item) => (
                                     <div
                                         key={item.path}
                                         className={`flex items-center p-3 border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 cursor-pointer transition-colors ${
-                                            item.type === 'file' ? 'bg-orange-50 border-orange-200 hover:bg-orange-100' : ''
+                                            item.type === 'file' ? (item.fileType === 'markdown' ? 'bg-green-50 border-green-200 hover:bg-green-100' : 'bg-orange-50 border-orange-200 hover:bg-orange-100') : ''
                                         }`}
                                         onClick={() => handleItemClick(item)}
                                     >
@@ -368,8 +401,12 @@ const FileBrowser = ({ isOpen, onClose, onFolderSelect, basePaths, baseDirectory
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                             </svg>
                                         ) : (
-                                            <span className="text-xs text-orange-600 ml-auto bg-orange-100 px-2 py-1 rounded font-medium">
-                                                PDF
+                                            <span className={`text-xs ml-auto px-2 py-1 rounded font-medium ${
+                                                item.fileType === 'markdown' 
+                                                    ? 'text-green-600 bg-green-100' 
+                                                    : 'text-orange-600 bg-orange-100'
+                                            }`}>
+                                                {item.fileType === 'markdown' ? 'MD' : 'PDF'}
                                             </span>
                                         )}
                                     </div>
