@@ -122,49 +122,35 @@ const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, 
             setIsLoading(true);
             setError(null);
             
-            const message = `This evaluation tool needs access to your base directories:
-
-• PDF Directory: ${basePaths.base_pdf_path}
-• OCR Directory: ${basePaths.base_ocr_path}  
-• Text Directory: ${basePaths.base_text_path}
-
-Please select each directory when prompted. This is a one-time setup.`;
+            // Check if File System Access API is available
+            if (!window.showDirectoryPicker) {
+                throw new Error('File System Access API is not supported in this browser. Please use Google Chrome for the best experience.');
+            }
             
-            if (window.confirm(message)) {
-                // Request PDF directory
-                const pdfMessage = `Please select the PDF base directory:\n${basePaths.base_pdf_path}`;
-                if (window.confirm(pdfMessage)) {
-                    const pdfHandle = await window.showDirectoryPicker();
-                    
-                    // Request OCR directory
-                    const ocrMessage = `Please select the OCR base directory:\n${basePaths.base_ocr_path}`;
-                    if (window.confirm(ocrMessage)) {
-                        const ocrHandle = await window.showDirectoryPicker();
-                        
-                        // Request Text directory
-                        const textMessage = `Please select the Text base directory:\n${basePaths.base_text_path}`;
-                        if (window.confirm(textMessage)) {
-                            const textHandle = await window.showDirectoryPicker();
-                            
-                            // Store all handles
-                            const handles = {
-                                pdf: pdfHandle,
-                                ocr: ocrHandle,
-                                text: textHandle
-                            };
-                            setBaseDirectoryHandles(handles);
-                            setPermissionsGranted(true);
-                            
-                            // Store in IndexedDB for persistence
-                            await storeDirectoryHandles(handles);
-                            
-                            // Notify parent component about the base directory handles
-                            if (onBaseDirectoryHandlesChange) {
-                                onBaseDirectoryHandlesChange(handles);
-                            }
-                        }
-                    }
-                }
+            // Request PDF directory
+            const pdfHandle = await window.showDirectoryPicker();
+            
+            // Request OCR directory
+            const ocrHandle = await window.showDirectoryPicker();
+            
+            // Request Text directory
+            const textHandle = await window.showDirectoryPicker();
+            
+            // Store all handles
+            const handles = {
+                pdf: pdfHandle,
+                ocr: ocrHandle,
+                text: textHandle
+            };
+            setBaseDirectoryHandles(handles);
+            setPermissionsGranted(true);
+            
+            // Store in IndexedDB for persistence
+            await storeDirectoryHandles(handles);
+            
+            // Notify parent component about the base directory handles
+            if (onBaseDirectoryHandlesChange) {
+                onBaseDirectoryHandlesChange(handles);
             }
         } catch (err) {
             if (err.name !== 'AbortError') {
