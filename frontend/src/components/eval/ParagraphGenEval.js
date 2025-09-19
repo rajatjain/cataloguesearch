@@ -13,7 +13,7 @@ import {
     readFileContent
 } from '../../utils/directoryHandlers';
 
-const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, basePaths: parentBasePaths, selectedFolder: propSelectedFolder, onBaseDirectoryHandlesChange }) => {
+const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, basePaths: parentBasePaths, selectedFolder: propSelectedFolder, baseDirectoryHandles: parentBaseDirectoryHandles }) => {
     const [selectedFolder, setSelectedFolder] = useState(propSelectedFolder || null);
     const [sourceHandle, setSourceHandle] = useState(null);
     const [targetHandle, setTargetHandle] = useState(null);
@@ -25,12 +25,12 @@ const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, 
     const [error, setError] = useState(null);
     const [jumpPageNumber, setJumpPageNumber] = useState('');
     const [basePaths, setBasePaths] = useState(parentBasePaths || null);
-    const [baseDirectoryHandles, setBaseDirectoryHandles] = useState({
+    const [baseDirectoryHandles, setBaseDirectoryHandles] = useState(parentBaseDirectoryHandles || {
         pdf: null,
         ocr: null,
         text: null
     });
-    const [permissionsGranted, setPermissionsGranted] = useState(false);
+    const [permissionsGranted, setPermissionsGranted] = useState(!!parentBaseDirectoryHandles);
     
     // Bookmarks functionality
     const [bookmarks, setBookmarks] = useState([]);
@@ -76,9 +76,6 @@ const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, 
                         setBaseDirectoryHandles(stored);
                         setPermissionsGranted(true);
                         
-                        if (onBaseDirectoryHandlesChange) {
-                            onBaseDirectoryHandlesChange(stored);
-                        }
                         // console.log('Successfully restored directory handles from storage');
                     } else {
                         console.log('Stored handles no longer have permission, clearing storage');
@@ -92,7 +89,7 @@ const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, 
         };
 
         loadPersistedHandles();
-    }, [onBaseDirectoryHandlesChange]);
+    }, []);
 
 
     // Load base paths from API if not provided by parent
@@ -148,10 +145,6 @@ const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, 
             // Store in IndexedDB for persistence
             await storeDirectoryHandles(handles);
             
-            // Notify parent component about the base directory handles
-            if (onBaseDirectoryHandlesChange) {
-                onBaseDirectoryHandlesChange(handles);
-            }
         } catch (err) {
             if (err.name !== 'AbortError') {
                 setError(`Error requesting directory permissions: ${err.message}`);

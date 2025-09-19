@@ -3,7 +3,7 @@ import { Spinner } from './SharedComponents';
 
 const API_BASE_URL = 'http://localhost:8500/api';
 
-const OCRUtils = () => {
+const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, baseDirectoryHandles }) => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [language, setLanguage] = useState('hin');
     const [cropTop, setCropTop] = useState(0);
@@ -90,6 +90,56 @@ const OCRUtils = () => {
             window.removeEventListener('keydown', handleEsc);
         };
     }, [showBookmarkModal]);
+
+    // Effect to handle file selection from file browser
+    useEffect(() => {
+        if (propSelectedFile && propSelectedFile.selectedPDFFile && 
+            (!selectedFile || selectedFile.name !== propSelectedFile.selectedPDFFile)) {
+            const handleBrowserFileSelection = async () => {
+                try {
+                    if (propSelectedFile.selectedPDFFile && baseDirectoryHandles?.pdf) {
+                        setError(null);
+                        setIsLoading(true);
+                        
+                        // Navigate to the PDF file using the relative path
+                        const pathParts = propSelectedFile.relativePath.split('/');
+                        const pdfDirectory = pathParts.slice(0, -1).join('/'); // Remove the last part (PDF name without extension)
+                        
+                        // Navigate to the PDF directory
+                        let currentHandle = baseDirectoryHandles.pdf;
+                        const pathSegments = pdfDirectory.split('/').filter(segment => segment.length > 0);
+                        
+                        for (const segment of pathSegments) {
+                            currentHandle = await currentHandle.getDirectoryHandle(segment);
+                        }
+                        
+                        // Get the PDF file handle
+                        const pdfFileHandle = await currentHandle.getFileHandle(propSelectedFile.selectedPDFFile);
+                        const pdfFile = await pdfFileHandle.getFile();
+                        
+                        // Set the selected file and load it
+                        setSelectedFile(pdfFile);
+                        setOcrResults(null);
+                        resetBatchState();
+                        setCroppedPreviewUrl(null);
+                        setIsPDF(true);
+                        
+                        // Load the PDF
+                        await loadPDF(pdfFile);
+                        
+                        setIsLoading(false);
+                    } else if (propSelectedFile.selectedPDFFile) {
+                        setError('Directory permissions not granted. Please grant permissions on the Home tab first.');
+                    }
+                } catch (err) {
+                    setError(`Error loading file from browser: ${err.message}`);
+                    setIsLoading(false);
+                }
+            };
+
+            handleBrowserFileSelection();
+        }
+    }, [propSelectedFile, baseDirectoryHandles]);
 
     const resetBatchState = () => {
         setBatchJobId(null);
@@ -660,32 +710,81 @@ const OCRUtils = () => {
                 <div className="p-4 border-b border-slate-200 bg-slate-50">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {/* File Input */}
-                        <div>
+                        <div className="col-span-2">
                             <label className="block text-sm font-medium text-slate-700 mb-2">
-                                Select File
+                                File Selection
                             </label>
-                            <div className="relative">
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*,application/pdf"
-                                    onChange={handleFileSelect}
-                                    className="sr-only"
-                                    id="file-upload"
-                                />
-                                <label
-                                    htmlFor="file-upload"
-                                    className="block w-full text-sm text-slate-500 border border-slate-300 rounded-md px-3 py-2 cursor-pointer bg-white hover:bg-slate-50 transition-colors"
-                                >
-                                    <span className="inline-flex items-center">
-                                        <span className="bg-sky-50 text-sky-700 font-semibold px-4 py-2 rounded-md mr-4 hover:bg-sky-100">
-                                            Upload a file
+                            <div className="space-y-2">
+                                {/* File Upload Option */}
+                                <div className="relative">
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*,application/pdf"
+                                        onChange={handleFileSelect}
+                                        className="sr-only"
+                                        id="file-upload"
+                                    />
+                                    <label
+                                        htmlFor="file-upload"
+                                        className="block w-full text-sm text-slate-500 border border-slate-300 rounded-md px-3 py-2 cursor-pointer bg-white hover:bg-slate-50 transition-colors"
+                                    >
+                                        <span className="inline-flex items-center">
+                                            <span className="bg-sky-50 text-sky-700 font-semibold px-4 py-2 rounded-md mr-4 hover:bg-sky-100">
+                                                Upload a file
+                                            </span>
+                                            <span className="text-slate-500">
+                                                {selectedFile ? selectedFile.name : 'No file selected'}
+                                            </span>
                                         </span>
-                                        <span className="text-slate-500">
-                                            {selectedFile ? selectedFile.name : 'No file selected'}
-                                        </span>
-                                    </span>
-                                </label>
+                                    </label>
+                                </div>
+                                
+                                {/* File Browser Info */}
+                                {propSelectedFile && (
+                                    <div className={`p-2 border rounded-md text-sm ${
+                                        selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
+                                            ? 'bg-green-50 border-green-200' 
+                                            : 'bg-blue-50 border-blue-200'
+                                    }`}>
+                                        <div className="flex items-center">
+                                            <svg className={`w-4 h-4 mr-2 ${
+                                                selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
+                                                    ? 'text-green-600' 
+                                                    : 'text-blue-600'
+                                            }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                {selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile ? (
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                ) : (
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-5l-2-2H5a2 2 0 00-2 2z" />
+                                                )}
+                                            </svg>
+                                            <span className={`font-medium ${
+                                                selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
+                                                    ? 'text-green-800' 
+                                                    : 'text-blue-800'
+                                            }`}>
+                                                {selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
+                                                    ? 'File Browser - Loaded:' 
+                                                    : 'File Browser Selection:'}
+                                            </span>
+                                        </div>
+                                        <div className={`mt-1 ${
+                                            selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile 
+                                                ? 'text-green-700' 
+                                                : 'text-blue-700'
+                                        }`}>
+                                            {propSelectedFile.selectedPDFFile || 'Unknown file'}
+                                        </div>
+                                        {!(selectedFile && selectedFile.name === propSelectedFile.selectedPDFFile) && (
+                                            <div className="text-xs text-blue-600 mt-1">
+                                                {baseDirectoryHandles?.pdf 
+                                                    ? 'Loading file...' 
+                                                    : 'Grant directory permissions on Home tab first'}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
