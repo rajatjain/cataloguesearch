@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Spinner } from './SharedComponents';
 
-const API_BASE_URL = 'http://localhost:8500/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '/api';
 
 const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, baseDirectoryHandles }) => {
     const [selectedFile, setSelectedFile] = useState(null);
@@ -305,7 +305,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
             formData.append('crop_bottom', cropBottom);
             formData.append('use_google_ocr', useGoogleOCR);
 
-            const response = await fetch(`${API_BASE_URL}/ocr`, {
+            const response = await fetch(`${API_BASE_URL}/eval/ocr`, {
                 method: 'POST',
                 body: formData,
             });
