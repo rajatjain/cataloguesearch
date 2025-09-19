@@ -1,7 +1,3 @@
-"""
-Markdown parser for converting Ishtopadesh markdown files to Granth objects.
-This parser handles structured religious texts with verses and commentary.
-"""
 import logging
 
 import markdown
