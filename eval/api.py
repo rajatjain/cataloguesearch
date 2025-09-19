@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from typing import Dict, List, Optional
 import os
@@ -13,6 +13,7 @@ import zipfile
 import shutil
 import concurrent.futures
 import threading
+import requests
 from starlette.background import BackgroundTask
 
 # OCR-specific imports
@@ -25,6 +26,7 @@ if backend_path not in sys.path:
 
 from config import Config
 from backend.crawler.pdf_processor import PDFProcessor
+from backend.crawler.markdown_parser import MarkdownParser
 from .ocr import get_ocr_service
 
 log_handle = logging.getLogger(__name__)
@@ -88,6 +90,10 @@ class CostCalculationResponse(BaseModel):
     cost: str
     pages: int
     currency: str = "₹"
+
+# --- Scripture Eval Request Model ---
+class ScriptureEvalRequest(BaseModel):
+    relative_path: str
 
 # --- Helper Functions ---
 def get_memory_usage():
@@ -344,3 +350,89 @@ try:
     asyncio.create_task(cleanup_old_jobs_task())
 except Exception:
     pass  # Ignore if no event loop is running
+
+@router.post("/scripture")
+async def process_scripture(request: ScriptureEvalRequest):
+    """
+    Process a markdown scripture file and return the parsed Granth object.
+    """
+    try:
+        # Initialize config to get base paths
+        config = Config("configs/config.yaml")
+        
+        # Construct the full path to the markdown file
+        # Assuming the relative path is relative to the base markdown directory
+        base_path = getattr(config, 'BASE_MARKDOWN_PATH', config.BASE_PDF_PATH)  # fallback to PDF path if markdown path not defined
+        full_file_path = os.path.join(base_path, request.relative_path)
+        
+        # Validate file exists and is a markdown file
+        if not os.path.exists(full_file_path):
+            raise HTTPException(status_code=404, detail=f"Markdown file not found: {request.relative_path}")
+        
+        if not full_file_path.lower().endswith('.md'):
+            raise HTTPException(status_code=400, detail="File must be a markdown (.md) file")
+        
+        log_handle.info(f"Processing scripture file: {full_file_path}")
+        
+        # Parse the markdown file using MarkdownParser
+        # Pass the base directory so it can find config files
+        parser = MarkdownParser(base_folder=base_path)
+        granth = parser.parse_file(full_file_path)
+        
+        log_handle.info(f"Successfully parsed Granth: {granth._name} with {len(granth._verses)} verses")
+        
+        # Return the Granth object as HTTP response
+        return granth.get_http_response()
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_handle.error(f"Error processing scripture file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing scripture file: {str(e)}")
+
+@router.get("/pdf/proxy")
+async def proxy_pdf(url: str):
+    """
+    Proxy PDF requests to avoid CORS issues with external PDF URLs.
+    """
+    try:
+        # Validate that this is a PDF URL
+        if not url or not (url.startswith('http://') or url.startswith('https://')):
+            raise HTTPException(status_code=400, detail="Invalid URL provided")
+        
+        # Add some basic security - only allow certain domains if needed
+        # For now, we'll be permissive but you can add domain whitelist here
+        
+        log_handle.info(f"Proxying PDF request for: {url}")
+        
+        # Make request to external PDF
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=30, stream=True)
+        response.raise_for_status()
+        
+        # Check if it's actually a PDF
+        content_type = response.headers.get('content-type', '').lower()
+        if 'pdf' not in content_type and not url.lower().endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="URL does not appear to be a PDF file")
+        
+        # Return the PDF content with proper headers
+        return Response(
+            content=response.content,
+            media_type="application/pdf",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET",
+                "Access-Control-Allow-Headers": "*",
+                "Cache-Control": "public, max-age=3600"  # Cache for 1 hour
+            }
+        )
+        
+    except requests.RequestException as e:
+        log_handle.error(f"Error fetching PDF from {url}: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Failed to fetch PDF: {str(e)}")
+    except Exception as e:
+        log_handle.error(f"Error proxying PDF: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error proxying PDF: {str(e)}")

@@ -14,6 +14,7 @@ from backend.utils import json_dumps
 from backend.config import Config
 from backend.crawler.index_generator import IndexGenerator
 from backend.crawler.index_state import IndexState
+from backend.common.utils import get_merged_config
 
 # Setup logging for this module
 log_handle = logging.getLogger(__name__)
@@ -38,31 +39,8 @@ class SingleFileProcessor:
         """
         Loads all the metadata for the file. This metadata will be indexed in OpenSearch
         """
-        # Collect all folders from base to PDF's folder
-        folders = []
-        current = os.path.dirname(self._file_path)
-        config = {}
-        while True:
-            folders = [current] + folders
-            log_handle.debug(f"Current folder: {current}, Base folder: {self._base_pdf_folder}")
-            if os.path.samefile(current, self._base_pdf_folder):
-                break
-            parent = os.path.dirname(current)
-            current = parent
-
-        # Merge config.json from each folder
-        for folder in folders:
-            config_path = os.path.join(folder, "config.json")
-            if os.path.exists(config_path):
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config.update(json.load(f))
-
-        # Merge file-specific config
-        file_base, _ = os.path.splitext(self._file_path)
-        file_config_path = f"{file_base}_config.json"
-        if os.path.exists(file_config_path):
-            with open(file_config_path, "r", encoding="utf-8") as f:
-                config.update(json.load(f))
+        # Use common utility to get merged config
+        config = get_merged_config(self._file_path, self._base_pdf_folder)
 
         # Add file_url from scan_config if provided
         if scan_config:

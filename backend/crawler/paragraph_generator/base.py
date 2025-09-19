@@ -149,6 +149,12 @@ class BaseParagraphGenerator(ABC):
 
         cleaned_text = text
 
+        cleaned_text = cleaned_text.replace('\u00A0', ' ')  # Non-breaking space (NBSP)
+        cleaned_text = cleaned_text.replace('\u200B', '')   # Zero-width space
+        cleaned_text = cleaned_text.replace('\u2009', ' ')  # Thin space
+        cleaned_text = cleaned_text.replace('\u202F', ' ')  # Narrow no-break space
+        cleaned_text = cleaned_text.replace('\uFEFF', '')   # Zero-width no-break space (BOM)
+
         # Common punctuation normalization
         cleaned_text = self._normalize_punctuation(cleaned_text)
 
