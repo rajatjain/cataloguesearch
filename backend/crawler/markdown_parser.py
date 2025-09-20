@@ -85,29 +85,29 @@ class MarkdownParser:
     def _extract_verses(self, soup: BeautifulSoup) -> List[Verse]:
         """Extract all verses from the parsed HTML."""
         verses = []
-        h1_tags = soup.find_all('h1')
+        h2_tags = soup.find_all('h2')
         
-        for seq_num, h1 in enumerate(h1_tags, 1):
-            verse = self._extract_single_verse(h1, seq_num, soup)
+        for seq_num, h2 in enumerate(h2_tags, 1):
+            verse = self._extract_single_verse(h2, seq_num, soup)
             if verse:
                 verses.append(verse)
         
         return verses
     
-    def _extract_single_verse(self, h1_tag, seq_num: int, soup: BeautifulSoup) -> Optional[Verse]:
+    def _extract_single_verse(self, h2_tag, seq_num: int, soup: BeautifulSoup) -> Optional[Verse]:
         """Extract a single verse from an H1 tag and its following content."""
         # Extract type and type_num from H1 text
-        h1_text = self.clean_text(h1_tag.get_text())
-        verse_type, type_num = self._parse_verse_header(h1_text)
+        h2_text = self.clean_text(h2_tag.get_text())
+        verse_type, type_num = self._parse_verse_header(h2_text)
         
         if not verse_type:
             return None
         
         # Get all content until the next H1
         content_elements = []
-        current = h1_tag.next_sibling
+        current = h2_tag.next_sibling
         
-        while current and (not hasattr(current, 'name') or current.name != 'h1'):
+        while current and (not hasattr(current, 'name') or current.name != 'h2'):
             if hasattr(current, 'name') and current.name:
                 content_elements.append(current)
             current = current.next_sibling
@@ -156,7 +156,7 @@ class MarkdownParser:
         verse_lines = []
         
         for element in content_elements:
-            if element.name == 'h2':
+            if element.name == 'h3':
                 break  # Stop at first section header
             
             if element.name == 'p':
@@ -173,7 +173,7 @@ class MarkdownParser:
         current_content = []
         
         for element in content_elements:
-            if element.name == 'h2':
+            if element.name == 'h3':
                 # Save previous section
                 if current_section:
                     sections[current_section] = current_content
