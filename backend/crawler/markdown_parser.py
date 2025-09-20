@@ -83,19 +83,30 @@ class MarkdownParser:
         )
     
     def _extract_verses(self, soup: BeautifulSoup) -> List[Verse]:
-        """Extract all verses from the parsed HTML."""
+        """Extract all verses from the parsed HTML, tracking Adhikars."""
         verses = []
-        h2_tags = soup.find_all('h2')
+        current_adhikar = None
+        seq_num = 1
         
-        for seq_num, h2 in enumerate(h2_tags, 1):
-            verse = self._extract_single_verse(h2, seq_num, soup)
-            if verse:
-                verses.append(verse)
+        # Find all H1 and H2 tags in document order
+        all_headers = soup.find_all(['h1', 'h2'])
+        
+        for header in all_headers:
+            if header.name == 'h1':
+                # Update current Adhikar
+                current_adhikar = self.clean_text(header.get_text())
+                log_handle.info(f"Found Adhikar: {current_adhikar}")
+            elif header.name == 'h2':
+                # Extract verse with current Adhikar
+                verse = self._extract_single_verse(header, seq_num, soup, current_adhikar)
+                if verse:
+                    verses.append(verse)
+                    seq_num += 1
         
         return verses
     
-    def _extract_single_verse(self, h2_tag, seq_num: int, soup: BeautifulSoup) -> Optional[Verse]:
-        """Extract a single verse from an H1 tag and its following content."""
+    def _extract_single_verse(self, h2_tag, seq_num: int, soup: BeautifulSoup, adhikar: Optional[str] = None) -> Optional[Verse]:
+        """Extract a single verse from an H2 tag and its following content."""
         # Extract type and type_num from H1 text
         h2_text = self.clean_text(h2_tag.get_text())
         verse_type, type_num = self._parse_verse_header(h2_text)
@@ -103,11 +114,11 @@ class MarkdownParser:
         if not verse_type:
             return None
         
-        # Get all content until the next H1
+        # Get all content until the next H1 or H2
         content_elements = []
         current = h2_tag.next_sibling
         
-        while current and (not hasattr(current, 'name') or current.name != 'h2'):
+        while current and (not hasattr(current, 'name') or current.name not in ['h1', 'h2']):
             if hasattr(current, 'name') and current.name:
                 content_elements.append(current)
             current = current.next_sibling
@@ -137,7 +148,8 @@ class MarkdownParser:
             meaning=self.clean_text(meaning),
             teeka=[self.clean_text(t) for t in teeka],
             bhavarth=[self.clean_text(b) for b in bhavarth],
-            page_num=page_num
+            page_num=page_num,
+            adhikar=adhikar
         )
     
     def _parse_verse_header(self, header_text: str) -> tuple[Optional[str], Optional[int]]:
@@ -211,8 +223,8 @@ class MarkdownParser:
     def _extract_page_number(self, sections: dict) -> Optional[int]:
         """Extract page number from 'Page <num>' section headers."""
         for section_name in sections.keys():
-            # Match "Page <number>" pattern
-            match = re.match(r'^Page\s+Number\s+(\d+)$', section_name, re.IGNORECASE)
+            # Match "Page Number - <number>" or "Page Number <number>" patterns
+            match = re.match(r'^Page\s+Number\s*-?\s*(\d+)$', section_name, re.IGNORECASE)
             if match:
                 return int(match.group(1))
         return None

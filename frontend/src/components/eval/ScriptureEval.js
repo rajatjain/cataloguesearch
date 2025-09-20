@@ -195,9 +195,16 @@ const ScriptureEval = ({ selectedFile, onFileSelect, basePaths, baseDirectoryHan
                 }}
             >
                 <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-sky-600">
-                        {verse.type} {verse.type_num}
-                    </span>
+                    <div className="flex flex-col">
+                        <span className="text-sm font-medium text-sky-600">
+                            {verse.type} {verse.type_num}
+                        </span>
+                        {verse.adhikar && (
+                            <span className="text-xs text-purple-600 font-medium">
+                                {verse.adhikar}
+                            </span>
+                        )}
+                    </div>
                     {verse.page_num && (
                         <span className="text-xs text-slate-500">
                             Page {verse.page_num}
@@ -558,9 +565,16 @@ const ScriptureEval = ({ selectedFile, onFileSelect, basePaths, baseDirectoryHan
                             <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <h4 className="font-semibold text-slate-800">
-                                            {scriptureData.verses[currentVerse].type} {scriptureData.verses[currentVerse].type_num}
-                                        </h4>
+                                        <div className="flex flex-col">
+                                            <h4 className="font-semibold text-slate-800">
+                                                {scriptureData.verses[currentVerse].type} {scriptureData.verses[currentVerse].type_num}
+                                            </h4>
+                                            {scriptureData.verses[currentVerse].adhikar && (
+                                                <span className="text-sm text-purple-600 font-medium">
+                                                    {scriptureData.verses[currentVerse].adhikar}
+                                                </span>
+                                            )}
+                                        </div>
                                         {scriptureData.verses[currentVerse].page_num && (
                                             <span className="text-sm text-slate-500">
                                                 Page {scriptureData.verses[currentVerse].page_num}
