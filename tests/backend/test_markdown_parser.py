@@ -30,6 +30,11 @@ class TestMarkdownParser:
         """Path to adhikar granth test file (with Adhikars)."""
         return os.path.join("tests", "data", "md", "adhikar_granth.md")
     
+    @pytest.fixture
+    def mixed_granth_path(self):
+        """Path to mixed granth test file (with Gatha and Kalash)."""
+        return os.path.join("tests", "data", "md", "mixed_granth.md")
+    
     def test_simple_granth_no_adhikars(self, parser, simple_granth_path):
         """Test parsing of simple granth without Adhikars."""
         # Parse the simple granth file
@@ -211,3 +216,68 @@ Test translation
         granth2 = parser.parse_content(no_adhikar_content, "test2.md")
         assert len(granth2._verses) == 1
         assert granth2._verses[0]._adhikar is None  # No H1 means no Adhikar
+    
+    def test_mixed_granth_gatha_kalash(self, parser, mixed_granth_path):
+        """Test parsing of mixed granth with Gatha and Kalash verses."""
+        granth = parser.parse_file(mixed_granth_path)
+        
+        # Basic structure assertions
+        assert isinstance(granth, Granth)
+        assert len(granth._verses) == 15  # 9 Gatha + 6 Kalash = 15 verses
+        
+        # Expected verse types and Adhikars
+        expected_verses = [
+            (1, "Gatha", 1, "ज्ञान अधिकार"),    # Gatha 1
+            (2, "Kalash", 1, "ज्ञान अधिकार"),   # Kalash 1
+            (3, "Gatha", 2, "ज्ञान अधिकार"),    # Gatha 2
+            (4, "Kalash", 2, "ज्ञान अधिकार"),   # Kalash 2
+            (5, "Gatha", 3, "कर्म अधिकार"),     # Gatha 3
+            (6, "Gatha", 4, "कर्म अधिकार"),     # Gatha 4
+            (7, "Kalash", 3, "कर्म अधिकार"),    # Kalash 3
+            (8, "Gatha", 5, "कर्म अधिकार"),     # Gatha 5
+            (9, "Kalash", 4, "कर्म अधिकार"),    # Kalash 4
+            (10, "Gatha", 6, "मोक्ष अधिकार"),   # Gatha 6
+            (11, "Gatha", 7, "मोक्ष अधिकार"),   # Gatha 7
+            (12, "Kalash", 5, "मोक्ष अधिकार"),  # Kalash 5
+            (13, "Gatha", 8, "मोक्ष अधिकार"),   # Gatha 8
+            (14, "Kalash", 6, "मोक्ष अधिकार"),  # Kalash 6
+            (15, "Gatha", 9, "मोक्ष अधिकार"),   # Gatha 9
+        ]
+        
+        # Verify each verse
+        for i, (seq_num, verse_type, type_num, adhikar) in enumerate(expected_verses):
+            verse = granth._verses[i]
+            assert isinstance(verse, Verse)
+            assert verse._seq_num == seq_num, f"Verse {i+1} seq_num should be {seq_num}"
+            assert verse._type == verse_type, f"Verse {i+1} type should be {verse_type}"
+            assert verse._type_num == type_num, f"Verse {i+1} type_num should be {type_num}"
+            assert verse._adhikar == adhikar, f"Verse {i+1} adhikar should be '{adhikar}'"
+        
+        # Test specific verse content
+        # First Gatha
+        gatha1 = granth._verses[0]
+        assert "सत्य वचन बोलना धर्म है" in gatha1._verse
+        assert gatha1._type == "Gatha"
+        assert gatha1._type_num == 1
+        assert gatha1._adhikar == "ज्ञान अधिकार"
+        assert gatha1._page_num == 5
+        
+        # First Kalash
+        kalash1 = granth._verses[1]
+        assert "ज्ञान प्राप्ति से आत्मा का कल्याण" in kalash1._verse
+        assert kalash1._type == "Kalash"
+        assert kalash1._type_num == 1
+        assert kalash1._adhikar == "ज्ञान अधिकार"
+        assert kalash1._page_num == 8
+        
+        # Test teeka and bhavarth content
+        assert len(gatha1._teeka) >= 1
+        assert len(gatha1._bhavarth) >= 1
+        assert "सत्यवादिता मानव का सर्वोच्च गुण है" in gatha1._teeka[0]
+        assert "सत्य बोलने वाला व्यक्ति समाज में आदरणीय होता है" in gatha1._bhavarth[0]
+        
+        # Count verse types
+        gatha_count = sum(1 for v in granth._verses if v._type == "Gatha")
+        kalash_count = sum(1 for v in granth._verses if v._type == "Kalash")
+        assert gatha_count == 9, "Should have 9 Gatha verses"
+        assert kalash_count == 6, "Should have 6 Kalash verses"
