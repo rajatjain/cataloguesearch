@@ -272,3 +272,79 @@ def are_dicts_same(dict1: dict[str, list[str]], dict2: dict[str, list[str]]) -> 
             return False
 
     return True
+
+# ========================================================================
+# Utils for granth
+
+def setup_granth():
+    config = Config()
+    base_dir = tempfile.mkdtemp(prefix="test_granth_")
+    pdf_dir = "%s/data/pdfs" % base_dir
+    log_handle.info(f"Using base dir: {base_dir}, pdf_dir: {pdf_dir}")
+    config.settings()["crawler"]["base_pdf_path"] = pdf_dir
+
+    granth_dir = f"{pdf_dir}/Granth"
+
+    # Create directories for each MD file
+    simple_md_dir = f"{pdf_dir}/Granth/simple_md"
+    adhikar_md_dir = f"{pdf_dir}/Granth/adhikar_md"
+    mixed_md_dir = f"{pdf_dir}/Granth/mixed_md"
+    
+    os.makedirs(simple_md_dir, exist_ok=True)
+    os.makedirs(adhikar_md_dir, exist_ok=True)
+    os.makedirs(mixed_md_dir, exist_ok=True)
+
+    # Config for simple_granth.md
+    simple_md_config = {
+        "Granth": "Simple",
+        "Anuyog": "Simple Anuyog",
+        "Author": "Simple Author",
+        "Teekakar": "Simple Teekakar",
+        "language": "hi",
+        "file_url": "http://simple_file_url"
+    }
+    write_config_file(f"{simple_md_dir}/config.json", simple_md_config)
+
+    # Config for adhikar_granth.md
+    adhikar_md_config = {
+        "Granth": "Adhikar",
+        "Anuyog": "Charitra Anuyog",
+        "Author": "Acharya Kundkund",
+        "Teekakar": "Acharya Nemichandra",
+        "language": "gu",
+        "file_url": "http://adhikar_file_url"
+    }
+    write_config_file(f"{adhikar_md_dir}/config.json", adhikar_md_config)
+
+    # Config for mixed_granth.md
+    mixed_md_config = {
+        "Granth": "Mixed",
+        "Anuyog": "Dravya Anuyog",
+        "Author": "Acharya Haribhadra",
+        "Teekakar": "Pandit Todarmal",
+        "language": "hi",
+        "file_url": "http://mixed_file_url"
+    }
+    write_config_file(f"{mixed_md_dir}/config.json", mixed_md_config)
+
+    # Copy test MD files to their directories
+    TEST_BASE_DIR = os.getenv("TEST_BASE_DIR")
+    test_md_path = os.path.join(TEST_BASE_DIR, "data", "md")
+    
+    simple_granth_path = f"{simple_md_dir}/simple_granth.md"
+    adhikar_granth_path = f"{adhikar_md_dir}/adhikar_granth.md"
+    mixed_granth_path = f"{mixed_md_dir}/mixed_granth.md"
+    
+    shutil.copy(os.path.join(test_md_path, "simple_granth.md"), simple_granth_path)
+    shutil.copy(os.path.join(test_md_path, "adhikar_granth.md"), adhikar_granth_path)
+    shutil.copy(os.path.join(test_md_path, "mixed_granth.md"), mixed_granth_path)
+
+    # Return the structure
+    return {
+        "base_dir": pdf_dir,
+        "granth_files": {
+            "simple_granth": {"file_path": simple_granth_path, "config": simple_md_config},
+            "adhikar_granth": {"file_path": adhikar_granth_path, "config": adhikar_md_config},
+            "mixed_granth": {"file_path": mixed_granth_path, "config": mixed_md_config}
+        }
+    }

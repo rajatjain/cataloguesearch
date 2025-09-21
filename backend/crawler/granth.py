@@ -19,10 +19,11 @@ class Verse:
         - teeka:         Full Teeka. This is a list comprising multiple paragraphs
         - bhavarth:      Full Bhavarth. This is a list comprising multiple paragraphs
         - page_num:      Page Number in the original PDF file.
+        - adhikar:       The Adhikar (chapter/section) this verse belongs to, if any.
 
     """
     def __init__(
-        self, seq_num, verse, type, type_num, translation, language, meaning, teeka, bhavarth, page_num=None
+        self, seq_num, verse, type, type_num, translation, language, meaning, teeka, bhavarth, page_num=None, adhikar=None
     ):
         self._seq_num = seq_num
         self._verse = verse
@@ -34,6 +35,7 @@ class Verse:
         self._teeka = teeka
         self._bhavarth = bhavarth
         self._page_num = page_num
+        self._adhikar = adhikar
     
     def __str__(self):
         verse_preview = f"""
@@ -47,6 +49,7 @@ class Verse:
             Teeka: {json_dumps(self._teeka)}
             Bhavarth: {json_dumps(self._bhavarth)}
             Page Num: {self._page_num}
+            Adhikar: {self._adhikar}
         """
         return verse_preview
     
@@ -62,7 +65,8 @@ class Verse:
             "meaning": self._meaning,
             "teeka": self._teeka,
             "bhavarth": self._bhavarth,
-            "page_num": self._page_num
+            "page_num": self._page_num,
+            "adhikar": self._adhikar
         }
 
 class GranthMetadata:
