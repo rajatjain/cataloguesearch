@@ -1,4 +1,5 @@
 import logging
+import os
 
 import markdown
 from bs4 import BeautifulSoup
@@ -48,16 +49,28 @@ class MarkdownParser:
         # Convert markdown to HTML
         html = self.md.convert(content)
         soup = BeautifulSoup(html, 'html.parser')
-        
+
         # Extract verses
         verses = self._extract_verses(soup)
-        
+
+        # Convert absolute path to relative path (relative to base_folder)
+        relative_filename = original_filename
+        if self.base_folder and os.path.isabs(original_filename):
+            try:
+                relative_filename = os.path.relpath(original_filename, self.base_folder)
+            except ValueError:
+                # If paths are on different drives (Windows), keep absolute path
+                log_handle.warning(
+                    f"Could not compute relative path for {original_filename} "
+                    f"relative to {self.base_folder}. Using absolute path."
+                )
+
         # Load metadata from config files if base_folder is provided
         if self.base_folder:
             config = get_merged_config(original_filename, self.base_folder)
             metadata = GranthMetadata(
                 anuyog=config.get("Anuyog", ""),
-                language=config.get("language", "hindi"), 
+                language=config.get("language", "hindi"),
                 author=config.get("Author", "Unknown"),
                 teekakar=config.get("Teekakar", "Unknown"),
                 file_url=config.get("file_url", "")
@@ -70,14 +83,14 @@ class MarkdownParser:
                 language="hindi",
                 author="Unknown",
                 teekakar="Unknown",
-                file_url=original_filename
+                file_url=relative_filename
             )
-            granth_name = original_filename
+            granth_name = relative_filename
         log_handle.info(f"config: {metadata}")
-        
+
         return Granth(
             name=granth_name,
-            original_filename=original_filename,
+            original_filename=relative_filename,
             metadata=metadata,
             verses=verses
         )

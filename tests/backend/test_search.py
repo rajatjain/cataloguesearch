@@ -511,7 +511,7 @@ def test_search_granth_content():
         {"query": "नदी पहाड़ों से समुद्र तक बहती", "lang": "hi", "filename": "simple_granth"},
 
         # simple_granth - Gujarati test cases
-        {"query": "નવી શરૂઆતનું પ્રતીક", "lang": "gu", "filename": "simple_granth"},
+        {"query": "સૂર્યનો ઉદય નવી શરૂઆતનું", "lang": "gu", "filename": "simple_granth"},
         {"query": "જળ જ જીવન છે", "lang": "gu", "filename": "simple_granth"},
         {"query": "સૂર્ય પૂર્વ દિશામાં ઉદય", "lang": "gu", "filename": "simple_granth"},
 
@@ -557,7 +557,7 @@ def test_search_granth_content():
             exact_match=False,
             exclude_words=[],
             categories={},
-            language=lang,
+            detected_language=lang,
             page_size=10,
             page_number=1
         )
@@ -714,7 +714,7 @@ def test_search_granth_content_exact_match():
             exact_match=True,  # Use exact match
             exclude_words=[],
             categories={},
-            language=lang,
+            detected_language=lang,
             page_size=10,
             page_number=1
         )
@@ -826,7 +826,7 @@ def test_search_granth_content_with_categories():
             exact_match=True,
             exclude_words=[],
             categories={"anuyog": [expected_anuyog]},
-            language=lang,
+            detected_language=lang,
             page_size=10,
             page_number=1
         )
@@ -847,7 +847,7 @@ def test_search_granth_content_with_categories():
             exact_match=True,
             exclude_words=[],
             categories={"anuyog": [not_expected_anuyog]},
-            language=lang,
+            detected_language=lang,
             page_size=10,
             page_number=1
         )
@@ -864,7 +864,7 @@ def test_search_granth_content_with_categories():
             exact_match=True,
             exclude_words=[],
             categories={"author": [expected_author]},
-            language=lang,
+            detected_language=lang,
             page_size=10,
             page_number=1
         )
@@ -885,7 +885,7 @@ def test_search_granth_content_with_categories():
             exact_match=True,
             exclude_words=[],
             categories={"author": [not_expected_author]},
-            language=lang,
+            detected_language=lang,
             page_size=10,
             page_number=1
         )

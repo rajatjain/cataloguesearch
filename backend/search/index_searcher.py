@@ -72,165 +72,6 @@ class IndexSearcher:
                 log_handle.debug(f"Added metadata filter: {field_name} with values {values}")
         return filters
 
-    def _build_language_filter(self, language: str) -> Dict[str, Any]:
-        """Build language filter that works for both indexes using metadata.language"""
-        if not language or language == 'all':
-            return None
-        
-        # Convert language name to code
-        language_code_map = {"hindi": "hi", "gujarati": "gu",
-                             "gu": "gu", "hi": "hi"}
-        language_code = language_code_map.get(language, language)
-        
-        # Same filter works for both indexes since both have metadata.language
-        return {
-            "term": {
-                "metadata.language": language_code
-            }
-        }
-
-    def _build_multi_field_lexical_query(
-            self, index_name: str, search_fields: List[str], keywords: str,
-            exact_match: bool, exclude_words: List[str],
-            categories: Dict[str, List[str]], language: str) -> Dict[str, Any]:
-        """
-        Builds the OpenSearch DSL query for multi-field lexical search.
-        Works with both search_index and granth_index.
-        """
-        log_handle.verbose(
-            f"Multi-field lexical search on index: {index_name}, "
-            f"fields: {search_fields}, language: {language}, "
-            f"exact_match: {exact_match}, exclude_words: {exclude_words}")
-
-        # Check if we're searching the granth index (which has nested verses)
-        is_nested_search = index_name == self._config.OPENSEARCH_GRANTH_INDEX_NAME
-
-        # Build the main query based on exact_match and nested structure
-        if is_nested_search:
-            # For granth index with nested verses field
-            if exact_match:
-                inner_query = {
-                    "multi_match": {
-                        "query": keywords,
-                        "fields": search_fields,
-                        "type": "phrase"
-                    }
-                }
-            else:
-                inner_query = {
-                    "multi_match": {
-                        "query": keywords,
-                        "fields": search_fields,
-                        "type": "best_fields",
-                        "operator": "or"
-                    }
-                }
-
-            # Build highlight configuration for nested fields
-            highlight_fields = {}
-            for field in search_fields:
-                highlight_fields[field] = {}
-
-            main_query = {
-                "nested": {
-                    "path": "verses",
-                    "query": inner_query,
-                    "inner_hits": {
-                        "highlight": {
-                            "fields": highlight_fields
-                        }
-                    }
-                }
-            }
-            # For nested queries, we don't need root-level highlighting
-            highlight_config = None
-        else:
-            # For regular search index (non-nested fields)
-            if exact_match:
-                # Exact phrase match across all fields
-                main_query = {
-                    "multi_match": {
-                        "query": keywords,
-                        "fields": search_fields,
-                        "type": "phrase"
-                    }
-                }
-            else:
-                # Regular match with all terms across all fields
-                main_query = {
-                    "multi_match": {
-                        "query": keywords,
-                        "fields": search_fields,
-                        "type": "best_fields",
-                        "operator": "and"
-                    }
-                }
-
-            # Build highlight configuration for all search fields
-            highlight_fields = {}
-            for field in search_fields:
-                highlight_fields[field] = {
-                    "pre_tags": ["<em>"],
-                    "post_tags": ["</em>"],
-                    "number_of_fragments": 0,
-                    "type": "unified",
-                    "highlight_query": main_query
-                }
-
-            highlight_config = {
-                "fields": highlight_fields
-            }
-
-        # Build the final query body
-        bool_query = {
-            "must": [main_query]
-        }
-
-        # Add exclude words as must_not clauses
-        if exclude_words:
-            must_not_clauses = []
-            for word in exclude_words:
-                must_not_clauses.append({
-                    "multi_match": {
-                        "query": word,
-                        "fields": search_fields
-                    }
-                })
-            bool_query["must_not"] = must_not_clauses
-            log_handle.debug(f"Added {len(exclude_words)} exclude words to multi-field lexical query.")
-
-        query_body = {
-            "query": {
-                "bool": bool_query
-            },
-            "track_total_hits": 1000
-        }
-
-        # Only add root-level highlight for non-nested queries
-        if highlight_config:
-            query_body["highlight"] = highlight_config
-
-        # Add filters
-        filters = []
-        
-        # Add category filters
-        category_filters = self._build_category_filters(categories)
-        if category_filters:
-            filters.extend(category_filters)
-            
-        # Add language filter
-        language_filter = self._build_language_filter(language)
-        if language_filter:
-            filters.append(language_filter)
-            
-        if filters:
-            query_body["query"]["bool"]["filter"] = filters
-            log_handle.debug(f"Added {len(filters)} filters to multi-field lexical query.")
-
-        log_handle.verbose(f"Multi-field lexical query: {json_dumps(query_body)}")
-
-        return query_body
-
     def _build_lexical_query(
             self, keywords: str, exact_match: bool, exclude_words: List[str],
             categories: Dict[str, List[str]], detected_language: str) -> Dict[str, Any]:
@@ -418,204 +259,77 @@ class IndexSearcher:
             extracted.append(result)
         return extracted
 
-    def perform_multi_field_lexical_search(
-            self, index_name: str, search_fields: List[str], keywords: str, 
-            exact_match: bool, exclude_words: List[str],
-            categories: Dict[str, List[str]], language: str,
+    def perform_lexical_search(
+            self, keywords: str, exact_match: bool, exclude_words: List[str],
+            categories: Dict[str, List[str]], detected_language: str,
             page_size: int, page_number: int) -> Tuple[List[Dict[str, Any]], int]:
-        """
-        Generalized multi-field lexical search that works with both search_index and granth_index.
-        
-        Args:
-            index_name: Target index (OPENSEARCH_INDEX_NAME or OPENSEARCH_GRANTH_INDEX_NAME)
-            search_fields: List of fields to search across
-            keywords: Search terms
-            exact_match: Whether to use exact phrase matching
-            exclude_words: Words to exclude from results
-            categories: Filters for metadata categories and bookmarks
-            language: Language for filtering (hi, gu, or 'all')
-            page_size: Number of results per page
-            page_number: Page number for pagination
-            
-        Returns:
-            Tuple of (results_list, total_hits_count)
-        """
-        query_body = self._build_multi_field_lexical_query(
-            index_name, search_fields, keywords, exact_match,
-            exclude_words, categories, language)
+        query_body = self._build_lexical_query(keywords, exact_match,
+                                               exclude_words, categories, detected_language)
         from_ = (page_number - 1) * page_size
-
+        log_handle.verbose(f"Lexical query: {json_dumps(query_body)}")
         try:
             response = self._opensearch_client.search(
-                index=index_name,
+                index=self._index_name,
                 body=query_body,
                 size=page_size,
                 from_=from_
             )
             hits = response.get('hits', {}).get('hits', [])
             total_hits = response.get('hits', {}).get('total', {}).get('value', 0)
+            log_handle.info(f"Lexical search executed. Total hits: {total_hits}.")
             log_handle.info(
-                f"Multi-field lexical search executed on index '{index_name}'. Total hits: {total_hits}.")
-            log_handle.info(
-                f"Multi-field lexical search response: "
+                f"Lexical search response: "
                 f"{json_dumps(response, truncate_fields=['content_snippet', 'vector_embedding'])}")
-            
-            # Use appropriate result extraction based on index
-            if index_name == self._config.OPENSEARCH_GRANTH_INDEX_NAME:
-                extracted_results = self._extract_granth_results(hits, search_fields, language)
-                return extracted_results, total_hits
-            else:
-                # For search index, use existing extraction logic
-                return (self._extract_results(hits, is_lexical=True, language=language),
-                        total_hits)
-            
+            return (self._extract_results(hits, is_lexical=True, language=detected_language),
+                    total_hits)
         except Exception as e:
-            log_handle.error(f"Error during multi-field lexical search: {e}", exc_info=True)
+            log_handle.error(f"Error during lexical search: {e}", exc_info=True)
             return [], 0
-
-    def _extract_granth_results(
-            self, hits: List[Dict[str, Any]], search_fields: List[str],
-            language: str) -> List[Dict[str, Any]]:
-        """Extract and format results for granth index search"""
-        extracted = []
-        for hit in hits:
-            source = hit.get('_source', {})
-            document_id = hit.get('_id')
-            score = hit.get("rerank_score", hit.get("_score"))
-
-            # Extract matching verses from inner_hits (if available from nested query)
-            matching_verses = []
-            inner_hits = hit.get('inner_hits', {})
-
-            # Handle content snippet from highlighting in inner_hits
-            content_snippet = ""
-            highlighted_fragments = []
-
-            if inner_hits and 'verses' in inner_hits:
-                # Get the matching nested documents from inner_hits
-                verse_hits = inner_hits['verses'].get('hits', {}).get('hits', [])
-                for verse_hit in verse_hits:
-                    matching_verses.append(verse_hit.get('_source', {}))
-
-                    # Get highlights from inner_hits
-                    verse_highlight = verse_hit.get('highlight', {})
-                    if verse_highlight:
-                        for field in search_fields:
-                            if field in verse_highlight:
-                                highlighted_fragments.extend(verse_highlight[field])
-            else:
-                # Fallback: if no inner_hits, use all verses (shouldn't happen with nested query)
-                matching_verses = source.get('verses', [])
-
-            if highlighted_fragments:
-                content_snippet = "...".join(highlighted_fragments)
-
-            # If no highlighting, fall back to extracting content from matching verses
-            if not content_snippet and matching_verses:
-                # Take content from the first matching verse
-                first_verse = matching_verses[0]
-                verse_text = first_verse.get('verse', '')
-                translation = first_verse.get('translation', '')
-                content_snippet = f"{verse_text} {translation}".strip()
-
-            metadata = source.get(self._metadata_prefix, {})
-            original_filename = source.get('original_filename')
-            filename = os.path.basename(original_filename) if original_filename else ""
-
-            result = {
-                "document_id": document_id,
-                "original_filename": original_filename,
-                "filename": filename,
-                "content_snippet": content_snippet,
-                "score": float(score) if score is not None else 0.0,
-                "metadata": metadata,
-                "file_url": metadata.get("file_url", ""),
-                # Granth-specific fields
-                "granth_id": source.get('granth_id'),
-                "name": source.get('name', ''),
-                "verses": matching_verses  # Only return matching verses, not all verses
-            }
-
-            extracted.append(result)
-        return extracted
 
     def perform_pravachan_search(
             self, keywords: str, exact_match: bool, exclude_words: List[str],
             categories: Dict[str, List[str]], detected_language: str,
             page_size: int, page_number: int) -> Tuple[List[Dict[str, Any]], int]:
         """
-        Performs lexical search on the pravachan/document search index.
-        Wrapper around perform_multi_field_lexical_search for pravachan documents.
+        Performs lexical search on pravachan documents.
+        Adds metadata.category = "Pravachan" filter.
         """
-        # Map detected language to appropriate search field
-        search_fields = []
-        if detected_language in ['hindi', 'hi']:
-            search_fields = ['text_content_hindi']
-        elif detected_language in ['gujarati', 'gu']:
-            search_fields = ['text_content_gujarati']
-        else:
-            # Default to Hindi if language not recognized
-            search_fields = ['text_content_hindi']
-            log_handle.warning(
-                f"Detected language '{detected_language}' not supported. "
-                f"Defaulting to Hindi field.")
-        
-        return self.perform_multi_field_lexical_search(
-            index_name=self._config.OPENSEARCH_INDEX_NAME,
-            search_fields=search_fields,
+        # Add category filter for Pravachan
+        pravachan_categories = categories.copy() if categories else {}
+        if 'category' not in pravachan_categories:
+            pravachan_categories['category'] = ['Pravachan']
+
+        return self.perform_lexical_search(
             keywords=keywords,
             exact_match=exact_match,
             exclude_words=exclude_words,
-            categories=categories,
-            language=detected_language,
+            categories=pravachan_categories,
+            detected_language=detected_language,
             page_size=page_size,
             page_number=page_number
         )
 
     def perform_granth_search(
             self, keywords: str, exact_match: bool, exclude_words: List[str],
-            categories: Dict[str, List[str]], language: str,
-            page_size: int, page_number: int,
-            search_fields: List[str] = None) -> Tuple[List[Dict[str, Any]], int]:
-        """
-        Performs lexical search on the granth index.
-        Wrapper around perform_multi_field_lexical_search for granth documents.
-        
-        Args:
-            search_fields: Fields to search in granth index. 
-                          Defaults to ['verses.verse', 'verses.translation', 'verses.meaning', 'verses.teeka', 'verses.bhavarth']
-        """
-        if search_fields is None:
-            search_fields = [
-                'verses.verse', 
-                'verses.translation', 
-                'verses.meaning', 
-                'verses.teeka', 
-                'verses.bhavarth'
-            ]
-        
-        return self.perform_multi_field_lexical_search(
-            index_name=self._config.OPENSEARCH_GRANTH_INDEX_NAME,
-            search_fields=search_fields,
-            keywords=keywords,
-            exact_match=exact_match,
-            exclude_words=exclude_words,
-            categories=categories,
-            language=language,
-            page_size=page_size,
-            page_number=page_number
-        )
-
-    def perform_lexical_search(
-            self, keywords: str, exact_match: bool, exclude_words: List[str],
             categories: Dict[str, List[str]], detected_language: str,
             page_size: int, page_number: int) -> Tuple[List[Dict[str, Any]], int]:
         """
-        Legacy function - delegates to perform_pravachan_search for backward compatibility.
+        Performs lexical search on granth documents.
+        Adds metadata.category = "Granth" filter.
         """
-        return self.perform_pravachan_search(
-            keywords, exact_match, exclude_words, categories, 
-            detected_language, page_size, page_number
+        # Add category filter for Granth
+        granth_categories = categories.copy() if categories else {}
+        if 'category' not in granth_categories:
+            granth_categories['category'] = ['Granth']
+
+        return self.perform_lexical_search(
+            keywords=keywords,
+            exact_match=exact_match,
+            exclude_words=exclude_words,
+            categories=granth_categories,
+            detected_language=detected_language,
+            page_size=page_size,
+            page_number=page_number
         )
 
     def perform_vector_search(

@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -14,18 +15,19 @@ log_handle = logging.getLogger(__name__)
 class GranthIndexer:
     """
     Handles indexing of Granth objects into OpenSearch.
-    
+
     Two main functions:
     1. Store the complete Granth object in granth_index
     2. Extract teeka & bhavarth paragraphs, generate embeddings, and store in search_index
     """
-    
+
     def __init__(self, config: Config, opensearch_client: OpenSearch):
         self._config = config
         self._opensearch_client = opensearch_client
         self._granth_index_name = config.OPENSEARCH_GRANTH_INDEX_NAME
         self._search_index_name = config.OPENSEARCH_INDEX_NAME
-        
+        self._base_dir = config.BASE_PDF_PATH
+
         self._index_keys_per_lang = {
             "hi": "text_content_hindi",
             "gu": "text_content_gujarati"
@@ -119,152 +121,133 @@ class GranthIndexer:
     
     def _store_paragraphs_in_search_index(self, granth: Granth, granth_id: str, timestamp: str):
         """
-        Function 2: Extract teeka & bhavarth paragraphs and store in search_index
+        Function 2: Store all verse fields in search_index
         """
-        log_handle.info(f"Extracting and storing teeka & bhavarth paragraphs for Granth: {granth._name}")
-        
-        # Extract all paragraphs from teeka and bhavarth
-        paragraphs = self._extract_paragraphs_from_verses(granth, granth_id)
-        
-        if not paragraphs:
-            log_handle.info("No paragraphs found to index")
-            return
-        
-        # Generate embeddings for all paragraphs
-        paragraphs_with_embeddings = self._add_embeddings_to_paragraphs(paragraphs)
-        
-        # Create documents for search_index
-        search_docs = self._create_search_documents(
-            paragraphs_with_embeddings, granth, granth_id, timestamp
-        )
-        
-        # Bulk index into search_index
-        self._bulk_index_search_documents(search_docs)
-        
-        log_handle.info(
-            f"Successfully indexed {len(search_docs)} paragraph chunks for Granth: {granth._name}"
-        )
-    
-    def _extract_paragraphs_from_verses(self, granth: Granth, granth_id: str) -> list[dict]:
-        """
-        Extract teeka and bhavarth paragraphs from all verses
-        """
-        paragraphs = []
-        
+        log_handle.info(f"Storing all verse fields for Granth: {granth._name}")
+
+        # Define fields to index with/without embeddings
+        fields_config = {
+            "no_embeddings": ["verse", "translation", "meaning"],
+            "with_embeddings": ["teeka", "bhavarth"]
+        }
+
+        all_docs = []
+
         for verse in granth._verses:
             verse_seq = verse._seq_num or 0
-            language = verse._language or granth._metadata._language or "hi"
+            language = granth._metadata._language or "hi"
             page_num = verse._page_num or 1
-            
-            # Extract teeka paragraphs
-            if verse._teeka:
-                teeka_list = verse._teeka if isinstance(verse._teeka, list) else [verse._teeka]
-                for i, para in enumerate(teeka_list):
-                    if para and para.strip():
-                        chunk_id = f"{granth_id}_v{verse_seq}_teeka_{i}"
-                        paragraphs.append({
-                            "chunk_id": chunk_id,
-                            "content": para.strip(),
-                            "content_type": "teeka",
-                            "verse_seq_num": verse_seq,
-                            "verse_type": verse._type,
-                            "verse_type_num": verse._type_num,
-                            "language": language,
-                            "page_num": page_num,
-                            "adhikar": verse._adhikar
-                        })
-            
-            # Extract bhavarth paragraphs
-            if verse._bhavarth:
-                bhavarth_list = verse._bhavarth if isinstance(verse._bhavarth, list) else [verse._bhavarth]
-                for i, para in enumerate(bhavarth_list):
-                    if para and para.strip():
-                        chunk_id = f"{granth_id}_v{verse_seq}_bhavarth_{i}"
-                        paragraphs.append({
-                            "chunk_id": chunk_id,
-                            "content": para.strip(),
-                            "content_type": "bhavarth",
-                            "verse_seq_num": verse_seq,
-                            "verse_type": verse._type,
-                            "verse_type_num": verse._type_num,
-                            "language": language,
-                            "page_num": page_num,
-                            "adhikar": verse._adhikar
-                        })
-        
-        log_handle.info(f"Extracted {len(paragraphs)} paragraphs from {len(granth._verses)} verses")
-        return paragraphs
-    
-    def _add_embeddings_to_paragraphs(self, paragraphs: list[dict]) -> list[dict]:
-        """
-        Generate vector embeddings for all paragraphs
-        """
-        if not paragraphs:
-            return []
-        
-        embedding_model = get_embedding_model_factory(self._config)
-        
-        # Extract text content for embedding generation
-        texts_to_embed = [para["content"] for para in paragraphs]
-        
-        log_handle.info(f"Generating embeddings for {len(texts_to_embed)} paragraphs...")
-        
-        # Generate embeddings in batches
-        embeddings = embedding_model.get_embeddings_batch(texts_to_embed, batch_size=8)
-        
-        # Add embeddings to paragraphs
-        for i, para in enumerate(paragraphs):
-            para["vector_embedding"] = embeddings[i]
-        
-        log_handle.info(f"Generated embeddings for {len(paragraphs)} paragraphs")
-        return paragraphs
-    
-    def _create_search_documents(
-        self, paragraphs: list[dict], granth: Granth, granth_id: str, timestamp: str
-    ) -> list[dict]:
-        """
-        Create documents in the format expected by search_index
-        """
-        search_docs = []
-        
-        for para in paragraphs:
-            language = para["language"]
-            
-            # Determine the correct language field for search_index
             lang_key = self._index_keys_per_lang.get(language, self._index_keys_per_lang["hi"])
-            
-            # Create document matching search_index structure
-            doc = {
-                "chunk_id": para["chunk_id"],
-                "document_id": granth_id,
-                "original_filename": granth._original_filename,
-                "page_number": para["page_num"],
-                "paragraph_id": f"{para['content_type']}_{para['verse_seq_num']}",
-                "vector_embedding": para["vector_embedding"],
-                "metadata": {
-                    "title": granth._name,
-                    "language": language,
-                    "author": granth._metadata._author,
-                    "teekakar": granth._metadata._teekakar,
-                    "anuyog": granth._metadata._anuyog,
-                    "content_type": "granth",
-                    "verse_content_type": para["content_type"],  # teeka or bhavarth
-                    "verse_seq_num": para["verse_seq_num"],
-                    "verse_type": para["verse_type"],
-                    "verse_type_num": para["verse_type_num"],
-                    "adhikar": para["adhikar"]
-                },
-                "timestamp_indexed": timestamp,
-                "language": language
-            }
-            
-            # Add content to the appropriate language field
-            doc[lang_key] = para["content"]
-            
-            search_docs.append(doc)
-        
-        return search_docs
-    
+
+            # Index fields WITHOUT embeddings
+            for field_name in fields_config["no_embeddings"]:
+                field_value = getattr(verse, f"_{field_name}", None)
+                if field_value and str(field_value).strip():
+                    doc = self._create_verse_document(
+                        granth, granth_id, verse, verse_seq, language, lang_key,
+                        page_num, field_name, str(field_value).strip(), timestamp,
+                        include_embedding=False
+                    )
+                    all_docs.append(doc)
+
+            # Index fields WITH embeddings (arrays)
+            for field_name in fields_config["with_embeddings"]:
+                field_value = getattr(verse, f"_{field_name}", None)
+                if field_value:
+                    # Handle both list and string values
+                    field_list = field_value if isinstance(field_value, list) else [field_value]
+                    for i, content in enumerate(field_list):
+                        if content and content.strip():
+                            doc = self._create_verse_document(
+                                granth, granth_id, verse, verse_seq, language, lang_key,
+                                page_num, field_name, content.strip(), timestamp,
+                                include_embedding=True, array_index=i
+                            )
+                            all_docs.append(doc)
+
+        if not all_docs:
+            log_handle.info("No verse fields found to index")
+            return
+
+        # Separate docs by whether they need embeddings
+        docs_needing_embeddings = [doc for doc in all_docs if doc.get("needs_embedding")]
+        docs_without_embeddings = [doc for doc in all_docs if not doc.get("needs_embedding")]
+
+        # Generate embeddings in parallel batch for all docs that need them
+        if docs_needing_embeddings:
+            texts_to_embed = [doc["text_content"] for doc in docs_needing_embeddings]
+
+            embedding_model = get_embedding_model_factory(self._config)
+            log_handle.info(f"Generating embeddings for {len(texts_to_embed)} fields...")
+
+            # Generate embeddings in batches (parallel processing)
+            embeddings = embedding_model.get_embeddings_batch(texts_to_embed, batch_size=8)
+
+            # Add embeddings to documents
+            for doc, embedding in zip(docs_needing_embeddings, embeddings):
+                doc["vector_embedding"] = embedding
+                # Clean up temporary fields
+                del doc["needs_embedding"]
+                del doc["text_content"]
+
+        # Clean up temporary fields for docs without embeddings
+        for doc in docs_without_embeddings:
+            del doc["needs_embedding"]
+            del doc["text_content"]
+
+        # Bulk index all documents
+        final_docs = docs_needing_embeddings + docs_without_embeddings
+        self._bulk_index_search_documents(final_docs)
+
+        log_handle.info(
+            f"Successfully indexed {len(final_docs)} verse fields "
+            f"({len(docs_without_embeddings)} without embeddings, {len(docs_needing_embeddings)} with embeddings)"
+        )
+
+    def _create_verse_document(
+        self, granth: Granth, granth_id: str, verse, verse_seq: int,
+        language: str, lang_key: str, page_num: int, field_name: str,
+        content: str, timestamp: str, include_embedding: bool = False, array_index: int = None
+    ) -> dict:
+        """
+        Create a document for a verse field to be indexed in search_index
+        """
+        # Create chunk_id
+        if array_index is not None:
+            chunk_id = f"{granth_id}_v{verse_seq}_{field_name}_{array_index}"
+        else:
+            chunk_id = f"{granth_id}_v{verse_seq}_{field_name}"
+
+        doc = {
+            "chunk_id": chunk_id,
+            "document_id": granth_id,
+            "original_filename": granth._original_filename,
+            "page_number": page_num,
+            "paragraph_id": f"{field_name}_{verse_seq}",
+            "metadata": {
+                "title": granth._name,
+                "language": language,
+                "author": granth._metadata._author,
+                "teekakar": granth._metadata._teekakar,
+                "anuyog": granth._metadata._anuyog,
+                "category": "Granth",
+                "verse_content_type": field_name,
+                "verse_seq_num": verse_seq,
+                "verse_type": verse._type,
+                "verse_type_num": verse._type_num,
+                "adhikar": verse._adhikar
+            },
+            "timestamp_indexed": timestamp,
+            "language": language,
+            "needs_embedding": include_embedding,
+            "text_content": content  # Temporary field for embedding generation
+        }
+
+        # Add text content to appropriate language field
+        doc[lang_key] = content
+
+        return doc
+
     def _bulk_index_search_documents(self, search_docs: list[dict]):
         """
         Bulk index documents into search_index

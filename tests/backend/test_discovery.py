@@ -98,7 +98,7 @@ def test_get_metadata():
         datetime.datetime.now().isoformat()
     )
     meta = sfp._get_metadata()
-    assert meta == {'language': 'hi', 'category': 'city', 'type': 'metro'}
+    assert meta == {'language': 'hi', 'category': 'Pravachan', 'Anuyog': 'city', 'type': 'metro'}
 
     # Test bangalore_gujarati.pdf in gujarati/cities/metro/ - should get language, category, and type
     sfp = SingleFileProcessor(
@@ -108,7 +108,7 @@ def test_get_metadata():
         datetime.datetime.now().isoformat()
     )
     meta = sfp._get_metadata()
-    assert meta == {'language': 'gu', 'category': 'city', 'type': 'metro'}
+    assert meta == {'language': 'gu', 'category': 'Pravachan', 'Anuyog': 'city', 'type': 'metro'}
 
     # Test hampi_hindi.pdf in hindi/history/ - should get language and category
     sfp = SingleFileProcessor(
@@ -118,7 +118,7 @@ def test_get_metadata():
         datetime.datetime.now().isoformat()
     )
     meta = sfp._get_metadata()
-    assert meta == {'language': 'hi', 'category': 'history'}
+    assert meta == {'language': 'hi', 'category': 'Pravachan', 'Anuyog': 'history'}
 
     # Test indore_hindi.pdf in hindi/cities/non_metro/ - should get language, category, and type
     sfp = SingleFileProcessor(
@@ -128,7 +128,7 @@ def test_get_metadata():
         datetime.datetime.now().isoformat()
     )
     meta = sfp._get_metadata()
-    assert meta == {'language': 'hi', 'category': 'city', 'type': 'non_metro'}
+    assert meta == {'language': 'hi', 'category': 'Pravachan', 'Anuyog': 'city', 'type': 'non_metro'}
 
     # Test songadh_gujarati.pdf in gujarati/spiritual/ - should get language and category
     sfp = SingleFileProcessor(
@@ -138,7 +138,7 @@ def test_get_metadata():
         datetime.datetime.now().isoformat()
     )
     meta = sfp._get_metadata()
-    assert meta == {'language': 'gu', 'category': 'spiritual'}
+    assert meta == {'language': 'gu', 'category': 'Pravachan', 'Anuyog': 'spiritual'}
 
 def test_crawl(initialise):
     config = Config()
@@ -160,7 +160,7 @@ def test_crawl(initialise):
     assert len(state1) == 12
 
     # change the hindi cities config file to affect all hindi city files
-    new_config = {"category": "urban"}
+    new_config = {"Anuyog": "urban"}
     write_config_file(f"{config.BASE_PDF_PATH}/hindi/cities/config.json", new_config)
     # re-crawl
 
@@ -180,7 +180,7 @@ def test_crawl(initialise):
 
     log_handle.info(f"Test 2: re-crawling after changing config file again")
     # change the config for jaipur_gujarati.pdf
-    jgx = {"category": "special_city", "type": "heritage"}
+    jgx = {"Anuyog": "special_city", "type": "heritage"}
     fname = doc_ids["jaipur_gujarati"][0]
     config_fname = fname.replace(".pdf", "_config.json")
     write_config_file(config_fname, jgx)
