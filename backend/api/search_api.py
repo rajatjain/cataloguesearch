@@ -368,7 +368,8 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                         page_size=30,
                         page_number=1,
                         language=language,
-                        rerank=enable_reranking
+                        rerank=enable_reranking,
+                        rerank_top_k=30
                     )
                     log_handle.info(f"Pravachan vector search returned {len(pravachan_results)} results (total: {pravachan_total_hits}).")
 
@@ -380,7 +381,8 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                         page_size=20,
                         page_number=1,
                         language=language,
-                        rerank=enable_reranking
+                        rerank=enable_reranking,
+                        rerank_top_k=20
                     )
                     log_handle.info(f"Granth vector search returned {len(granth_results)} results (total: {granth_total_hits}).")
 
