@@ -23,17 +23,17 @@ class TestMarkdownParser:
     @pytest.fixture
     def simple_granth_path(self):
         """Path to simple granth test file (no Adhikars)."""
-        return os.path.join("tests", "data", "md", "simple_granth.md")
+        return os.path.join("tests", "data", "md", "hindi", "simple_granth.md")
     
     @pytest.fixture
     def adhikar_granth_path(self):
         """Path to adhikar granth test file (with Adhikars)."""
-        return os.path.join("tests", "data", "md", "adhikar_granth.md")
+        return os.path.join("tests", "data", "md", "hindi", "adhikar_granth.md")
     
     @pytest.fixture
     def mixed_granth_path(self):
         """Path to mixed granth test file (with Gatha and Kalash)."""
-        return os.path.join("tests", "data", "md", "mixed_granth.md")
+        return os.path.join("tests", "data", "md", "hindi", "mixed_granth.md")
     
     def test_simple_granth_no_adhikars(self, parser, simple_granth_path):
         """Test parsing of simple granth without Adhikars."""
@@ -56,12 +56,12 @@ class TestMarkdownParser:
         # Verify specific verse content
         first_verse = granth._verses[0]
         assert "सूर्य उदय होता है" in first_verse._verse
-        assert "The sun rises" in first_verse._translation
+        assert "प्रकाश चारों" in first_verse._translation
         assert first_verse._page_num == 12
         
         last_verse = granth._verses[4]
         assert "मेहनत करने वाले को" in last_verse._verse
-        assert "Those who work hard" in last_verse._translation
+        assert "मेहनत करते हैं, वे सफलता" in last_verse._translation
         assert last_verse._page_num == 25
     
     def test_adhikar_granth_with_adhikars(self, parser, adhikar_granth_path):
@@ -120,8 +120,8 @@ class TestMarkdownParser:
         # Test first verse detailed content
         verse1 = granth._verses[0]
         assert verse1._verse.strip().startswith("सूर्य उदय होता है")
-        assert verse1._translation.strip().startswith("The sun rises")
-        assert verse1._meaning.strip().startswith("This verse describes")
+        assert verse1._translation.strip().startswith("सूर्य पूर्व दिशा")
+        assert verse1._meaning.strip().startswith("यह श्लोक सूर्योदय")
         assert len(verse1._teeka) > 0
         assert len(verse1._bhavarth) > 0
         assert verse1._page_num == 12

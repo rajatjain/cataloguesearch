@@ -1,6 +1,6 @@
 # प्रकृति अधिकार
 
-This chapter discusses nature and environment.
+यह अध्याय प्रकृति और पर्यावरण पर चर्चा करता है।
 
 ## Shlok 1
 
@@ -9,12 +9,12 @@ This chapter discusses nature and environment.
 
 ### Translation
 
-Stars shine in the sky at night.
-The earth glows with moonlight.
+रात में आकाश में तारे चमकते हैं।
+धरती चांद की रोशनी से जगमगाती है।
 
 ### Meaning
 
-This verse describes the beauty of the night sky and celestial objects.
+यह श्लोक रात के आकाश और आकाशीय पिंडों की सुंदरता का वर्णन करता है।
 
 ### Teeka
 
@@ -29,12 +29,12 @@ This verse describes the beauty of the night sky and celestial objects.
 
 ### Translation
 
-The wind blows throughout the day.
-The leaves of trees keep swaying.
+हवा दिन भर चलती है।
+पेड़ों की पत्तियां हिलती रहती हैं।
 
 ### Meaning
 
-This verse captures the constant movement in nature through wind and its effects.
+यह श्लोक हवा और उसके प्रभावों के माध्यम से प्रकृति में निरंतर गति को दर्शाता है।
 
 ### Teeka
 
@@ -44,7 +44,7 @@ This verse captures the constant movement in nature through wind and its effects
 
 # शिक्षा अधिकार
 
-This chapter focuses on education and learning.
+यह अध्याय शिक्षा और सीखने पर केंद्रित है।
 
 ## Shlok 3
 
@@ -53,12 +53,12 @@ This chapter focuses on education and learning.
 
 ### Translation
 
-Reading books is a good habit.
-Knowledge increases through daily study.
+किताबें पढ़ना एक अच्छी आदत है।
+दैनिक अध्ययन से ज्ञान बढ़ता है।
 
 ### Meaning
 
-This verse emphasizes the importance of regular reading and continuous learning.
+यह श्लोक नियमित पठन और निरंतर सीखने के महत्व पर जोर देता है।
 
 ### Teeka
 
@@ -73,12 +73,12 @@ This verse emphasizes the importance of regular reading and continuous learning.
 
 ### Translation
 
-Learning from a teacher is the best way.
-Knowledge comes from experienced people.
+एक शिक्षक से सीखना सबसे अच्छा तरीका है।
+ज्ञान अनुभवी लोगों से आता है।
 
 ### Meaning
 
-This verse highlights the value of learning from experienced mentors and teachers.
+यह श्लोक अनुभवी सलाहकारों और शिक्षकों से सीखने के मूल्य पर प्रकाश डालता है।
 
 ### Teeka
 
@@ -93,12 +93,12 @@ This verse highlights the value of learning from experienced mentors and teacher
 
 ### Translation
 
-Practice brings mastery in art.
-One should learn with patience.
+अभ्यास कला में महारत लाता है।
+व्यक्ति को धैर्य के साथ सीखना चाहिए।
 
 ### Meaning
 
-This verse teaches that consistent practice and patience are essential for mastering any skill.
+यह श्लोक सिखाता है कि किसी भी कौशल में महारत हासिल करने के लिए लगातार अभ्यास और धैर्य आवश्यक है।
 
 ### Teeka
 
@@ -108,7 +108,7 @@ This verse teaches that consistent practice and patience are essential for maste
 
 # सामाजिक अधिकार
 
-This chapter deals with social relationships and community.
+यह अध्याय सामाजिक संबंधों और समुदाय से संबंधित है।
 
 ## Shlok 6
 
@@ -117,12 +117,12 @@ This chapter deals with social relationships and community.
 
 ### Translation
 
-Working together leads to success.
-There is strength in unity.
+एक साथ काम करने से सफलता मिलती है।
+एकता में शक्ति होती है।
 
 ### Meaning
 
-This verse teaches the importance of cooperation and teamwork in achieving common goals.
+यह श्लोक सामान्य लक्ष्यों को प्राप्त करने में सहयोग और टीमवर्क के महत्व को सिखाता है।
 
 ### Teeka
 
@@ -137,12 +137,12 @@ This verse teaches the importance of cooperation and teamwork in achieving commo
 
 ### Translation
 
-Respecting elders is a good value.
-One should behave with humility.
+बड़ों का सम्मान करना एक अच्छा मूल्य है।
+व्यक्ति को विनम्रता के साथ व्यवहार करना चाहिए।
 
 ### Meaning
 
-This verse emphasizes respect for elders and the importance of humble behavior.
+यह श्लोक बड़ों के लिए सम्मान और विनम्र व्यवहार के महत्व पर जोर देता है।
 
 ### Teeka
 
