@@ -527,8 +527,6 @@ def test_is_lexical_query(api_server):
         f"http://{api_server.host}:{api_server.port}/api/search",
         json=search_payload_2
     )
-    log_handle.info(f"Response: {response_2}")
-    # log_handle.info(f"Response: {json_dumps(data_2, truncate_fields=['vector_embedding'])}")
     data_2 = response_2.json()
 
     assert response_2.status_code == 200
@@ -538,8 +536,8 @@ def test_is_lexical_query(api_server):
     validate_result_schema(data_2, False)
     
     # Should have vector results (can be from any file)
-    assert data_2["total_vector_results"] > 0, "Expected vector results for 'इंदौर का इतिहास?'"
-    
+    assert data_2["pravachan_results"]["total_hits"] > 0, "Expected vector results for 'इंदौर का इतिहास?'"
+
     # Test case 3: "સોનગઢ ઇતિહાસ" - should trigger lexical search
     # (2 words, no punctuation, so is_lexical_query should return True)
     search_payload_3 = {
@@ -614,7 +612,7 @@ def test_is_lexical_query(api_server):
     validate_result_schema(data_4, False)
     
     # Should have vector results
-    assert data_4["total_vector_results"] > 0, "Expected vector results for 'સોનગઢનો ઇતિહાસ?'"
+    assert data_4["pravachan_results"]["total_hits"] > 0, "Expected vector results for 'સોનગઢનો ઇતિહાસ?'"
     
     # Test case 5: "हंपी के बारे में कुछ बताइए" - should trigger vector search
     # (has question phrase "कुछ बताइए", so is_lexical_query should return False)
@@ -652,9 +650,7 @@ def test_is_lexical_query(api_server):
     validate_result_schema(data_5, False)
 
     # Should have vector results
-    assert data_5["total_vector_results"] > 0, "Expected vector results for 'हंपी के बारे में कुछ बताइए'"
-
-    log_handle.info(f"is_lexical_query test passed - Hindi lexical: {data_1['pravachan_results']['total_hits']}, Hindi vector: {data_2['total_vector_results']}, Gujarati lexical: {data_3['pravachan_results']['total_hits']}, Gujarati vector: {data_4['total_vector_results']}, Hindi question: {data_5['total_vector_results']} results")
+    assert data_5["pravachan_results"]["total_hits"] > 0, "Expected vector results for 'हंपी के बारे में कुछ बताइए'"
 
 
 def test_api_spell_suggestion_search(api_server):
@@ -906,11 +902,13 @@ def test_get_similar_documents(api_server):
         log_handle.info(f"Search response for '{test_case['query']}': {json_dumps(search_data, truncate_fields=['vector_embedding'])}")
         
         # Validate we have enough search results to get the second one
-        total_results = search_data.get("total_vector_results", 0)
+        pravachan_results = search_data.get("pravachan_results", {})
+        results = pravachan_results.get("results", [])
+        total_results = len(results)
         assert total_results >= 2, f"Expected at least 2 results for '{test_case['query']}', got {total_results}"
-        
+
         # Step 2: Get document_id from second result
-        one_result = search_data["vector_results"][1]
+        one_result = results[1]
 
         assert one_result is not None, "Could not find search result"
         
@@ -976,28 +974,15 @@ def test_cache_invalidation(api_server):
     
     log_handle.info("✓ Cache invalidation test passed - metadata consistent after cache invalidation")
 
-
 def validate_result_schema(data, lexical_results):
-    if lexical_results:
-        # Check for lexical results structure
-        assert "pravachan_results" in data, "Expected pravachan_results in response"
-        assert "granth_results" in data, "Expected granth_results in response"
+    # Check for lexical results structure
+    assert "pravachan_results" in data, "Expected pravachan_results in response"
+    assert "granth_results" in data, "Expected granth_results in response"
+    pravachan_keys = ["results", "total_hits", "page_size", "page_number"]
+    for key in pravachan_keys:
+        assert key in data["pravachan_results"], f"Expected {key} in pravachan_results"
 
-        # Validate pravachan_results structure
-        pravachan_keys = ["results", "total_hits", "page_size", "page_number"]
-        for key in pravachan_keys:
-            assert key in data["pravachan_results"], f"Expected {key} in pravachan_results"
-
-        # Validate granth_results structure
-        granth_keys = ["results", "total_hits", "page_size", "page_number"]
-        for key in granth_keys:
-            assert key in data["granth_results"], f"Expected {key} in granth_results"
-    else:
-        # Check for vector results structure
-        vector_keys = ["total_results", "page_size", "page_number", "results", "vector_results", "total_vector_results"]
-        for key in vector_keys:
-            assert key in data, f"Expected {key} in vector response"
-
-        # For vector queries, results and total_results should be 0
-        assert data["results"] == [], "Expected empty results for vector query"
-        assert data["total_results"] == 0, "Expected 0 total_results for vector query"
+    # Validate granth_results structure
+    granth_keys = ["results", "total_hits", "page_size", "page_number"]
+    for key in granth_keys:
+        assert key in data["granth_results"], f"Expected {key} in granth_results"

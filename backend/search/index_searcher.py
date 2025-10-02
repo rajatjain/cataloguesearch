@@ -390,7 +390,7 @@ class IndexSearcher:
                 "page_number": source.get('page_number'),
                 "paragraph_id": source.get('paragraph_id'),
                 "content_snippet": content_snippet,
-                "score": score,
+                "score": float(score) if score is not None else 0.0,
                 "bookmarks": source.get(self._bookmark_field, {}),
                 "metadata": source.get(self._metadata_prefix, {}),
                 "file_url": metadata.get("file_url", "")
@@ -512,7 +512,7 @@ class IndexSearcher:
                 "original_filename": original_filename,
                 "filename": filename,
                 "content_snippet": content_snippet,
-                "score": score,
+                "score": float(score) if score is not None else 0.0,
                 "metadata": metadata,
                 "file_url": metadata.get("file_url", ""),
                 # Granth-specific fields
