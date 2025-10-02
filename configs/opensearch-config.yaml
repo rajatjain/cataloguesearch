@@ -296,17 +296,8 @@ granth_index:
         analyzer: mixed_indic_analyzer
       metadata:
         type: object
-        properties:
-          anuyog:
-            type: keyword
-          language:
-            type: keyword
-          author:
-            type: keyword
-          teekakar:
-            type: keyword
-          file_url:
-            type: keyword
+        # Expected fields: anuyog, language, author, teekakar, file_url
+        # Using dynamic mapping with .keyword multi-field for filter compatibility
       verses:
         type: nested
         properties:

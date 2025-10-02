@@ -5,12 +5,12 @@
 
 ### Translation
 
-The sun rises in the eastern direction.
-Light spreads all around.
+सूर्य पूर्व दिशा में उदय होता है।
+प्रकाश चारों ओर फैलता है।
 
 ### Meaning
 
-This verse describes the natural phenomenon of sunrise and how light illuminates everything.
+यह श्लोक सूर्योदय की प्राकृतिक घटना और कैसे प्रकाश हर चीज को रोशन करता है, इसका वर्णन करता है।
 
 ### Teeka
 
@@ -31,12 +31,12 @@ This verse describes the natural phenomenon of sunrise and how light illuminates
 
 ### Translation
 
-The river flows from mountains to the sea.
-Water is the foundation of life.
+नदी पहाड़ों से समुद्र तक बहती है।
+जल जीवन का आधार है।
 
 ### Meaning
 
-This verse explains the water cycle and the importance of water for all living beings.
+यह श्लोक जल चक्र और सभी जीवित प्राणियों के लिए जल के महत्व की व्याख्या करता है।
 
 ### Teeka
 
@@ -57,12 +57,12 @@ This verse explains the water cycle and the importance of water for all living b
 
 ### Translation
 
-Planting trees is a virtuous deed.
-The earth looks beautiful with greenery.
+पेड़ लगाना एक पुण्य का काम है।
+हरियाली से धरती सुंदर लगती है।
 
 ### Meaning
 
-This verse emphasizes the importance of trees and environmental conservation.
+यह श्लोक पेड़ों के महत्व और पर्यावरण संरक्षण पर जोर देता है।
 
 ### Teeka
 
@@ -83,12 +83,12 @@ This verse emphasizes the importance of trees and environmental conservation.
 
 ### Translation
 
-Education is the greatest wealth of a human being.
-Knowledge leads to personality development.
+शिक्षा मनुष्य का सबसे बड़ा धन है।
+ज्ञान से व्यक्तित्व का विकास होता है।
 
 ### Meaning
 
-This verse highlights the value of education and learning in human life.
+यह श्लोक मानव जीवन में शिक्षा और सीखने के महत्व पर प्रकाश डालता है।
 
 ### Teeka
 
@@ -109,12 +109,12 @@ This verse highlights the value of education and learning in human life.
 
 ### Translation
 
-Those who work hard achieve success.
-Hard work is the key to success.
+जो कड़ी मेहनत करते हैं, वे सफलता प्राप्त करते हैं।
+कड़ी मेहनत ही सफलता की कुंजी है।
 
 ### Meaning
 
-This verse teaches that consistent effort and dedication lead to achievement of goals.
+यह श्लोक सिखाता है कि लगातार प्रयास और समर्पण से लक्ष्यों की प्राप्ति होती है।
 
 ### Teeka
 

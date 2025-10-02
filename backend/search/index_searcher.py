@@ -90,7 +90,7 @@ class IndexSearcher:
         }
 
     def _build_multi_field_lexical_query(
-            self, index_name: str, search_fields: List[str], keywords: str, 
+            self, index_name: str, search_fields: List[str], keywords: str,
             exact_match: bool, exclude_words: List[str],
             categories: Dict[str, List[str]], language: str) -> Dict[str, Any]:
         """
@@ -102,26 +102,58 @@ class IndexSearcher:
             f"fields: {search_fields}, language: {language}, "
             f"exact_match: {exact_match}, exclude_words: {exclude_words}")
 
-        # Build the main query based on exact_match
-        if exact_match:
-            # Exact phrase match across all fields
+        # Check if we're searching the granth index (which has nested verses)
+        is_nested_search = index_name == self._config.OPENSEARCH_GRANTH_INDEX_NAME
+
+        # Build the main query based on exact_match and nested structure
+        if is_nested_search:
+            # For granth index with nested verses field
+            if exact_match:
+                inner_query = {
+                    "multi_match": {
+                        "query": keywords,
+                        "fields": search_fields,
+                        "type": "phrase"
+                    }
+                }
+            else:
+                inner_query = {
+                    "multi_match": {
+                        "query": keywords,
+                        "fields": search_fields,
+                        "type": "best_fields",
+                        "operator": "or"
+                    }
+                }
+
             main_query = {
-                "multi_match": {
-                    "query": keywords,
-                    "fields": search_fields,
-                    "type": "phrase"
+                "nested": {
+                    "path": "verses",
+                    "query": inner_query,
+                    "inner_hits": {}
                 }
             }
         else:
-            # Regular match with all terms across all fields
-            main_query = {
-                "multi_match": {
-                    "query": keywords,
-                    "fields": search_fields,
-                    "type": "best_fields",
-                    "operator": "and"
+            # For regular search index (non-nested fields)
+            if exact_match:
+                # Exact phrase match across all fields
+                main_query = {
+                    "multi_match": {
+                        "query": keywords,
+                        "fields": search_fields,
+                        "type": "phrase"
+                    }
                 }
-            }
+            else:
+                # Regular match with all terms across all fields
+                main_query = {
+                    "multi_match": {
+                        "query": keywords,
+                        "fields": search_fields,
+                        "type": "best_fields",
+                        "operator": "and"
+                    }
+                }
 
         # Build highlight configuration for all search fields
         highlight_fields = {}
@@ -398,8 +430,7 @@ class IndexSearcher:
             index_name, search_fields, keywords, exact_match,
             exclude_words, categories, language)
         from_ = (page_number - 1) * page_size
-        log_handle.verbose(f"Multi-field lexical query: {json_dumps(query_body)}")
-        
+
         try:
             response = self._opensearch_client.search(
                 index=index_name,
@@ -429,7 +460,7 @@ class IndexSearcher:
             return [], 0
 
     def _extract_granth_results(
-            self, hits: List[Dict[str, Any]], search_fields: List[str], 
+            self, hits: List[Dict[str, Any]], search_fields: List[str],
             language: str) -> List[Dict[str, Any]]:
         """Extract and format results for granth index search"""
         extracted = []
@@ -437,11 +468,24 @@ class IndexSearcher:
             source = hit.get('_source', {})
             document_id = hit.get('_id')
             score = hit.get("rerank_score", hit.get("_score"))
-            
+
+            # Extract matching verses from inner_hits (if available from nested query)
+            matching_verses = []
+            inner_hits = hit.get('inner_hits', {})
+
+            if inner_hits and 'verses' in inner_hits:
+                # Get the matching nested documents from inner_hits
+                verse_hits = inner_hits['verses'].get('hits', {}).get('hits', [])
+                for verse_hit in verse_hits:
+                    matching_verses.append(verse_hit.get('_source', {}))
+            else:
+                # Fallback: if no inner_hits, use all verses (shouldn't happen with nested query)
+                matching_verses = source.get('verses', [])
+
             # Handle content snippet from highlighting across multiple fields
             content_snippet = ""
             highlight = hit.get('highlight', {})
-            
+
             if highlight:
                 # Collect highlighted content from all fields
                 highlighted_fragments = []
@@ -450,21 +494,19 @@ class IndexSearcher:
                         highlighted_fragments.extend(highlight[field])
                 if highlighted_fragments:
                     content_snippet = "...".join(highlighted_fragments)
-            
-            # If no highlighting, fall back to extracting content from source
-            if not content_snippet:
-                verses = source.get('verses', [])
-                if verses:
-                    # Take content from the first verse
-                    first_verse = verses[0]
-                    verse_text = first_verse.get('verse', '')
-                    translation = first_verse.get('translation', '')
-                    content_snippet = f"{verse_text} {translation}".strip()
-            
+
+            # If no highlighting, fall back to extracting content from matching verses
+            if not content_snippet and matching_verses:
+                # Take content from the first matching verse
+                first_verse = matching_verses[0]
+                verse_text = first_verse.get('verse', '')
+                translation = first_verse.get('translation', '')
+                content_snippet = f"{verse_text} {translation}".strip()
+
             metadata = source.get(self._metadata_prefix, {})
             original_filename = source.get('original_filename')
             filename = os.path.basename(original_filename) if original_filename else ""
-            
+
             result = {
                 "document_id": document_id,
                 "original_filename": original_filename,
@@ -476,9 +518,9 @@ class IndexSearcher:
                 # Granth-specific fields
                 "granth_id": source.get('granth_id'),
                 "name": source.get('name', ''),
-                "verses": source.get('verses', [])
+                "verses": matching_verses  # Only return matching verses, not all verses
             }
-            
+
             extracted.append(result)
         return extracted
 

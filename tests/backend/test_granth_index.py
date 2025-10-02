@@ -138,7 +138,7 @@ def test_granth_indexing_pipeline_with_config():
     )
     
     granth_docs = granth_search_result["hits"]["hits"]
-    assert len(granth_docs) == 3, f"Expected 3 documents in granth_index, found {len(granth_docs)}"
+    assert len(granth_docs) == 6, f"Expected 3 documents in granth_index, found {len(granth_docs)}"
     log_handle.info(f"✓ Found {len(granth_docs)} documents in granth_index")
     
     # Verify unique original_filenames and detailed verse counts
@@ -183,7 +183,7 @@ def test_granth_indexing_pipeline_with_config():
             "verse_types": verse_type_counts
         }
     
-    assert len(original_filenames) == 3, f"Expected 3 unique filenames, found {len(original_filenames)}"
+    assert len(original_filenames) == 6, f"Expected 3 unique filenames, found {len(original_filenames)}"
     log_handle.info(f"✓ Verified 3 unique original_filenames: {original_filenames}")
     
     # Detailed verse count validation per file
@@ -331,86 +331,86 @@ def test_granth_indexing_pipeline_with_config():
     log_handle.info("Testing queries by Anuyog...")
     simple_anuyog_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.anuyog": "Simple Anuyog"}}}
+        body={"query": {"term": {"metadata.anuyog.keyword": "Simple Anuyog"}}}
     )
-    assert simple_anuyog_query["hits"]["total"]["value"] == 1, "Should find 1 document with Simple Anuyog"
-    log_handle.info("✓ Query by Anuyog 'Simple Anuyog': 1 document found")
+    assert simple_anuyog_query["hits"]["total"]["value"] == 2, "Should find 2 document with Simple Anuyog"
+    log_handle.info("✓ Query by Anuyog 'Simple Anuyog': 2 document found")
     
     charitra_anuyog_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.anuyog": "Charitra Anuyog"}}}
+        body={"query": {"term": {"metadata.anuyog.keyword": "Charitra Anuyog"}}}
     )
-    assert charitra_anuyog_query["hits"]["total"]["value"] == 1, "Should find 1 document with Charitra Anuyog"
-    log_handle.info("✓ Query by Anuyog 'Charitra Anuyog': 1 document found")
+    assert charitra_anuyog_query["hits"]["total"]["value"] == 2, "Should find 2 document with Charitra Anuyog"
+    log_handle.info("✓ Query by Anuyog 'Charitra Anuyog': 2 document found")
     
     dravya_anuyog_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.anuyog": "Dravya Anuyog"}}}
+        body={"query": {"term": {"metadata.anuyog.keyword": "Dravya Anuyog"}}}
     )
-    assert dravya_anuyog_query["hits"]["total"]["value"] == 1, "Should find 1 document with Dravya Anuyog"
-    log_handle.info("✓ Query by Anuyog 'Dravya Anuyog': 1 document found")
+    assert dravya_anuyog_query["hits"]["total"]["value"] == 2, "Should find 2 document with Dravya Anuyog"
+    log_handle.info("✓ Query by Anuyog 'Dravya Anuyog': 2 document found")
     
     # Test querying by Author
     log_handle.info("Testing queries by Author...")
     simple_author_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.author": "Simple Author"}}}
+        body={"query": {"term": {"metadata.author.keyword": "Simple Author"}}}
     )
-    assert simple_author_query["hits"]["total"]["value"] == 1, "Should find 1 document with Simple Author"
-    log_handle.info("✓ Query by Author 'Simple Author': 1 document found")
+    assert simple_author_query["hits"]["total"]["value"] == 2, "Should find 2 document with Simple Author"
+    log_handle.info("✓ Query by Author 'Simple Author': 2 document found")
     
     kundkund_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.author": "Acharya Kundkund"}}}
+        body={"query": {"term": {"metadata.author.keyword": "Acharya Kundkund"}}}
     )
-    assert kundkund_query["hits"]["total"]["value"] == 1, "Should find 1 document with Acharya Kundkund"
-    log_handle.info("✓ Query by Author 'Acharya Kundkund': 1 document found")
+    assert kundkund_query["hits"]["total"]["value"] == 2, "Should find 2 document with Acharya Kundkund"
+    log_handle.info("✓ Query by Author 'Acharya Kundkund': 2 document found")
     
     haribhadra_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.author": "Acharya Haribhadra"}}}
+        body={"query": {"term": {"metadata.author.keyword": "Acharya Haribhadra"}}}
     )
-    assert haribhadra_query["hits"]["total"]["value"] == 1, "Should find 1 document with Acharya Haribhadra"
-    log_handle.info("✓ Query by Author 'Acharya Haribhadra': 1 document found")
+    assert haribhadra_query["hits"]["total"]["value"] == 2, "Should find 2 document with Acharya Haribhadra"
+    log_handle.info("✓ Query by Author 'Acharya Haribhadra': 2 document found")
     
     # Test querying by Teekakar
     log_handle.info("Testing queries by Teekakar...")
     simple_teekakar_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.teekakar": "Simple Teekakar"}}}
+        body={"query": {"term": {"metadata.teekakar.keyword": "Simple Teekakar"}}}
     )
-    assert simple_teekakar_query["hits"]["total"]["value"] == 1, "Should find 1 document with Simple Teekakar"
-    log_handle.info("✓ Query by Teekakar 'Simple Teekakar': 1 document found")
+    assert simple_teekakar_query["hits"]["total"]["value"] == 2, "Should find 2 document with Simple Teekakar"
+    log_handle.info("✓ Query by Teekakar 'Simple Teekakar': 2 document found")
     
     amritchandra_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.teekakar": "Acharya Nemichandra"}}}
+        body={"query": {"term": {"metadata.teekakar.keyword": "Acharya Nemichandra"}}}
     )
-    assert amritchandra_query["hits"]["total"]["value"] == 1, "Should find 1 document with Acharya Nemichandra"
-    log_handle.info("✓ Query by Teekakar 'Acharya Nemichandra': 1 document found")
+    assert amritchandra_query["hits"]["total"]["value"] == 2, "Should find 2 document with Acharya Nemichandra"
+    log_handle.info("✓ Query by Teekakar 'Acharya Nemichandra': 2 document found")
     
     todarmal_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.teekakar": "Pandit Todarmal"}}}
+        body={"query": {"term": {"metadata.teekakar.keyword": "Pandit Todarmal"}}}
     )
-    assert todarmal_query["hits"]["total"]["value"] == 1, "Should find 1 document with Pandit Todarmal"
-    log_handle.info("✓ Query by Teekakar 'Pandit Todarmal': 1 document found")
+    assert todarmal_query["hits"]["total"]["value"] == 2, "Should find 2 document with Pandit Todarmal"
+    log_handle.info("✓ Query by Teekakar 'Pandit Todarmal': 2 document found")
     
     # Test querying by Language
     log_handle.info("Testing queries by Language...")
     hindi_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.language": "hi"}}}
+        body={"query": {"term": {"metadata.language.keyword": "hi"}}}
     )
-    assert hindi_query["hits"]["total"]["value"] == 2, "Should find 2 documents with Hindi language"
-    log_handle.info("✓ Query by Language 'hi': 2 documents found")
+    assert hindi_query["hits"]["total"]["value"] == 3, "Should find 3 documents with Hindi language"
+    log_handle.info("✓ Query by Language 'hi': 3 documents found")
     
     gujarati_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.language": "gu"}}}
+        body={"query": {"term": {"metadata.language.keyword": "gu"}}}
     )
-    assert gujarati_query["hits"]["total"]["value"] == 1, "Should find 1 document with Gujarati language"
-    log_handle.info("✓ Query by Language 'gu': 1 document found")
+    assert gujarati_query["hits"]["total"]["value"] == 3, "Should find 3 document with Gujarati language"
+    log_handle.info("✓ Query by Language 'gu': 3 document found")
     
     # Test search_index metadata inheritance
     log_handle.info("Testing search_index metadata inheritance...")
@@ -427,45 +427,33 @@ def test_granth_indexing_pipeline_with_config():
     # Try match query instead of term query for better text matching
     search_anuyog_query = opensearch_client.search(
         index=config.OPENSEARCH_INDEX_NAME,
-        body={"query": {"match": {"metadata.anuyog": "Simple Anuyog"}}}
+        body={"query": {"match": {"metadata.anuyog.keyword": "Simple Anuyog"}}}
     )
     assert search_anuyog_query["hits"]["total"]["value"] > 0, f"Should find paragraph chunks with Simple Anuyog. Found: {search_anuyog_query['hits']['total']['value']}"
     log_handle.info(f"✓ Search index query by Anuyog: {search_anuyog_query['hits']['total']['value']} chunks found")
     
     search_author_query = opensearch_client.search(
         index=config.OPENSEARCH_INDEX_NAME,
-        body={"query": {"match": {"metadata.author": "Acharya Kundkund"}}}
+        body={"query": {"match": {"metadata.author.keyword": "Acharya Kundkund"}}}
     )
     assert search_author_query["hits"]["total"]["value"] > 0, f"Should find paragraph chunks with Acharya Kundkund. Found: {search_author_query['hits']['total']['value']}"
     log_handle.info(f"✓ Search index query by Author: {search_author_query['hits']['total']['value']} chunks found")
     
     # Test complex queries
-    log_handle.info("Testing complex metadata queries...")
-    complex_query = opensearch_client.search(
-        index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={
-            "query": {
-                "bool": {
-                    "must": [
-                        {"term": {"metadata.language": "hi"}},
-                        {"term": {"metadata.anuyog": "Simple Anuyog"}}
-                    ]
+    for lang in ["hi", "gu"]:
+        log_handle.info("Testing complex metadata queries...")
+        complex_query = opensearch_client.search(
+            index=config.OPENSEARCH_GRANTH_INDEX_NAME,
+            body={
+                "query": {
+                    "bool": {
+                        "must": [
+                            {"term": {"metadata.language.keyword": lang}},
+                            {"term": {"metadata.anuyog.keyword": "Simple Anuyog"}}
+                        ]
+                    }
                 }
             }
-        }
-    )
-    assert complex_query["hits"]["total"]["value"] == 1, "Should find 1 document matching both language=hi and anuyog=Simple Anuyog"
-    log_handle.info("✓ Complex query (language=hi AND anuyog=Simple Anuyog): 1 document found")
-    
-    # Phase 8: Final validation summary
-    log_handle.info("=== Phase 8: Test Summary ===")
-    log_handle.info(f"✓ Successfully indexed 3 Granth files with hierarchical configs")
-    log_handle.info(f"✓ get_merged_config functionality validated")
-    log_handle.info(f"✓ granth_index: {len(granth_docs)} documents with complete structure")
-    log_handle.info(f"✓ search_index: {len(search_docs)} paragraph chunks with embeddings")
-    log_handle.info(f"✓ Vector embeddings: {embedding_count} valid embeddings generated")
-    log_handle.info(f"✓ Content types: {content_types}")
-    log_handle.info(f"✓ Adhikar field handling validated for all file types")
-    log_handle.info(f"✓ Metadata querying tested: Anuyog, Author, Teekakar, Language")
-    log_handle.info(f"✓ Complex metadata filtering validated")
-    log_handle.info("🎉 Granth indexing with config merging test completed successfully!")
+        )
+        assert complex_query["hits"]["total"]["value"] == 1, f"Should find 1 document matching both language={lang} and anuyog=Simple Anuyog"
+        log_handle.info(f"✓ Complex query (language={lang} AND anuyog=Simple Anuyog): 1 document found")

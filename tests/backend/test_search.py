@@ -1,14 +1,19 @@
 import os
 import shutil
 import random
+
+import pytest
+
 from backend.common import embedding_models
-from backend.common.opensearch import get_opensearch_client
+from backend.common.opensearch import get_opensearch_client, create_indices_if_not_exists
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
 from backend.crawler.index_generator import IndexGenerator
 from backend.crawler.pdf_processor import PDFProcessor
 from backend.search.index_searcher import IndexSearcher
-from tests.backend.common import setup, get_all_documents
+from backend.crawler.granth_index import GranthIndexer
+from backend.crawler.markdown_parser import MarkdownParser
+from tests.backend.common import setup, get_all_documents, setup_granth
 from tests.backend.base import *
 
 log_handle = logging.getLogger(__name__)
@@ -17,33 +22,38 @@ log_handle = logging.getLogger(__name__)
 # comment it out if you need to debug something.
 logging.getLogger('opensearch').setLevel(logging.WARNING)
 
-
 @pytest.fixture(scope="module", autouse=True)
 def build_index(initialise):
+    # delete and create indexes if they do not exist
+    config = Config()
+    opensearch_client = get_opensearch_client(config)
+    indexes = [
+        config.OPENSEARCH_INDEX_NAME,
+        config.OPENSEARCH_METADATA_INDEX_NAME,
+        config.OPENSEARCH_GRANTH_INDEX_NAME
+    ]
+    for index_name in indexes:
+        if index_name and opensearch_client.indices.exists(index=index_name):
+            opensearch_client.indices.delete(index=index_name)
+            log_handle.info(f"Deleted existing index: {index_name}")
+    create_indices_if_not_exists(config, opensearch_client)
+    build_search_index()
+    build_granth_index_for_search()
+
+    yield
+    # Cleanup - delete index
+    for index_name in indexes:
+        opensearch_client.indices.delete(index=index_name, ignore=[400, 404])
+
+def build_search_index():
     """
     Setup test data and build search index.
     Copy OCR data to base_ocr_path and call discovery with process=False, index=True.
     """
     # Setup test environment with scan_config files
-    setup(copy_ocr_files=True, add_scan_config=True)
     config = Config()
-    
-    # Initialize OpenSearch client and ensure clean index state
     opensearch_client = get_opensearch_client(config)
-    
-    # Explicitly delete indices to ensure clean state and proper mapping creation
-    log_handle.info("Deleting existing indices to ensure clean state for vector search")
-    indices_to_delete = [config.OPENSEARCH_INDEX_NAME, config.OPENSEARCH_METADATA_INDEX_NAME]
-    for index_name in indices_to_delete:
-        if index_name and opensearch_client.indices.exists(index=index_name):
-            opensearch_client.indices.delete(index=index_name)
-            log_handle.info(f"Deleted existing index: {index_name}")
-    
-    # Create indices with proper mapping (including knn_vector for embeddings)
-    from backend.common.opensearch import create_indices_if_not_exists
-    create_indices_if_not_exists(config, opensearch_client)
-    log_handle.info("Created indices with proper mapping for vector search")
-    
+    setup(copy_ocr_files=True, add_scan_config=True)
     pdf_processor = PDFProcessor(config)  # We won't actually use this since process=False
     discovery = Discovery(
         config, 
@@ -61,11 +71,40 @@ def build_index(initialise):
     doc_count = len(os_all_docs)
     log_handle.info(f"Indexed {doc_count} documents")
 
-    yield
+def build_granth_index_for_search():
+    """
+    Setup granth data and index in OpenSearch.
+    Calls setup_granth() to create markdown files, parses them, and indexes all granths.
+    """
+    config = Config()
+    opensearch_client = get_opensearch_client(config)
 
-    # Cleanup - delete index
-    opensearch_client.indices.delete(index=config.OPENSEARCH_INDEX_NAME, ignore=[400, 404])
+    # Setup granth directory structure and files
+    log_handle.info("Setting up granth directory structure")
+    granth_setup = setup_granth()
+    base_dir = granth_setup["base_dir"]
+    granth_files = granth_setup["granth_files"]
 
+    # Parse markdown files
+    parser = MarkdownParser(base_folder=base_dir)
+    indexer = GranthIndexer(config, opensearch_client)
+
+    log_handle.info("Parsing and indexing granth markdown files")
+    for granth_name, file_info in granth_files.items():
+        file_path = file_info["file_path"]
+        log_handle.info(f"Parsing {granth_name} from {file_path}")
+
+        granth = parser.parse_file(file_path)
+        assert granth is not None, f"Failed to parse {file_path}"
+
+        log_handle.info(f"Indexing {granth_name} with {len(granth._verses)} verses")
+        indexer.index_granth(granth, dry_run=False)
+
+    # Refresh indices to make data available for search
+    opensearch_client.indices.refresh(index=config.OPENSEARCH_GRANTH_INDEX_NAME)
+    opensearch_client.indices.refresh(index=config.OPENSEARCH_INDEX_NAME)
+
+    log_handle.info("Granth indexing complete")
 
 def test_lexical_search_basic():
     """Test basic lexical search with query-filename validation."""
@@ -454,5 +493,403 @@ def test_exclude_words():
     
     log_handle.info(f"Search with exclude words returned {len(results_with_exclude)} results (total: {total_hits_with_exclude})")
     assert len(results_with_exclude) == 0, f"Expected 0 results with exclude word '{exclude_word}', got {len(results_with_exclude)}"
-    
+
     log_handle.info(f"✓ Exclude words test passed: {len(results_without_exclude)} results without exclusion, {len(results_with_exclude)} results with exclusion")
+
+
+def test_search_granth_content():
+    """Test searching granth content (teeka and bhavarth paragraphs)."""
+    config = Config()
+    index_searcher = IndexSearcher(config)
+
+    # List of test cases: [query, language, expected_filename]
+    # Testing search across different granth files and different fields (verse, translation, meaning, teeka, bhavarth)
+    test_cases = [
+        # simple_granth - Hindi test cases
+        {"query": "सूर्य का उदय नई शुरुआत का प्रतीक", "lang": "hi", "filename": "simple_granth"},
+        {"query": "जल ही जीवन है", "lang": "hi", "filename": "simple_granth"},
+        {"query": "नदी पहाड़ों से समुद्र तक बहती", "lang": "hi", "filename": "simple_granth"},
+
+        # simple_granth - Gujarati test cases
+        {"query": "નવી શરૂઆતનું પ્રતીક", "lang": "gu", "filename": "simple_granth"},
+        {"query": "જળ જ જીવન છે", "lang": "gu", "filename": "simple_granth"},
+        {"query": "સૂર્ય પૂર્વ દિશામાં ઉદય", "lang": "gu", "filename": "simple_granth"},
+
+        # adhikar_granth - Hindi test cases (nature chapter)
+        {"query": "रात्रि का सौंदर्य तारों और चांद से बढ़ता", "lang": "hi", "filename": "adhikar_granth"},
+        {"query": "वायु प्रकृति की एक महत्वपूर्ण शक्ति", "lang": "hi", "filename": "adhikar_granth"},
+        {"query": "आकाश में तारे चमकते हैं रात में", "lang": "hi", "filename": "adhikar_granth"},
+
+        # adhikar_granth - Hindi test cases (education chapter)
+        {"query": "नियमित अध्ययन से बुद्धि का विकास", "lang": "hi", "filename": "adhikar_granth"},
+        {"query": "गुरु की शिक्षा से व्यक्तित्व निखरता", "lang": "hi", "filename": "adhikar_granth"},
+        {"query": "धैर्य और अभ्यास ही सफलता की कुंजी", "lang": "hi", "filename": "adhikar_granth"},
+
+        # adhikar_granth - Hindi test cases (social chapter)
+        {"query": "सामूहिक प्रयास से बड़े लक्ष्य प्राप्त", "lang": "hi", "filename": "adhikar_granth"},
+        {"query": "विनम्रता एक महान गुण है", "lang": "hi", "filename": "adhikar_granth"},
+
+        # mixed_granth - Hindi test cases (knowledge chapter)
+        {"query": "सत्यवादिता मानव का सर्वोच्च गुण", "lang": "hi", "filename": "mixed_granth"},
+        {"query": "सत्य बोलने वाला व्यक्ति समाज में आदरणीय", "lang": "hi", "filename": "mixed_granth"},
+        {"query": "अहिंसा का अर्थ है मन, वचन और कर्म से किसी को हानि न पहुंचाना", "lang": "hi", "filename": "mixed_granth"},
+
+        # mixed_granth - Hindi test cases (karma chapter)
+        {"query": "कर्म का सिद्धांत प्रकृति का नियम", "lang": "hi", "filename": "mixed_granth"},
+        {"query": "सदाचारी व्यक्ति हर जगह सम्मान पाता", "lang": "hi", "filename": "mixed_granth"},
+        {"query": "दान देने से हृदय की कठोरता दूर होती", "lang": "hi", "filename": "mixed_granth"},
+
+        # mixed_granth - Hindi test cases (moksha chapter)
+        {"query": "मोक्ष जीवन का परम लक्ष्य", "lang": "hi", "filename": "mixed_granth"},
+        {"query": "ध्यान योग का सर्वोत्तम साधन", "lang": "hi", "filename": "mixed_granth"},
+        {"query": "प्रेम एक दिव्य शक्ति है जो शत्रु को भी मित्र बना देती", "lang": "hi", "filename": "mixed_granth"},
+    ]
+
+    for test_case in test_cases:
+        query = test_case["query"]
+        lang = test_case["lang"]
+        expected_filename = test_case["filename"]
+
+        log_handle.info(f"Running granth search for: '{query}' (expecting {expected_filename})")
+
+        results, total_hits = index_searcher.perform_granth_search(
+            keywords=query,
+            exact_match=False,
+            exclude_words=[],
+            categories={},
+            language=lang,
+            page_size=10,
+            page_number=1
+        )
+
+        log_handle.info(f"Found {len(results)} granth results for query: '{query}'")
+        log_handle.info(f"Results: {json_dumps(results)}")
+        assert len(results) > 0, f"No results found for granth query: {query}"
+
+        # Validate that expected filename appears in results
+        found_expected = False
+        for result in results:
+            # Check if granth name matches expected pattern
+            granth_name = result.get('filename', '').lower()
+            if expected_filename in granth_name:
+                found_expected = True
+                log_handle.info(f"✓ Found expected granth {expected_filename} in results for query: '{query}'")
+                break
+
+        assert found_expected, f"Expected granth '{expected_filename}' not found in results for query '{query}'"
+
+def test_search_granth_content_exact_match():
+    """Test exact match searching in granth content with verse number validation."""
+    config = Config()
+    index_searcher = IndexSearcher(config)
+
+    # List of test cases with exact phrases from different granth files
+    # Each test validates filename, language, verse type, and verse number
+    test_cases = [
+        # simple_granth - Shlok 1 (Hindi)
+        {
+            "query": "सूर्य का उदय नई शुरुआत का प्रतीक है",
+            "lang": "hi",
+            "filename": "simple_granth",
+            "type": "Shlok",
+            "type_num": 1
+        },
+        # simple_granth - Shlok 2 (Hindi)
+        {
+            "query": "जल ही जीवन है और इसका संरक्षण आवश्यक है",
+            "lang": "hi",
+            "filename": "simple_granth",
+            "type": "Shlok",
+            "type_num": 2
+        },
+        # simple_granth - Shlok 1 (Gujarati)
+        {
+            "query": "સૂર્યનો ઉદય નવી શરૂઆતનું પ્રતીક છે",
+            "lang": "gu",
+            "filename": "simple_granth",
+            "type": "Shlok",
+            "type_num": 1
+        },
+        # simple_granth - Shlok 2 (Gujarati)
+        {
+            "query": "જળ જ જીવન છે અને તેનું સંરક્ષણ જરૂરી છે",
+            "lang": "gu",
+            "filename": "simple_granth",
+            "type": "Shlok",
+            "type_num": 2
+        },
+        # adhikar_granth - Shlok 1 (Hindi)
+        {
+            "query": "रात्रि का सौंदर्य तारों और चांद से बढ़ता है",
+            "lang": "hi",
+            "filename": "adhikar_granth",
+            "type": "Shlok",
+            "type_num": 1
+        },
+        # adhikar_granth - Shlok 2 (Hindi)
+        {
+            "query": "वायु प्रकृति की एक महत्वपूर्ण शक्ति है",
+            "lang": "hi",
+            "filename": "adhikar_granth",
+            "type": "Shlok",
+            "type_num": 2
+        },
+        # adhikar_granth - Shlok 3 (Hindi)
+        {
+            "query": "नियमित अध्ययन से बुद्धि का विकास होता है",
+            "lang": "hi",
+            "filename": "adhikar_granth",
+            "type": "Shlok",
+            "type_num": 3
+        },
+        # adhikar_granth - Shlok 1 (Gujarati)
+        {
+            "query": "રાત્રિનું સૌંદર્ય તારાઓ અને ચંદ્રથી વધે છે",
+            "lang": "gu",
+            "filename": "adhikar_granth",
+            "type": "Shlok",
+            "type_num": 1
+        },
+        # adhikar_granth - Shlok 2 (Gujarati)
+        {
+            "query": "વાયુ પ્રકૃતિની એક મહત્વપૂર્ણ શક્તિ છે",
+            "lang": "gu",
+            "filename": "adhikar_granth",
+            "type": "Shlok",
+            "type_num": 2
+        },
+        # mixed_granth - Gatha 1 (Hindi)
+        {
+            "query": "सत्यवादिता मानव का सर्वोच्च गुण है",
+            "lang": "hi",
+            "filename": "mixed_granth",
+            "type": "Gatha",
+            "type_num": 1
+        },
+        # mixed_granth - Gatha 2 (Hindi)
+        {
+            "query": "अहिंसा का अर्थ है मन, वचन और कर्म से किसी को हानि न पहुंचाना",
+            "lang": "hi",
+            "filename": "mixed_granth",
+            "type": "Gatha",
+            "type_num": 2
+        },
+        # mixed_granth - Gatha 3 (Hindi)
+        {
+            "query": "कर्म का सिद्धांत प्रकृति का नियम है",
+            "lang": "hi",
+            "filename": "mixed_granth",
+            "type": "Gatha",
+            "type_num": 3
+        },
+        # mixed_granth - Gatha 1 (Gujarati)
+        {
+            "query": "સત્યવાદીતા માનવનો સર્વોચ્ચ ગુણ છે",
+            "lang": "gu",
+            "filename": "mixed_granth",
+            "type": "Gatha",
+            "type_num": 1
+        },
+        # mixed_granth - Gatha 1 (Gujarati) - from Bhavarth
+        {
+            "query": "સત્ય બોલનાર વ્યક્તિ સમાજમાં આદરણીય હોય છે",
+            "lang": "gu",
+            "filename": "mixed_granth",
+            "type": "Gatha",
+            "type_num": 1
+        },
+    ]
+
+    for test_case in test_cases:
+        query = test_case["query"]
+        lang = test_case["lang"]
+        expected_filename = test_case["filename"]
+        expected_type = test_case["type"]
+        expected_type_num = test_case["type_num"]
+
+        log_handle.info(f"Running exact match granth search for: '{query}' (expecting {expected_filename}, {expected_type} {expected_type_num})")
+
+        results, total_hits = index_searcher.perform_granth_search(
+            keywords=query,
+            exact_match=True,  # Use exact match
+            exclude_words=[],
+            categories={},
+            language=lang,
+            page_size=10,
+            page_number=1
+        )
+
+        log_handle.info(f"Found {len(results)} exact match granth results for query: '{query}'")
+        log_handle.info(f"Results: {json_dumps(results)}")
+        assert len(results) == 1, f"Expected 1 result for exact match granth query: {query}, got {len(results)}"
+
+        # Validate that expected filename, verse type, and verse number appear in results
+        result = results[0]
+        granth_name = result.get('filename', '').lower()
+        verse_type = result.get('type', '')
+        verse_type_num = result.get('type_num', 0)
+
+        if expected_filename in granth_name and verse_type == expected_type and verse_type_num == expected_type_num:
+            found_expected = True
+            log_handle.info(f"✓ Found expected granth {expected_filename}, {expected_type} {expected_type_num} in results for query: '{query}'")
+            break
+
+def test_search_granth_content_with_categories():
+    """Test granth search with category filters (Anuyog, Author, etc.)."""
+    config = Config()
+    index_searcher = IndexSearcher(config)
+
+    # Test cases with category filtering
+    # Each test validates that filters work correctly
+    test_cases = [
+        # Hindi test cases
+        {
+            "query": "सूर्य का उदय नई शुरुआत का प्रतीक है",
+            "lang": "hi",
+            "expected_anuyog": "Simple Anuyog",
+            "expected_author": "Simple Author",
+            "not_expected_anuyog": "Charitra Anuyog",
+            "not_expected_author": "Acharya Kundkund"
+        },
+        {
+            "query": "रात्रि का सौंदर्य तारों और चांद से बढ़ता है",
+            "lang": "hi",
+            "expected_anuyog": "Charitra Anuyog",
+            "expected_author": "Acharya Kundkund",
+            "not_expected_anuyog": "Dravya Anuyog",
+            "not_expected_author": "Acharya Haribhadra"
+        },
+        {
+            "query": "सत्यवादिता मानव का सर्वोच्च गुण है",
+            "lang": "hi",
+            "expected_anuyog": "Dravya Anuyog",
+            "expected_author": "Acharya Haribhadra",
+            "not_expected_anuyog": "Simple Anuyog",
+            "not_expected_author": "Simple Author"
+        },
+        {
+            "query": "कर्म का सिद्धांत प्रकृति का नियम है",
+            "lang": "hi",
+            "expected_anuyog": "Dravya Anuyog",
+            "expected_author": "Acharya Haribhadra",
+            "not_expected_anuyog": "Charitra Anuyog",
+            "not_expected_author": "Acharya Kundkund"
+        },
+        # Gujarati test cases
+        {
+            "query": "સૂર્યનો ઉદય નવી શરૂઆતનું પ્રતીક છે",
+            "lang": "gu",
+            "expected_anuyog": "Simple Anuyog",
+            "expected_author": "Simple Author",
+            "not_expected_anuyog": "Charitra Anuyog",
+            "not_expected_author": "Acharya Kundkund"
+        },
+        {
+            "query": "રાત્રિનું સૌંદર્ય તારાઓ અને ચંદ્રથી વધે છે",
+            "lang": "gu",
+            "expected_anuyog": "Charitra Anuyog",
+            "expected_author": "Acharya Kundkund",
+            "not_expected_anuyog": "Dravya Anuyog",
+            "not_expected_author": "Acharya Haribhadra"
+        },
+        {
+            "query": "સત્યવાદીતા માનવનો સર્વોચ્ચ ગુણ છે",
+            "lang": "gu",
+            "expected_anuyog": "Dravya Anuyog",
+            "expected_author": "Acharya Haribhadra",
+            "not_expected_anuyog": "Simple Anuyog",
+            "not_expected_author": "Simple Author"
+        },
+        {
+            "query": "જળ જ જીવન છે અને તેનું સંરક્ષણ જરૂરી છે",
+            "lang": "gu",
+            "expected_anuyog": "Simple Anuyog",
+            "expected_author": "Simple Author",
+            "not_expected_anuyog": "Dravya Anuyog",
+            "not_expected_author": "Acharya Haribhadra"
+        },
+    ]
+
+    for test_case in test_cases:
+        query = test_case["query"]
+        lang = test_case["lang"]
+        expected_anuyog = test_case["expected_anuyog"]
+        expected_author = test_case["expected_author"]
+        not_expected_anuyog = test_case["not_expected_anuyog"]
+        not_expected_author = test_case["not_expected_author"]
+
+        # Test 1: Search with expected Anuyog filter - should return results
+        log_handle.info(f"Running granth search with Anuyog filter: '{query}' (expecting Anuyog: {expected_anuyog})")
+
+        results_with_anuyog, total_hits = index_searcher.perform_granth_search(
+            keywords=query,
+            exact_match=True,
+            exclude_words=[],
+            categories={"anuyog": [expected_anuyog]},
+            language=lang,
+            page_size=10,
+            page_number=1
+        )
+
+        log_handle.info(f"Found {len(results_with_anuyog)} results with Anuyog filter '{expected_anuyog}'")
+        assert len(results_with_anuyog) == 1, f"Expected 1 result with Anuyog '{expected_anuyog}', got {len(results_with_anuyog)}"
+
+        # Validate the result has the expected Anuyog
+        result_anuyog = results_with_anuyog[0].get('metadata', {}).get('anuyog', '')
+        assert result_anuyog == expected_anuyog, f"Expected Anuyog '{expected_anuyog}', got '{result_anuyog}'"
+        log_handle.info(f"✓ Found result with expected Anuyog: {expected_anuyog}")
+
+        # Test 2: Search with unexpected Anuyog filter - should return no results
+        log_handle.info(f"Running granth search with incorrect Anuyog filter: '{query}' (using Anuyog: {not_expected_anuyog})")
+
+        results_with_wrong_anuyog, total_hits = index_searcher.perform_granth_search(
+            keywords=query,
+            exact_match=True,
+            exclude_words=[],
+            categories={"anuyog": [not_expected_anuyog]},
+            language=lang,
+            page_size=10,
+            page_number=1
+        )
+
+        log_handle.info(f"Found {len(results_with_wrong_anuyog)} results with incorrect Anuyog filter '{not_expected_anuyog}'")
+        assert len(results_with_wrong_anuyog) == 0, f"Expected 0 results with incorrect Anuyog '{not_expected_anuyog}', got {len(results_with_wrong_anuyog)}"
+        log_handle.info(f"✓ Correctly found no results with incorrect Anuyog: {not_expected_anuyog}")
+
+        # Test 3: Search with expected Author filter - should return results
+        log_handle.info(f"Running granth search with Author filter: '{query}' (expecting Author: {expected_author})")
+
+        results_with_author, total_hits = index_searcher.perform_granth_search(
+            keywords=query,
+            exact_match=True,
+            exclude_words=[],
+            categories={"author": [expected_author]},
+            language=lang,
+            page_size=10,
+            page_number=1
+        )
+
+        log_handle.info(f"Found {len(results_with_author)} results with Author filter '{expected_author}'")
+        assert len(results_with_author) == 1, f"Expected 1 result with Author '{expected_author}', got {len(results_with_author)}"
+
+        # Validate the result has the expected Author
+        result_author = results_with_author[0].get('metadata', {}).get('author', '')
+        assert result_author == expected_author, f"Expected Author '{expected_author}', got '{result_author}'"
+        log_handle.info(f"✓ Found result with expected Author: {expected_author}")
+
+        # Test 4: Search with unexpected Author filter - should return no results
+        log_handle.info(f"Running granth search with incorrect Author filter: '{query}' (using Author: {not_expected_author})")
+
+        results_with_wrong_author, total_hits = index_searcher.perform_granth_search(
+            keywords=query,
+            exact_match=True,
+            exclude_words=[],
+            categories={"author": [not_expected_author]},
+            language=lang,
+            page_size=10,
+            page_number=1
+        )
+
+        log_handle.info(f"Found {len(results_with_wrong_author)} results with incorrect Author filter '{not_expected_author}'")
+        assert len(results_with_wrong_author) == 0, f"Expected 0 results with incorrect Author '{not_expected_author}', got {len(results_with_wrong_author)}"
+        log_handle.info(f"✓ Correctly found no results with incorrect Author: {not_expected_author}")
