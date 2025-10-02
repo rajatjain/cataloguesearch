@@ -350,52 +350,60 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
             return response
 
         else:
-            # For non-lexical queries: only perform vector search on pravachan (if enabled)
-            vector_results = []
-            vector_total_hits = 0
+            # For non-lexical queries: perform vector search on pravachan and/or granth based on enabled flags
+            pravachan_results = []
+            pravachan_total_hits = 0
+            granth_results = []
+            granth_total_hits = 0
 
-            # Vector search only applies to pravachan index
-            vector_page_size = pravachan_config.get("page_size", 20)
-            vector_page_number = pravachan_config.get("page_number", 1)
-
-            if pravachan_config.get("enabled", False):
-                query_embedding = embedding_model.get_embedding(keywords)
-                if not query_embedding:
-                    log_handle.warning("Could not generate embedding for query. Vector search skipped.")
-                else:
-                    vector_results, vector_total_hits = index_searcher.perform_vector_search(
+            query_embedding = embedding_model.get_embedding(keywords)
+            if not query_embedding:
+                log_handle.warning("Could not generate embedding for query. Vector search skipped.")
+            else:
+                if pravachan_config.get("enabled", False):
+                    pravachan_results, pravachan_total_hits = index_searcher.perform_vector_search(
                         keywords=keywords,
                         embedding=query_embedding,
-                        categories=categories,
-                        page_size=vector_page_size,
-                        page_number=vector_page_number,
+                        categories={**categories, 'category': ['Pravachan']},
+                        page_size=30,
+                        page_number=1,
                         language=language,
                         rerank=enable_reranking
                     )
-                    log_handle.info(
-                        f"Vector search returned {len(vector_results)} "
-                        f"results (total: {vector_total_hits}) with reranking={'enabled' if enable_reranking else 'disabled'}.")
+                    log_handle.info(f"Pravachan vector search returned {len(pravachan_results)} results (total: {pravachan_total_hits}).")
+
+                if granth_config.get("enabled", False):
+                    granth_results, granth_total_hits = index_searcher.perform_vector_search(
+                        keywords=keywords,
+                        embedding=query_embedding,
+                        categories={**categories, 'category': ['Granth']},
+                        page_size=20,
+                        page_number=1,
+                        language=language,
+                        rerank=enable_reranking
+                    )
+                    log_handle.info(f"Granth vector search returned {len(granth_results)} results (total: {granth_total_hits}).")
 
             # Use unified SearchResponse format for vector search too
             response = SearchResponse(
                 pravachan_results=SearchTypeResults(
-                    results=vector_results,
-                    total_hits=vector_total_hits,
-                    page_size=vector_page_size,
-                    page_number=vector_page_number
+                    results=pravachan_results,
+                    total_hits=pravachan_total_hits,
+                    page_size=30,
+                    page_number=1
                 ),
                 granth_results=SearchTypeResults(
-                    results=[],
-                    total_hits=0,
-                    page_size=granth_config.get("page_size", 20),
-                    page_number=granth_config.get("page_number", 1)
+                    results=granth_results,
+                    total_hits=granth_total_hits,
+                    page_size=20,
+                    page_number=1
                 ),
                 suggestions=[]
             )
 
             # Calculate latency and log metrics
             latency_ms = round((time.time() - start_time) * 1000, 2)
-            total_results = vector_total_hits
+            total_results = pravachan_total_hits + granth_total_hits
 
             # Escape query for CSV (replace commas with semicolons, quotes with single quotes)
             escaped_query = keywords.replace(',', ';').replace('"', "'").replace('\n', ' ').replace('\r', '')
@@ -404,7 +412,7 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
             # Log metrics in CSV format: client_ip,query,search_type,exact_match,categories,language,enable_reranking,page_size,page_number,latency_ms,total_results
             log_handle.metrics(
                 f"{client_ip},{escaped_query},vector,{exact_match},{escaped_categories},{language},"
-                f"{enable_reranking},{vector_page_size},{vector_page_number},{latency_ms},{total_results}"
+                f"{enable_reranking},{pravachan_config.get('page_size', 20)},{pravachan_config.get('page_number', 1)},{latency_ms},{total_results}"
             )
 
             log_handle.info(f"Search response: {json_dumps(response.model_dump())}")

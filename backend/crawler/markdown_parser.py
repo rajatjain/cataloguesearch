@@ -65,12 +65,23 @@ class MarkdownParser:
                     f"relative to {self.base_folder}. Using absolute path."
                 )
 
+        # Language normalization helper
+        def normalize_language(lang: str) -> str:
+            """Convert language name to code format (hindi -> hi, gujarati -> gu)"""
+            language_to_code = {
+                "hindi": "hi",
+                "gujarati": "gu",
+                "hi": "hi",
+                "gu": "gu"
+            }
+            return language_to_code.get(lang.lower() if lang else "", "hi")
+
         # Load metadata from config files if base_folder is provided
         if self.base_folder:
             config = get_merged_config(original_filename, self.base_folder)
             metadata = GranthMetadata(
                 anuyog=config.get("Anuyog", ""),
-                language=config.get("language", "hindi"),
+                language=normalize_language(config.get("language", "hindi")),
                 author=config.get("Author", "Unknown"),
                 teekakar=config.get("Teekakar", "Unknown"),
                 file_url=config.get("file_url", "")
@@ -80,7 +91,7 @@ class MarkdownParser:
             # Fallback to default metadata
             metadata = GranthMetadata(
                 anuyog="",
-                language="hindi",
+                language=normalize_language("hindi"),
                 author="Unknown",
                 teekakar="Unknown",
                 file_url=relative_filename
