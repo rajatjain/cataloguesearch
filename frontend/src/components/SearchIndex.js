@@ -23,22 +23,28 @@ const SearchIndex = () => {
     setSortConfig({ key, direction });
   };
 
+  // Get combined status for an item
+  const getCombinedStatus = (item) => {
+    // Return the first non-null status
+    return item.hindi || item.gujarati || null;
+  };
+
   // Sort content based on sort configuration
   const sortContent = (content) => {
     return [...content].sort((a, b) => {
       let aValue, bValue;
-      
+
       // For Year, Granth, and Count sorting, always prioritize status first
       if (sortConfig.key === 'name' || sortConfig.key === 'year' || sortConfig.key === 'count') {
         // First sort by status: searchable first, in_progress last
         const statusOrder = { 'searchable': 1, 'in_progress': 2, 'planned': 3 };
-        const aStatus = statusOrder[a.status] || 99;
-        const bStatus = statusOrder[b.status] || 99;
-        
+        const aStatus = statusOrder[getCombinedStatus(a)] || 99;
+        const bStatus = statusOrder[getCombinedStatus(b)] || 99;
+
         if (aStatus !== bStatus) {
           return aStatus - bStatus;
         }
-        
+
         // If status is the same, then sort by the requested field
         if (sortConfig.key === 'name') {
           aValue = a.granth;
@@ -56,13 +62,6 @@ const SearchIndex = () => {
           const result = aValue - bValue;
           return sortConfig.direction === 'asc' ? result : -result;
         }
-      } else if (sortConfig.key === 'status') {
-        // Define sort order for status: searchable, in_progress, planned
-        const statusOrder = { 'searchable': 1, 'in_progress': 2, 'planned': 3 };
-        aValue = statusOrder[a.status] || 99;
-        bValue = statusOrder[b.status] || 99;
-        const result = aValue - bValue;
-        return sortConfig.direction === 'asc' ? result : -result;
       }
       return 0;
     });
@@ -85,42 +84,46 @@ const SearchIndex = () => {
   };
 
   const getContent = () => {
-    // Always show all content from both languages
-    return {
-      hindi: sortContent(searchableContent.hindi),
-      gujarati: sortContent(searchableContent.gujarati)
-    };
+    return sortContent(searchableContent);
   };
 
   const content = getContent();
 
-  const renderContentTable = (content, language) => {
+  const renderStatusBadge = (status) => {
+    if (!status) return '-';
+    return (
+      <span className={`status-badge ${status}`}>
+        {status === 'searchable' ? '✅ Searchable' :
+         status === 'in_progress' ? '🔄 In Progress' :
+         '📅 Planned'}
+      </span>
+    );
+  };
+
+  const renderContentTable = () => {
     if (!content || content.length === 0) return null;
 
     return (
       <div className="content-section">
-        <h3 className="language-header">
-          {language === 'hindi' ? 'Hindi Pravachans' : 'Gujarati Pravachans'}
-        </h3>
         <div className="table-container">
           <table className="content-table">
             <thead>
               <tr>
-                <th 
+                <th
                   className={getSortHeaderClass('name')}
                   onClick={() => handleSort('name')}
                   style={{ cursor: 'pointer' }}
                 >
                   Granth{getSortIcon('name')}
                 </th>
-                <th 
+                <th
                   className={getSortHeaderClass('year')}
                   onClick={() => handleSort('year')}
                   style={{ cursor: 'pointer' }}
                 >
                   Year/Series{getSortIcon('year')}
                 </th>
-                <th 
+                <th
                   className={getSortHeaderClass('count')}
                   onClick={() => handleSort('count')}
                   style={{ cursor: 'pointer' }}
@@ -128,24 +131,26 @@ const SearchIndex = () => {
                   Count{getSortIcon('count')}
                 </th>
                 <th>
-                  Status
+                  Hindi
+                </th>
+                <th>
+                  Gujarati
                 </th>
               </tr>
             </thead>
             <tbody>
               {content.map((item, index) => (
-                <tr key={`${language}-${index}`}>
+                <tr key={`${item.granth}-${item.series}-${index}`}>
                   <td className="granth-cell">{item.granth}</td>
                   <td className="series-cell">{item.series}</td>
                   <td className="count-cell">
                     {item.count ? item.count.toLocaleString() : 'Compiled'}
                   </td>
                   <td className="status-cell">
-                    <span className={`status-badge ${item.status}`}>
-                      {item.status === 'searchable' ? '✅ Searchable' : 
-                       item.status === 'in_progress' ? '🔄 In Progress' : 
-                       '📅 Planned'}
-                    </span>
+                    {renderStatusBadge(item.hindi)}
+                  </td>
+                  <td className="status-cell">
+                    {renderStatusBadge(item.gujarati)}
                   </td>
                 </tr>
               ))}
@@ -161,27 +166,33 @@ const SearchIndex = () => {
 
       <div className="stats-overview">
         <div className="overview-card">
-          <div className="overview-number">{stats.grandTotal.toLocaleString()}</div>
-          <div className="overview-label">Total Pravachans Available</div>
+          <div className="overview-number">{getContentByStatus('searchable').hindi.length + getContentByStatus('searchable').gujarati.length} Series</div>
+          <div className="overview-secondary">{stats.grandTotal.toLocaleString()} Pravachans</div>
         </div>
-        <div className="overview-card">
-          <div className="overview-number">{getContentByStatus('searchable').hindi.length + getContentByStatus('searchable').gujarati.length}</div>
-          <div className="overview-label">Pravachan Series Available</div>
+        <div className="overview-card language-split">
+          <div className="language-stat">
+            <div className="overview-number">{stats.hindiTotal.toLocaleString()}</div>
+            <div className="overview-label">Hindi</div>
+          </div>
+          <div className="language-divider"></div>
+          <div className="language-stat">
+            <div className="overview-number">{stats.gujaratiTotal.toLocaleString()}</div>
+            <div className="overview-label">Gujarati</div>
+          </div>
         </div>
         {(() => {
           const inProgressCount = getContentByStatus('in_progress').hindi.length + getContentByStatus('in_progress').gujarati.length;
           return inProgressCount > 0 ? (
             <div className="overview-card">
               <div className="overview-number">{inProgressCount}</div>
-              <div className="overview-label">Pravachan Series in Progress</div>
+              <div className="overview-label">Series in Progress</div>
             </div>
           ) : null;
         })()}
       </div>
 
       <div className="content-tables">
-        {renderContentTable(content.hindi, 'hindi')}
-        {renderContentTable(content.gujarati, 'gujarati')}
+        {renderContentTable()}
       </div>
 
       <div className="page-footer">
