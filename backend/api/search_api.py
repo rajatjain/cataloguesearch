@@ -175,7 +175,7 @@ class SearchRequest(BaseModel):
                 "page_number": 1
             },
             "Granth": {
-                "enabled": False,
+                "enabled": True,
                 "page_size": 20,
                 "page_number": 1
             }
@@ -285,6 +285,7 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                     min_score=0.6,
                     num_suggestions=3
                 )
+                log_handle.info(f"Suggestions: {suggestions}")
 
                 response = SearchResponse(
                     pravachan_results=SearchTypeResults(

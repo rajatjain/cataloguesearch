@@ -3,6 +3,97 @@ import { SimilarIcon, ExpandIcon, PdfIcon, ShareIcon } from './SharedComponents'
 import ShareModal from './ShareModal';
 
 // --- SEARCH RESULTS COMPONENTS ---
+
+// Granth Result Card for displaying scripture verses
+export const GranthResultCard = ({ result, isFirst }) => {
+    const cardClasses = isFirst
+        ? "bg-white p-4 rounded-lg border-2 border-sky-500 shadow-md"
+        : "bg-white p-3 rounded-md border border-slate-200 transition-shadow hover:shadow-sm";
+
+    const granth = result;
+    const verses = granth.verses || [];
+
+    return (
+        <div className={cardClasses}>
+            {/* Granth Header */}
+            <div className="border-b border-slate-200 pb-2 mb-3">
+                <h3 className="text-lg font-bold text-slate-800 mb-1">{granth.name}</h3>
+                <div className="text-sm text-slate-500 flex flex-wrap gap-x-3 gap-y-1">
+                    {granth.metadata?.language && <span>Language: {granth.metadata.language}</span>}
+                    {granth.metadata?.author && <span>Author: {granth.metadata.author}</span>}
+                    {granth.metadata?.anuyog && <span>Anuyog: {granth.metadata.anuyog}</span>}
+                    {granth.original_filename && <span className="text-slate-600">{granth.original_filename}</span>}
+                    {granth.metadata?.file_url && (
+                        <a
+                            href={granth.metadata.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 font-medium flex items-center"
+                        >
+                            <PdfIcon />View PDF
+                        </a>
+                    )}
+                </div>
+            </div>
+
+            {/* Verses */}
+            <div className="space-y-4">
+                {verses.map((verse, index) => (
+                    <div key={index} className="border-l-4 border-sky-200 pl-3">
+                        <div className="flex items-center gap-2 mb-2">
+                            {verse.type && (
+                                <span className="inline-block bg-sky-100 text-sky-800 text-xs font-semibold px-2 py-0.5 rounded">
+                                    {verse.type} {verse.type_num}
+                                </span>
+                            )}
+                            {verse.page_num && (
+                                <span className="text-xs text-slate-500">Page: {verse.page_num}</span>
+                            )}
+                            {verse.adhikar && (
+                                <span className="text-xs text-slate-600">Adhikar: {verse.adhikar}</span>
+                            )}
+                        </div>
+
+                        {verse.verse && (
+                            <div className="mb-2">
+                                <p className="text-base font-semibold text-slate-700 leading-relaxed whitespace-pre-wrap">{verse.verse}</p>
+                            </div>
+                        )}
+
+                        {verse.translation && (
+                            <div className="mb-2">
+                                <p className="text-sm font-medium text-slate-600 mb-1">Translation:</p>
+                                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">{verse.translation}</p>
+                            </div>
+                        )}
+
+                        {verse.meaning && (
+                            <div className="mb-2">
+                                <p className="text-sm font-medium text-slate-600 mb-1">Meaning:</p>
+                                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">{verse.meaning}</p>
+                            </div>
+                        )}
+
+                        {verse.teeka && (
+                            <div className="mb-2">
+                                <p className="text-sm font-medium text-slate-600 mb-1">Teeka:</p>
+                                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">{verse.teeka}</p>
+                            </div>
+                        )}
+
+                        {verse.bhavarth && (
+                            <div>
+                                <p className="text-sm font-medium text-slate-600 mb-1">Bhavarth:</p>
+                                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">{verse.bhavarth}</p>
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 export const ResultCard = ({ result, onFindSimilar, onExpand, isFirst, query, currentFilters, language, searchType }) => {
     const [showShareModal, setShowShareModal] = useState(false);
     const getHighlightedHTML = () => {
@@ -153,43 +244,47 @@ export const Pagination = ({ currentPage, totalPages, onPageChange }) => {
 };
 
 export const Tabs = ({ activeTab, setActiveTab, searchData, similarDocumentsData, onClearSimilar }) => {
-    const keywordCount = searchData?.total_results || 0;
-    const vectorCount = searchData?.total_vector_results || 0;
+    const pravachanCount = searchData?.pravachan_results?.total_hits || 0;
+    const granthCount = searchData?.granth_results?.total_hits || 0;
     const similarCount = similarDocumentsData?.total_results || 0;
     const hasSuggestions = searchData?.suggestions && searchData.suggestions.length > 0;
     const tabStyle = "px-3 py-2 font-semibold text-base rounded-t-md cursor-pointer transition-colors duration-200 flex items-center gap-2 border-b-2";
     const activeTabStyle = "bg-white text-sky-600 border-sky-500";
     const inactiveTabStyle = "bg-transparent text-slate-500 hover:text-slate-700 border-transparent";
-    
+
+    // Don't render tabs if there are no results and no similar documents
+    const hasAnyResults = (!hasSuggestions && (pravachanCount > 0 || granthCount > 0)) || similarDocumentsData;
+    if (!hasAnyResults) return null;
+
     return (
         <div className="flex border-b border-slate-200">
-            {searchData?.results?.length > 0 && (
-                <button 
-                    onClick={() => setActiveTab('keyword')} 
-                    className={`${tabStyle} ${activeTab === 'keyword' ? activeTabStyle : inactiveTabStyle}`}
+            {!hasSuggestions && pravachanCount > 0 && (
+                <button
+                    onClick={() => setActiveTab('pravachan')}
+                    className={`${tabStyle} ${activeTab === 'pravachan' ? activeTabStyle : inactiveTabStyle}`}
                 >
-                    Keyword Results 
-                    <span className="text-sm font-normal bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{keywordCount}</span>
+                    Pravachan Results
+                    <span className="text-sm font-normal bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{pravachanCount}</span>
                 </button>
             )}
-            {!hasSuggestions && vectorCount > 0 && (
-                <button 
-                    onClick={() => setActiveTab('vector')} 
-                    className={`${tabStyle} ${activeTab === 'vector' ? activeTabStyle : inactiveTabStyle}`}
+            {!hasSuggestions && granthCount > 0 && (
+                <button
+                    onClick={() => setActiveTab('granth')}
+                    className={`${tabStyle} ${activeTab === 'granth' ? activeTabStyle : inactiveTabStyle}`}
                 >
-                    Semantic Results 
-                    <span className="text-sm font-normal bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{vectorCount}</span>
+                    Granth Results
+                    <span className="text-sm font-normal bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{granthCount}</span>
                 </button>
             )}
             {similarDocumentsData && (
-                <button 
-                    onClick={() => setActiveTab('similar')} 
+                <button
+                    onClick={() => setActiveTab('similar')}
                     className={`${tabStyle} ${activeTab === 'similar' ? activeTabStyle : inactiveTabStyle}`}
                 >
-                    More Like This 
+                    More Like This
                     <span className="text-sm font-normal bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full">{similarCount}</span>
-                    <span 
-                        onClick={(e) => { e.stopPropagation(); onClearSimilar(); }} 
+                    <span
+                        onClick={(e) => { e.stopPropagation(); onClearSimilar(); }}
                         className="text-red-400 hover:text-red-600 font-bold text-lg ml-1"
                     >
                         &times;
@@ -200,9 +295,23 @@ export const Tabs = ({ activeTab, setActiveTab, searchData, similarDocumentsData
     );
 };
 
-export const SuggestionsCard = ({ suggestions, originalQuery, onSuggestionClick }) => {
-    if (!suggestions || suggestions.length === 0) return null;
+export const SuggestionsCard = ({ suggestions, originalQuery, onSuggestionClick, hasResults }) => {
+    // If there are results, don't show this card at all
+    if (hasResults) return null;
 
+    // If there are no results and no suggestions, show simple "no results" message
+    if (!suggestions || suggestions.length === 0) {
+        return (
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg mb-4">
+                <div className="text-base text-slate-700 text-center">
+                    <p>No results found for "<span className="font-bold text-slate-900">{originalQuery}</span>".</p>
+                    <p className="text-sm text-slate-500 mt-2">Try different keywords or adjust your filters.</p>
+                </div>
+            </div>
+        );
+    }
+
+    // If there are suggestions, show them
     return (
         <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg mb-4">
             <div className="text-base text-yellow-800">
@@ -256,7 +365,7 @@ export const SimilarSourceInfoCard = ({ sourceDoc }) => {
 
 export const ResultsList = ({ results, totalResults, pageSize, currentPage, onPageChange, resultType, onFindSimilar, onExpand, searchType, query, currentFilters, language }) => {
     const totalPages = Math.ceil(totalResults / pageSize);
-    
+
     return (
         <div className="bg-white p-3 md:p-4 rounded-b-md">
             <div className="text-sm text-slate-500 mb-3">Showing {results.length} of {totalResults} results.</div>
@@ -272,6 +381,26 @@ export const ResultsList = ({ results, totalResults, pageSize, currentPage, onPa
                         currentFilters={currentFilters}
                         language={language}
                         searchType={searchType}
+                    />
+                ))}
+            </div>
+            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={onPageChange} />
+        </div>
+    );
+};
+
+export const GranthResultsList = ({ results, totalResults, pageSize, currentPage, onPageChange }) => {
+    const totalPages = Math.ceil(totalResults / pageSize);
+
+    return (
+        <div className="bg-white p-3 md:p-4 rounded-b-md">
+            <div className="text-sm text-slate-500 mb-3">Showing {results.length} of {totalResults} granth results.</div>
+            <div className="space-y-3">
+                {results.map((result, index) => (
+                    <GranthResultCard
+                        key={`granth-${result.granth_id || index}`}
+                        result={result}
+                        isFirst={currentPage === 1 && index === 0}
                     />
                 ))}
             </div>

@@ -62,7 +62,19 @@ class GranthIndexer:
         Function 1: Store the complete Granth object in granth_index
         """
         log_handle.info(f"Storing Granth object in granth_index with ID: {granth_id}")
-        
+
+        # Convert language to code format (hindi -> hi, gujarati -> gu)
+        language_to_code = {
+            "hindi": "hi",
+            "gujarati": "gu",
+            "hi": "hi",
+            "gu": "gu"
+        }
+        language_code = language_to_code.get(
+            granth._metadata._language.lower() if granth._metadata._language else "",
+            "hi"
+        )
+
         # Convert Granth to the expected document format for granth_index
         granth_doc = {
             "granth_id": granth_id,
@@ -70,7 +82,7 @@ class GranthIndexer:
             "name": granth._name,
             "metadata": {
                 "anuyog": granth._metadata._anuyog,
-                "language": granth._metadata._language,
+                "language": language_code,
                 "author": granth._metadata._author,
                 "teekakar": granth._metadata._teekakar,
                 "file_url": granth._metadata._file_url

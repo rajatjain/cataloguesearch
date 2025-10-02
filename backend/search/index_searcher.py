@@ -126,13 +126,24 @@ class IndexSearcher:
                     }
                 }
 
+            # Build highlight configuration for nested fields
+            highlight_fields = {}
+            for field in search_fields:
+                highlight_fields[field] = {}
+
             main_query = {
                 "nested": {
                     "path": "verses",
                     "query": inner_query,
-                    "inner_hits": {}
+                    "inner_hits": {
+                        "highlight": {
+                            "fields": highlight_fields
+                        }
+                    }
                 }
             }
+            # For nested queries, we don't need root-level highlighting
+            highlight_config = None
         else:
             # For regular search index (non-nested fields)
             if exact_match:
@@ -155,20 +166,20 @@ class IndexSearcher:
                     }
                 }
 
-        # Build highlight configuration for all search fields
-        highlight_fields = {}
-        for field in search_fields:
-            highlight_fields[field] = {
-                "pre_tags": ["<em>"],
-                "post_tags": ["</em>"],
-                "number_of_fragments": 0,
-                "type": "unified",
-                "highlight_query": main_query
-            }
+            # Build highlight configuration for all search fields
+            highlight_fields = {}
+            for field in search_fields:
+                highlight_fields[field] = {
+                    "pre_tags": ["<em>"],
+                    "post_tags": ["</em>"],
+                    "number_of_fragments": 0,
+                    "type": "unified",
+                    "highlight_query": main_query
+                }
 
-        highlight_config = {
-            "fields": highlight_fields
-        }
+            highlight_config = {
+                "fields": highlight_fields
+            }
 
         # Build the final query body
         bool_query = {
@@ -192,9 +203,12 @@ class IndexSearcher:
             "query": {
                 "bool": bool_query
             },
-            "highlight": highlight_config,
             "track_total_hits": 1000
         }
+
+        # Only add root-level highlight for non-nested queries
+        if highlight_config:
+            query_body["highlight"] = highlight_config
 
         # Add filters
         filters = []
@@ -473,27 +487,28 @@ class IndexSearcher:
             matching_verses = []
             inner_hits = hit.get('inner_hits', {})
 
+            # Handle content snippet from highlighting in inner_hits
+            content_snippet = ""
+            highlighted_fragments = []
+
             if inner_hits and 'verses' in inner_hits:
                 # Get the matching nested documents from inner_hits
                 verse_hits = inner_hits['verses'].get('hits', {}).get('hits', [])
                 for verse_hit in verse_hits:
                     matching_verses.append(verse_hit.get('_source', {}))
+
+                    # Get highlights from inner_hits
+                    verse_highlight = verse_hit.get('highlight', {})
+                    if verse_highlight:
+                        for field in search_fields:
+                            if field in verse_highlight:
+                                highlighted_fragments.extend(verse_highlight[field])
             else:
                 # Fallback: if no inner_hits, use all verses (shouldn't happen with nested query)
                 matching_verses = source.get('verses', [])
 
-            # Handle content snippet from highlighting across multiple fields
-            content_snippet = ""
-            highlight = hit.get('highlight', {})
-
-            if highlight:
-                # Collect highlighted content from all fields
-                highlighted_fragments = []
-                for field in search_fields:
-                    if field in highlight:
-                        highlighted_fragments.extend(highlight[field])
-                if highlighted_fragments:
-                    content_snippet = "...".join(highlighted_fragments)
+            if highlighted_fragments:
+                content_snippet = "...".join(highlighted_fragments)
 
             # If no highlighting, fall back to extracting content from matching verses
             if not content_snippet and matching_verses:
@@ -813,6 +828,7 @@ class IndexSearcher:
         Returns:
             A list of corrected query strings. Returns an empty list if no corrections are found.
         """
+        log_handle.info(f"Getting spelling suggestions for {text} on index {index_name}")
         if not text:
             return []
 

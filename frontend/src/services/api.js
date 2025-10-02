@@ -16,16 +16,25 @@ export const api = {
     search: async (requestPayload) => {
         try {
             const response = await fetch(`${API_BASE_URL}/search`, {
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestPayload),
             });
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
-            return { ...data, results: data.results || [], vector_results: data.vector_results || [] };
-        } catch (error) { 
-            console.error("API Error: Could not perform search", error); 
-            return { total_results: 0, results: [], total_vector_results: 0, vector_results: [] }; 
+            // Return new SearchResponse format with pravachan_results and granth_results
+            return {
+                pravachan_results: data.pravachan_results || { results: [], total_hits: 0, page_size: 20, page_number: 1 },
+                granth_results: data.granth_results || { results: [], total_hits: 0, page_size: 20, page_number: 1 },
+                suggestions: data.suggestions || []
+            };
+        } catch (error) {
+            console.error("API Error: Could not perform search", error);
+            return {
+                pravachan_results: { results: [], total_hits: 0, page_size: 20, page_number: 1 },
+                granth_results: { results: [], total_hits: 0, page_size: 20, page_number: 1 },
+                suggestions: []
+            };
         }
     },
     
