@@ -456,3 +456,68 @@ async def get_context(request: Request, chunk_id: str, language: str = Query("hi
     except Exception as e:
         log_handle.exception(f"An error occurred while fetching context: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
+@app.get("/api/granth/verse", response_model=Dict[str, Any])
+async def get_granth_verse(request: Request, original_filename: str = Query(...), verse_seq_num: int = Query(...)):
+    """
+    Fetches the full verse from granth_index for a given original_filename and verse_seq_num.
+    """
+    try:
+        config = request.app.state.config
+        opensearch_client = get_opensearch_client(config)
+        granth_index_name = config.OPENSEARCH_GRANTH_INDEX_NAME
+
+        log_handle.info(f"Received request for granth verse: original_filename={original_filename}, verse_seq_num={verse_seq_num}")
+
+        # Search for the granth document by original_filename
+        # Use match query instead of term query to handle slight variations
+        search_body = {
+            "query": {
+                "match": {
+                    "original_filename": original_filename
+                }
+            },
+            "size": 1
+        }
+
+        response = opensearch_client.search(
+            index=granth_index_name,
+            body=search_body
+        )
+
+        hits = response.get("hits", {}).get("hits", [])
+        if not hits:
+            raise HTTPException(status_code=404, detail=f"Granth document not found: {original_filename}")
+
+        granth_doc = hits[0]["_source"]
+        verses = granth_doc.get("verses", [])
+
+        # Find the verse with matching seq_num
+        matching_verse = None
+        for verse in verses:
+            if verse.get("seq_num") == verse_seq_num:
+                matching_verse = verse
+                break
+
+        if not matching_verse:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Verse with seq_num {verse_seq_num} not found in document {original_filename}"
+            )
+
+        # Return the verse along with granth metadata
+        result = {
+            "granth_id": granth_doc.get("granth_id"),
+            "granth_name": granth_doc.get("name"),
+            "metadata": granth_doc.get("metadata", {}),
+            "verse": matching_verse
+        }
+
+        log_handle.info(f"Successfully retrieved verse {verse_seq_num} from granth {original_filename}")
+        return JSONResponse(content=result, status_code=200)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_handle.exception(f"An error occurred while fetching granth verse: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
