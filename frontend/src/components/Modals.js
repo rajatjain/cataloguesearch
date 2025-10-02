@@ -26,11 +26,9 @@ export const GranthVerseModal = ({ verse, granthName, metadata, onClose, isLoadi
                 <div className="p-4 border-b border-slate-200 flex justify-between items-center">
                     <div>
                         <h2 className="text-xl font-bold text-slate-800">{granthName}</h2>
-                        {metadata && (
+                        {metadata && metadata.author && (
                             <div className="text-sm text-slate-500 flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                                {metadata.language && <span>Language: {metadata.language}</span>}
-                                {metadata.author && <span>Author: {metadata.author}</span>}
-                                {metadata.anuyog && <span>Anuyog: {metadata.anuyog}</span>}
+                                <span>Author: {metadata.author}</span>
                             </div>
                         )}
                     </div>
