@@ -207,22 +207,32 @@ def test_api_search_endpoint(api_server):
         "exact_match": False,
         "exclude_words": [],
         "categories": {},
-        "page_size": 10,
-        "page_number": 1,
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 10,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 10,
+                "page_number": 1
+            }
+        },
         "enable_reranking": True
     }
-    
+
     response = requests.post(
         f"http://{api_server.host}:{api_server.port}/api/search",
         json=search_payload
     )
-    
+
     assert response.status_code == 200
     data = response.json()
-    
+
     # Check response structure
     validate_result_schema(data, True)
-    log_handle.info(f"✓ API search test passed - found {data['total_results']} lexical results and {data.get('total_vector_results', 0)} vector results")
+    log_handle.info(f"✓ API search test passed - found {data['pravachan_results']['total_hits']} pravachan results")
 
 
 def test_api_metadata_endpoint(api_server):
@@ -266,7 +276,7 @@ def test_api_exact_phrase_search(api_server):
             "expected_file": "jaipur_gujarati.pdf"
         }
     ]
-    
+
     for i, test_case in enumerate(test_cases):
         search_payload = {
             "query": test_case["query"],
@@ -274,23 +284,33 @@ def test_api_exact_phrase_search(api_server):
             "exact_match": True,
             "exclude_words": [],
             "categories": {},
-            "page_size": 10,
-            "page_number": 1,
+            "search_types": {
+                "Pravachan": {
+                    "enabled": True,
+                    "page_size": 10,
+                    "page_number": 1
+                },
+                "Granth": {
+                    "enabled": False,
+                    "page_size": 10,
+                    "page_number": 1
+                }
+            },
             "enable_reranking": True
         }
-        
+
         response = requests.post(
             f"http://{api_server.host}:{api_server.port}/api/search",
             json=search_payload
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         log_handle.info(f"response: {json_dumps(data, truncate_fields=['vector_embedding'])}")
         validate_result_schema(data, True)
 
-        assert len(data["results"]) > 0
-        for result in data["results"]:
+        assert len(data["pravachan_results"]["results"]) > 0
+        for result in data["pravachan_results"]["results"]:
             fname = result["filename"]
             assert fname == test_case["expected_file"]
 
@@ -299,7 +319,7 @@ def test_api_exclude_words(api_server):
     """Test the /api/search endpoint with exclude words functionality."""
     query = "हिंदू पौराणिक"
     language = "hi"
-    
+
     # First test: regular search without exclude words - should return 2 results
     regular_search_payload = {
         "query": query,
@@ -307,27 +327,37 @@ def test_api_exclude_words(api_server):
         "exact_match": False,
         "exclude_words": [],
         "categories": {},
-        "page_size": 10,
-        "page_number": 1,
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 10,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 10,
+                "page_number": 1
+            }
+        },
         "enable_reranking": True
     }
-    
+
     response = requests.post(
         f"http://{api_server.host}:{api_server.port}/api/search",
         json=regular_search_payload
     )
-    
+
     assert response.status_code == 200
     data = response.json()
     log_handle.info(f"Regular search response: {json_dumps(data, truncate_fields=['vector_embedding'])}")
-    
+
     # Check response structure
     validate_result_schema(data, True)
 
     # Should return 2 results
-    regular_result_count = data["total_results"]
+    regular_result_count = data["pravachan_results"]["total_hits"]
     assert regular_result_count == 3, f"Expected 2 results for regular search, got {regular_result_count}"
-    
+
     # Second test: search with exclude words - should return only 1 result
     exclude_search_payload = {
         "query": query,
@@ -335,27 +365,37 @@ def test_api_exclude_words(api_server):
         "exact_match": False,
         "exclude_words": ["हंपी"],
         "categories": {},
-        "page_size": 10,
-        "page_number": 1,
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 10,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 10,
+                "page_number": 1
+            }
+        },
         "enable_reranking": True
     }
-    
+
     response = requests.post(
         f"http://{api_server.host}:{api_server.port}/api/search",
         json=exclude_search_payload
     )
-    
+
     assert response.status_code == 200
     data = response.json()
     log_handle.info(f"Exclude words search response: {json_dumps(data, truncate_fields=['vector_embedding'])}")
-    
+
     # Check response structure
     validate_result_schema(data, True)
 
     # Should return only 1 result after excluding "हंपी"
-    exclude_result_count = data["total_results"]
+    exclude_result_count = data["pravachan_results"]["total_hits"]
     assert exclude_result_count == 1, f"Expected 1 result after excluding 'हंपी', got {exclude_result_count}"
-    
+
     log_handle.info(f"✓ Exclude words test passed - regular search: {regular_result_count} results, exclude search: {exclude_result_count} results")
 
 
@@ -368,29 +408,39 @@ def test_api_context_endpoint(api_server):
         "exact_match": False,
         "exclude_words": [],
         "categories": {},
-        "page_size": 1,
-        "page_number": 1,
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 1,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 1,
+                "page_number": 1
+            }
+        },
         "enable_reranking": True
     }
-    
+
     search_response = requests.post(
         f"http://{api_server.host}:{api_server.port}/api/search",
         json=search_payload
     )
-    
+
     assert search_response.status_code == 200
     search_data = search_response.json()
-    
-    if search_data["total_results"] > 0:
+
+    if search_data["pravachan_results"]["total_hits"] > 0:
         # Get chunk_id from first result
-        chunk_id = search_data["results"][0].get("id") or search_data["results"][0].get("_id")
-        
+        chunk_id = search_data["pravachan_results"]["results"][0].get("id") or search_data["pravachan_results"]["results"][0].get("_id")
+
         if chunk_id:
             # Test context endpoint
             context_response = requests.get(
                 f"http://{api_server.host}:{api_server.port}/api/context/{chunk_id}?language=hi"
             )
-            
+
             if context_response.status_code == 200:
                 context_data = context_response.json()
                 assert "current" in context_data
@@ -412,35 +462,45 @@ def test_is_lexical_query(api_server):
         "exact_match": False,
         "exclude_words": [],
         "categories": {},
-        "page_size": 10,
-        "page_number": 1,
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 10,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 10,
+                "page_number": 1
+            }
+        },
         "enable_reranking": True
     }
-    
+
     response_1 = requests.post(
         f"http://{api_server.host}:{api_server.port}/api/search",
         json=search_payload_1
     )
-    
+
     assert response_1.status_code == 200
     data_1 = response_1.json()
     log_handle.info(f"Response for 'इंदौर का इतिहास': {json_dumps(data_1, truncate_fields=['vector_embedding'])}")
-    
+
     # Validate response structure for lexical search
     validate_result_schema(data_1, True)
-    
+
     # Should have lexical results and specifically from indore_hindi.pdf
-    assert data_1["total_results"] > 0, "Expected lexical results for 'इंदौर का इतिहास'"
-    
+    assert data_1["pravachan_results"]["total_hits"] > 0, "Expected lexical results for 'इंदौर का इतिहास'"
+
     # Verify results are from indore_hindi.pdf
     found_indore_file = False
-    for result in data_1["results"]:
+    for result in data_1["pravachan_results"]["results"]:
         if "indore_hindi.pdf" in result["filename"]:
             found_indore_file = True
             break
     assert found_indore_file, "Expected to find results from indore_hindi.pdf"
-    
-    # Test case 2: "इंदौर का इतिहास?" - should trigger vector search  
+
+    # Test case 2: "इंदौर का इतिहास?" - should trigger vector search
     # (has punctuation '?', so is_lexical_query should return False)
     search_payload_2 = {
         "query": "इंदौर का इतिहास?",
@@ -448,8 +508,18 @@ def test_is_lexical_query(api_server):
         "exact_match": False,
         "exclude_words": [],
         "categories": {},
-        "page_size": 10,
-        "page_number": 1,
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 10,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 10,
+                "page_number": 1
+            }
+        },
         "enable_reranking": True
     }
     
@@ -457,9 +527,11 @@ def test_is_lexical_query(api_server):
         f"http://{api_server.host}:{api_server.port}/api/search",
         json=search_payload_2
     )
-    
-    assert response_2.status_code == 200
+    log_handle.info(f"Response: {response_2}")
+    # log_handle.info(f"Response: {json_dumps(data_2, truncate_fields=['vector_embedding'])}")
     data_2 = response_2.json()
+
+    assert response_2.status_code == 200
     log_handle.info(f"Response for 'इंदौर का इतिहास?': {json_dumps(data_2, truncate_fields=['vector_embedding'])}")
     
     # Validate response structure for vector search
@@ -476,27 +548,37 @@ def test_is_lexical_query(api_server):
         "exact_match": False,
         "exclude_words": [],
         "categories": {},
-        "page_size": 10,
-        "page_number": 1,
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 10,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 10,
+                "page_number": 1
+            }
+        },
         "enable_reranking": True
     }
-    
+
     response_3 = requests.post(
         f"http://{api_server.host}:{api_server.port}/api/search",
         json=search_payload_3
     )
-    
+
     assert response_3.status_code == 200
     data_3 = response_3.json()
     log_handle.info(f"Response for 'સોનગઢ ઇતિહાસ': {json_dumps(data_3, truncate_fields=['vector_embedding'])}")
-    
+
     # Validate response structure for lexical search
     validate_result_schema(data_3, True)
-    
+
     # Should have lexical results
-    assert data_3["total_results"] > 0, "Expected lexical results for 'સોનગઢ ઇતિહાસ'"
-    
-    # Test case 4: "સોનગઢનો ઇતિહાસ?" - should trigger vector search  
+    assert data_3["pravachan_results"]["total_hits"] > 0, "Expected lexical results for 'સોનગઢ ઇતિહાસ'"
+
+    # Test case 4: "સોનગઢનો ઇતિહાસ?" - should trigger vector search
     # (has punctuation '?', so is_lexical_query should return False)
     search_payload_4 = {
         "query": "સોનગઢનો ઇતિહાસ?",
@@ -504,8 +586,18 @@ def test_is_lexical_query(api_server):
         "exact_match": False,
         "exclude_words": [],
         "categories": {},
-        "page_size": 10,
-        "page_number": 1,
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 10,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 10,
+                "page_number": 1
+            }
+        },
         "enable_reranking": True
     }
     
@@ -532,27 +624,37 @@ def test_is_lexical_query(api_server):
         "exact_match": False,
         "exclude_words": [],
         "categories": {},
-        "page_size": 10,
-        "page_number": 1,
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 10,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 10,
+                "page_number": 1
+            }
+        },
         "enable_reranking": True
     }
-    
+
     response_5 = requests.post(
         f"http://{api_server.host}:{api_server.port}/api/search",
         json=search_payload_5
     )
-    
+
     assert response_5.status_code == 200
     data_5 = response_5.json()
     log_handle.info(f"Response for 'हंपी के बारे में कुछ बताइए': {json_dumps(data_5, truncate_fields=['vector_embedding'])}")
-    
+
     # Validate response structure for vector search
     validate_result_schema(data_5, False)
-    
+
     # Should have vector results
     assert data_5["total_vector_results"] > 0, "Expected vector results for 'हंपी के बारे में कुछ बताइए'"
-    
-    log_handle.info(f"is_lexical_query test passed - Hindi lexical: {data_1['total_results']}, Hindi vector: {data_2['total_vector_results']}, Gujarati lexical: {data_3['total_results']}, Gujarati vector: {data_4['total_vector_results']}, Hindi question: {data_5['total_vector_results']} results")
+
+    log_handle.info(f"is_lexical_query test passed - Hindi lexical: {data_1['pravachan_results']['total_hits']}, Hindi vector: {data_2['total_vector_results']}, Gujarati lexical: {data_3['pravachan_results']['total_hits']}, Gujarati vector: {data_4['total_vector_results']}, Hindi question: {data_5['total_vector_results']} results")
 
 
 def test_api_spell_suggestion_search(api_server):
@@ -571,7 +673,7 @@ def test_api_spell_suggestion_search(api_server):
             "expected_file": "indore_gujarati.pdf"
         }
     ]
-    
+
     for i, test_case in enumerate(test_cases):
         # Test case 1: Search for misspelled word - should return no results but suggest correct spelling
         search_payload_1 = {
@@ -580,29 +682,39 @@ def test_api_spell_suggestion_search(api_server):
             "exact_match": False,
             "exclude_words": [],
             "categories": {},
-            "page_size": 10,
-            "page_number": 1,
+            "search_types": {
+                "Pravachan": {
+                    "enabled": True,
+                    "page_size": 10,
+                    "page_number": 1
+                },
+                "Granth": {
+                    "enabled": False,
+                    "page_size": 10,
+                    "page_number": 1
+                }
+            },
             "enable_reranking": True
         }
-        
+
         response_1 = requests.post(
             f"http://{api_server.host}:{api_server.port}/api/search",
             json=search_payload_1
         )
-        
+
         assert response_1.status_code == 200
         data_1 = response_1.json()
         log_handle.info(f"Response for '{test_case['misspelled_query']}': {json_dumps(data_1, truncate_fields=['vector_embedding'])}")
-        
+
         # Should have no results but contain suggestions
-        assert data_1["total_results"] == 0, f"Expected no results for misspelled '{test_case['misspelled_query']}'"
+        assert data_1["pravachan_results"]["total_hits"] == 0, f"Expected no results for misspelled '{test_case['misspelled_query']}'"
         assert "suggestions" in data_1, "Expected suggestions in response"
         assert len(data_1["suggestions"]) > 0, "Expected at least one suggestion"
-        
+
         # Check if expected suggestion is in suggestions
         suggested_words = data_1["suggestions"]
         assert test_case["expected_suggestion"] in suggested_words, f"Expected '{test_case['expected_suggestion']}' in suggestions"
-        
+
         # Test case 2: Search for the suggested word - should return results from expected file
         search_payload_2 = {
             "query": test_case["expected_suggestion"],
@@ -610,36 +722,46 @@ def test_api_spell_suggestion_search(api_server):
             "exact_match": False,
             "exclude_words": [],
             "categories": {},
-            "page_size": 10,
-            "page_number": 1,
+            "search_types": {
+                "Pravachan": {
+                    "enabled": True,
+                    "page_size": 10,
+                    "page_number": 1
+                },
+                "Granth": {
+                    "enabled": False,
+                    "page_size": 10,
+                    "page_number": 1
+                }
+            },
             "enable_reranking": True
         }
-        
+
         response_2 = requests.post(
             f"http://{api_server.host}:{api_server.port}/api/search",
             json=search_payload_2
         )
-        
+
         assert response_2.status_code == 200
         data_2 = response_2.json()
         log_handle.info(f"Response for '{test_case['expected_suggestion']}': {json_dumps(data_2, truncate_fields=['vector_embedding'])}")
-        
+
         # Should have results for the correctly spelled word
-        assert data_2["total_results"] > 0, f"Expected results for correctly spelled '{test_case['expected_suggestion']}'"
-        
+        assert data_2["pravachan_results"]["total_hits"] > 0, f"Expected results for correctly spelled '{test_case['expected_suggestion']}'"
+
         # Validate response structure
         validate_result_schema(data_2, True)
-        
+
         # Validate that results come from expected file
         found_expected_file = False
-        for result in data_2["results"]:
+        for result in data_2["pravachan_results"]["results"]:
             if test_case["expected_file"] in result["filename"]:
                 found_expected_file = True
                 break
         assert found_expected_file, f"Expected to find results from {test_case['expected_file']}"
-        
-        log_handle.info(f"✓ {test_case['language']} spell suggestion test passed - '{test_case['misspelled_query']}' returned {data_1['total_results']} results with {len(data_1.get('suggestions', []))} suggestions, '{test_case['expected_suggestion']}' returned {data_2['total_results']} results from {test_case['expected_file']}")
-    
+
+        log_handle.info(f"✓ {test_case['language']} spell suggestion test passed - '{test_case['misspelled_query']}' returned {data_1['pravachan_results']['total_hits']} results with {len(data_1.get('suggestions', []))} suggestions, '{test_case['expected_suggestion']}' returned {data_2['pravachan_results']['total_hits']} results from {test_case['expected_file']}")
+
     log_handle.info("✓ All spell suggestion tests passed")
 
 
@@ -648,7 +770,7 @@ def test_get_context(api_server):
     test_cases = [
         {
             "query": "અહમદનગર",
-            "language": "gu", 
+            "language": "gu",
             "expected_file": "hampi_gujarati.pdf"
         },
         {
@@ -657,7 +779,7 @@ def test_get_context(api_server):
             "expected_file": "hampi_hindi.pdf"
         }
     ]
-    
+
     for i, test_case in enumerate(test_cases):
         # Step 1: Issue search query to get document_id
         search_payload = {
@@ -666,27 +788,37 @@ def test_get_context(api_server):
             "exact_match": False,
             "exclude_words": [],
             "categories": {},
-            "page_size": 10,
-            "page_number": 1,
+            "search_types": {
+                "Pravachan": {
+                    "enabled": True,
+                    "page_size": 10,
+                    "page_number": 1
+                },
+                "Granth": {
+                    "enabled": False,
+                    "page_size": 10,
+                    "page_number": 1
+                }
+            },
             "enable_reranking": True
         }
-        
+
         search_response = requests.post(
             f"http://{api_server.host}:{api_server.port}/api/search",
             json=search_payload
         )
-        
+
         assert search_response.status_code == 200
         search_data = search_response.json()
         log_handle.info(f"Search response for '{test_case['query']}': {json_dumps(search_data, truncate_fields=['vector_embedding'])}")
-        
+
         # Validate we have search results
-        assert search_data["total_results"] > 0, f"Expected results for '{test_case['query']}'"
-        
+        assert search_data["pravachan_results"]["total_hits"] > 0, f"Expected results for '{test_case['query']}'"
+
         # Validate results come from expected file
-        first_result = search_data["results"][0]
+        first_result = search_data["pravachan_results"]["results"][0]
         assert test_case["expected_file"] in first_result["filename"], f"Expected result from {test_case['expected_file']}"
-        
+
         # Step 2: Get document_id from first result
         document_id = first_result.get("document_id") or first_result.get("id") or first_result.get("_id")
         assert document_id is not None, "Expected document_id in search result"
@@ -740,7 +872,7 @@ def test_get_similar_documents(api_server):
             "language": "hi"
         }
     ]
-    
+
     for i, test_case in enumerate(test_cases):
         # Step 1: Issue search query to get search results
         search_payload = {
@@ -749,16 +881,26 @@ def test_get_similar_documents(api_server):
             "exact_match": False,
             "exclude_words": [],
             "categories": {},
-            "page_size": 10,
-            "page_number": 1,
+            "search_types": {
+                "Pravachan": {
+                    "enabled": True,
+                    "page_size": 10,
+                    "page_number": 1
+                },
+                "Granth": {
+                    "enabled": False,
+                    "page_size": 10,
+                    "page_number": 1
+                }
+            },
             "enable_reranking": True
         }
-        
+
         search_response = requests.post(
             f"http://{api_server.host}:{api_server.port}/api/search",
             json=search_payload
         )
-        
+
         assert search_response.status_code == 200
         search_data = search_response.json()
         log_handle.info(f"Search response for '{test_case['query']}': {json_dumps(search_data, truncate_fields=['vector_embedding'])}")
@@ -836,12 +978,26 @@ def test_cache_invalidation(api_server):
 
 
 def validate_result_schema(data, lexical_results):
-    keys = ["results", "total_results", "vector_results", "total_vector_results"]
-    for key in keys:
-        assert key in data
     if lexical_results:
-        assert data["vector_results"] == []
-        assert data["total_vector_results"] == 0
+        # Check for lexical results structure
+        assert "pravachan_results" in data, "Expected pravachan_results in response"
+        assert "granth_results" in data, "Expected granth_results in response"
+
+        # Validate pravachan_results structure
+        pravachan_keys = ["results", "total_hits", "page_size", "page_number"]
+        for key in pravachan_keys:
+            assert key in data["pravachan_results"], f"Expected {key} in pravachan_results"
+
+        # Validate granth_results structure
+        granth_keys = ["results", "total_hits", "page_size", "page_number"]
+        for key in granth_keys:
+            assert key in data["granth_results"], f"Expected {key} in granth_results"
     else:
-        assert data["results"] == []
-        assert data["total_results"] == 0
+        # Check for vector results structure
+        vector_keys = ["total_results", "page_size", "page_number", "results", "vector_results", "total_vector_results"]
+        for key in vector_keys:
+            assert key in data, f"Expected {key} in vector response"
+
+        # For vector queries, results and total_results should be 0
+        assert data["results"] == [], "Expected empty results for vector query"
+        assert data["total_results"] == 0, "Expected 0 total_results for vector query"
