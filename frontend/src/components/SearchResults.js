@@ -94,7 +94,7 @@ export const GranthResultCard = ({ result, isFirst }) => {
     );
 };
 
-export const ResultCard = ({ result, onFindSimilar, onExpand, isFirst, query, currentFilters, language, searchType }) => {
+export const ResultCard = ({ result, onFindSimilar, onExpand, onExpandGranth, resultType, isFirst, query, currentFilters, language, searchType }) => {
     const [showShareModal, setShowShareModal] = useState(false);
     const getHighlightedHTML = () => {
         const content = result.content_snippet || '';
@@ -105,6 +105,22 @@ export const ResultCard = ({ result, onFindSimilar, onExpand, isFirst, query, cu
     const cardClasses = isFirst
         ? "bg-white p-4 rounded-lg border-2 border-sky-500 shadow-md"
         : "bg-white p-3 rounded-md border border-slate-200 transition-shadow hover:shadow-sm";
+
+    const handleExpandClick = () => {
+        if (resultType === 'granth') {
+            // For Granth results, extract original_filename and verse_seq_num from metadata
+            const originalFilename = result.original_filename;
+            const verseSeqNum = result.metadata?.verse_seq_num;
+            if (originalFilename && verseSeqNum !== undefined && onExpandGranth) {
+                onExpandGranth(originalFilename, verseSeqNum);
+            }
+        } else {
+            // For Pravachan and other results, use document_id
+            if (onExpand) {
+                onExpand(result.document_id);
+            }
+        }
+    };
 
     return (
         <div className={cardClasses}>
@@ -128,7 +144,7 @@ export const ResultCard = ({ result, onFindSimilar, onExpand, isFirst, query, cu
                     <button onClick={() => setShowShareModal(true)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center">
                         <ShareIcon />Share
                     </button>
-                    <button onClick={() => onExpand(result.document_id)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center">
+                    <button onClick={handleExpandClick} className="text-sky-600 hover:text-sky-800 font-medium flex items-center">
                         <ExpandIcon />Expand
                     </button>
                     <button onClick={() => onFindSimilar(result)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center">
@@ -139,9 +155,9 @@ export const ResultCard = ({ result, onFindSimilar, onExpand, isFirst, query, cu
             <div className={`${isFirst ? 'text-lg' : 'text-base'} text-slate-700 leading-relaxed font-sans`}>
                 <p className="whitespace-pre-wrap" dangerouslySetInnerHTML={getHighlightedHTML()} />
             </div>
-            
+
             {showShareModal && (
-                <ShareModal 
+                <ShareModal
                     result={result}
                     query={query}
                     currentFilters={currentFilters}
@@ -363,7 +379,7 @@ export const SimilarSourceInfoCard = ({ sourceDoc }) => {
     );
 };
 
-export const ResultsList = ({ results, totalResults, pageSize, currentPage, onPageChange, resultType, onFindSimilar, onExpand, searchType, query, currentFilters, language }) => {
+export const ResultsList = ({ results, totalResults, pageSize, currentPage, onPageChange, resultType, onFindSimilar, onExpand, onExpandGranth, searchType, query, currentFilters, language }) => {
     const totalPages = Math.ceil(totalResults / pageSize);
 
     return (
@@ -376,6 +392,8 @@ export const ResultsList = ({ results, totalResults, pageSize, currentPage, onPa
                         result={result}
                         onFindSimilar={onFindSimilar}
                         onExpand={onExpand}
+                        onExpandGranth={onExpandGranth}
+                        resultType={resultType}
                         isFirst={currentPage === 1 && index === 0}
                         query={query}
                         currentFilters={currentFilters}

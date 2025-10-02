@@ -5,7 +5,7 @@ import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from
 import { Navigation, Header } from './components/Navigation';
 import { SearchBar, MetadataFilters, AdvancedSearch, SearchOptions } from './components/SearchInterface';
 import { ResultsList, SuggestionsCard, Tabs, SimilarSourceInfoCard } from './components/SearchResults';
-import { ExpandModal, WelcomeModal } from './components/Modals';
+import { ExpandModal, GranthVerseModal, WelcomeModal } from './components/Modals';
 import { FeedbackForm } from './components/Feedback';
 import About from './components/About';
 import WhatsNew from './components/WhatsNew';
@@ -227,6 +227,8 @@ const AppContent = () => {
     const [sourceDocForSimilarity, setSourceDocForSimilarity] = useState(null);
     const [modalData, setModalData] = useState(null);
     const [isContextLoading, setIsContextLoading] = useState(false);
+    const [granthVerseData, setGranthVerseData] = useState(null);
+    const [isGranthVerseLoading, setIsGranthVerseLoading] = useState(false);
     const [showWelcomePopup, setShowWelcomePopup] = useState(false);
     const [showTipsModal, setShowTipsModal] = useState(false);
     const PAGE_SIZE = 20;
@@ -359,14 +361,24 @@ const AppContent = () => {
     };
 
     const handleExpand = async (chunkId) => {
-        setIsContextLoading(true); 
+        setIsContextLoading(true);
         setModalData({ previous: null, current: null, next: null });
         const data = await api.getParagraphContext(chunkId);
-        setModalData(data); 
+        setModalData(data);
         setIsContextLoading(false);
     };
 
+    const handleExpandGranthVerse = async (originalFilename, verseSeqNum) => {
+        setIsGranthVerseLoading(true);
+        setGranthVerseData(null);
+        const data = await api.getGranthVerse(originalFilename, verseSeqNum);
+        setGranthVerseData(data);
+        setIsGranthVerseLoading(false);
+    };
+
     const handleCloseModal = () => setModalData(null);
+
+    const handleCloseGranthVerseModal = () => setGranthVerseData(null);
 
     const handleWelcomeClose = () => {
         setShowWelcomePopup(false);
@@ -449,17 +461,27 @@ const AppContent = () => {
     return (
         <div className="bg-slate-50 text-slate-900 min-h-screen font-sans">
             {modalData && (
-                <ExpandModal 
-                    data={modalData} 
-                    onClose={handleCloseModal} 
-                    isLoading={isContextLoading} 
+                <ExpandModal
+                    data={modalData}
+                    onClose={handleCloseModal}
+                    isLoading={isContextLoading}
                 />
             )}
-            
+
+            {granthVerseData && (
+                <GranthVerseModal
+                    verse={granthVerseData.verse}
+                    granthName={granthVerseData.granth_name}
+                    metadata={granthVerseData.metadata}
+                    onClose={handleCloseGranthVerseModal}
+                    isLoading={isGranthVerseLoading}
+                />
+            )}
+
             {showWelcomePopup && (
-                <WelcomeModal 
-                    onClose={handleWelcomeClose} 
-                    onGoToUsageGuide={handleWelcomeGoToUsageGuide} 
+                <WelcomeModal
+                    onClose={handleWelcomeClose}
+                    onGoToUsageGuide={handleWelcomeGoToUsageGuide}
                 />
             )}
 
@@ -589,6 +611,7 @@ const AppContent = () => {
                                             resultType="granth"
                                             onFindSimilar={handleFindSimilar}
                                             onExpand={handleExpand}
+                                            onExpandGranth={handleExpandGranthVerse}
                                             searchType={searchType}
                                             query={query}
                                             currentFilters={activeFilters}

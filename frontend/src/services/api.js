@@ -55,24 +55,36 @@ export const api = {
             const response = await fetch(`${API_BASE_URL}/context/${chunkId}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             return await response.json();
-        } catch (error) { 
-            console.error("API Error: Could not fetch context", error); 
-            return null; 
+        } catch (error) {
+            console.error("API Error: Could not fetch context", error);
+            return null;
         }
     },
-    
+
+    getGranthVerse: async (originalFilename, verseSeqNum) => {
+        try {
+            const encodedFilename = encodeURIComponent(originalFilename);
+            const response = await fetch(`${API_BASE_URL}/granth/verse?original_filename=${encodedFilename}&verse_seq_num=${verseSeqNum}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return await response.json();
+        } catch (error) {
+            console.error("API Error: Could not fetch granth verse", error);
+            return null;
+        }
+    },
+
     submitFeedback: async (feedbackData) => {
         try {
             const response = await fetch(`${API_BASE_URL}/feedback`, {
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(feedbackData),
             });
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             return await response.json();
-        } catch (error) { 
-            console.error("API Error: Could not submit feedback", error); 
-            throw error; 
+        } catch (error) {
+            console.error("API Error: Could not submit feedback", error);
+            throw error;
         }
     }
 };
