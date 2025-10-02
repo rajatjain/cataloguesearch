@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from
 // Import components
 import { Navigation, Header } from './components/Navigation';
 import { SearchBar, MetadataFilters, AdvancedSearch, SearchOptions } from './components/SearchInterface';
-import { ResultsList, GranthResultsList, SuggestionsCard, Tabs, SimilarSourceInfoCard } from './components/SearchResults';
+import { ResultsList, SuggestionsCard, Tabs, SimilarSourceInfoCard } from './components/SearchResults';
 import { ExpandModal, WelcomeModal } from './components/Modals';
 import { FeedbackForm } from './components/Feedback';
 import About from './components/About';
@@ -580,12 +580,19 @@ const AppContent = () => {
                                         />
                                     )}
                                     {activeTab === 'granth' && searchData?.granth_results?.results.length > 0 && (
-                                        <GranthResultsList
+                                        <ResultsList
                                             results={searchData.granth_results.results}
                                             totalResults={searchData.granth_results.total_hits}
                                             pageSize={PAGE_SIZE}
                                             currentPage={granthPage}
                                             onPageChange={handlePageChange}
+                                            resultType="granth"
+                                            onFindSimilar={handleFindSimilar}
+                                            onExpand={handleExpand}
+                                            searchType={searchType}
+                                            query={query}
+                                            currentFilters={activeFilters}
+                                            language={language}
                                         />
                                     )}
                                     {activeTab === 'similar' && (

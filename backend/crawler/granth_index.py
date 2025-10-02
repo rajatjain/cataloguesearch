@@ -235,7 +235,8 @@ class GranthIndexer:
                 "verse_seq_num": verse_seq,
                 "verse_type": verse._type,
                 "verse_type_num": verse._type_num,
-                "adhikar": verse._adhikar
+                "adhikar": verse._adhikar,
+                "file_url": granth._metadata._file_url
             },
             "timestamp_indexed": timestamp,
             "language": language,

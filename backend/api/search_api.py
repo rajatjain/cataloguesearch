@@ -270,7 +270,7 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                     exact_match=exact_match,
                     exclude_words=exclude_words,
                     categories=categories,
-                    language=language,
+                    detected_language=language,
                     page_size=granth_config.get("page_size", 20),
                     page_number=granth_config.get("page_number", 1)
                 )
