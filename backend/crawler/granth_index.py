@@ -33,30 +33,71 @@ class GranthIndexer:
             "gu": "text_content_gujarati"
         }
     
+    def delete_current_index(self, relative_filename: str):
+        """
+        Delete all entries from both granth_index and search_index with the given original_filename.
+
+        Args:
+            relative_filename: The relative filename to match for deletion
+        """
+        log_handle.info(f"Deleting all entries for original_filename: {relative_filename}")
+
+        indices = [self._granth_index_name, self._search_index_name]
+        total_deleted = {}
+
+        for index_name in indices:
+            delete_query = {
+                "query": {
+                    "term": {
+                        "original_filename": relative_filename
+                    }
+                }
+            }
+
+            try:
+                response = self._opensearch_client.delete_by_query(
+                    index=index_name,
+                    body=delete_query
+                )
+                deleted_count = response.get('deleted', 0)
+                total_deleted[index_name] = deleted_count
+                log_handle.info(f"Deleted {deleted_count} documents from {index_name}")
+            except Exception as e:
+                log_handle.error(f"Error deleting from {index_name}: {e}")
+                total_deleted[index_name] = 0
+
+        log_handle.info(
+            f"Total deleted: {total_deleted.get(self._granth_index_name, 0)} from granth_index, "
+            f"{total_deleted.get(self._search_index_name, 0)} from search_index"
+        )
+
     def index_granth(self, granth: Granth, dry_run: bool = True):
         """
         Main function to index a Granth object.
-        
+
         Args:
             granth: The Granth object to index
             dry_run: If True, performs a dry run without actually indexing
         """
         log_handle.info(f"Starting to index Granth: {granth._name}")
-        
+
         # Generate granth_id from relative path of original filename
         granth_id = str(uuid.uuid5(uuid.NAMESPACE_URL, granth._original_filename))
         timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-        
+
         if dry_run:
             log_handle.info(f"[DRY RUN] Would index Granth {granth._name} with ID {granth_id}")
             return
-        
+
+        # Delete existing entries for this filename
+        self.delete_current_index(granth._original_filename)
+
         # Function 1: Store Granth object in granth_index
         self._store_granth_in_granth_index(granth, granth_id, timestamp)
-        
+
         # Function 2: Store teeka & bhavarth paragraphs in search_index
         self._store_paragraphs_in_search_index(granth, granth_id, timestamp)
-        
+
         log_handle.info(f"Completed indexing Granth: {granth._name}")
     
     def _store_granth_in_granth_index(self, granth: Granth, granth_id: str, timestamp: str):
