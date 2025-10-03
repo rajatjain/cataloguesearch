@@ -13,8 +13,10 @@ from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
 from backend.crawler.index_generator import IndexGenerator
 from backend.crawler.pdf_processor import PDFProcessor
+from backend.crawler.granth_index import GranthIndexer
+from backend.crawler.markdown_parser import MarkdownParser
 from backend.search.index_searcher import IndexSearcher
-from tests.backend.common import setup, get_all_documents
+from tests.backend.common import setup, get_all_documents, setup_granth
 from tests.backend.base import *
 
 log_handle = logging.getLogger(__name__)
@@ -87,7 +89,7 @@ def build_index(initialise):
     
     # Explicitly delete indices to ensure clean state and proper mapping creation
     log_handle.info("Deleting existing indices to ensure clean state for vector search")
-    indices_to_delete = [config.OPENSEARCH_INDEX_NAME, config.OPENSEARCH_METADATA_INDEX_NAME]
+    indices_to_delete = [config.OPENSEARCH_INDEX_NAME, config.OPENSEARCH_METADATA_INDEX_NAME, config.OPENSEARCH_GRANTH_INDEX_NAME]
     for index_name in indices_to_delete:
         if index_name and opensearch_client.indices.exists(index=index_name):
             opensearch_client.indices.delete(index=index_name)
@@ -115,10 +117,38 @@ def build_index(initialise):
     doc_count = len(os_all_docs)
     log_handle.info(f"Indexed {doc_count} documents")
 
+    # Index granth markdown files
+    log_handle.info("Setting up granth directory structure")
+    granth_setup = setup_granth()
+    base_dir = granth_setup["base_dir"]
+    granth_files = granth_setup["granth_files"]
+
+    # Parse markdown files and index them
+    parser = MarkdownParser(base_folder=base_dir)
+    indexer = GranthIndexer(config, opensearch_client)
+
+    log_handle.info("Parsing and indexing granth markdown files")
+    for granth_name, file_info in granth_files.items():
+        file_path = file_info["file_path"]
+        log_handle.info(f"Parsing {granth_name} from {file_path}")
+
+        granth = parser.parse_file(file_path)
+        assert granth is not None, f"Failed to parse {file_path}"
+
+        log_handle.info(f"Indexing {granth_name} with {len(granth._verses)} verses")
+        indexer.index_granth(granth, dry_run=False)
+
+    # Refresh indices to make data available for search
+    opensearch_client.indices.refresh(index=config.OPENSEARCH_GRANTH_INDEX_NAME)
+    opensearch_client.indices.refresh(index=config.OPENSEARCH_INDEX_NAME)
+
+    log_handle.info("Granth indexing complete")
+
     yield
 
-    # Cleanup - delete index
-    opensearch_client.indices.delete(index=config.OPENSEARCH_INDEX_NAME, ignore=[400, 404])
+    # Cleanup - delete indices
+    for index_name in indices_to_delete:
+        opensearch_client.indices.delete(index=index_name, ignore=[400, 404])
 
 
 class APIServerManager:
@@ -973,6 +1003,162 @@ def test_cache_invalidation(api_server):
     assert "gujarati" in metadata_after
     
     log_handle.info("✓ Cache invalidation test passed - metadata consistent after cache invalidation")
+
+def test_get_granth_verse(api_server):
+    """Test the /api/granth/verse endpoint with Hindi and Gujarati exact match queries."""
+    test_cases = [
+        {
+            "query": "पर्यावरण संरक्षण",
+            "language": "hi",
+            "expected_file_pattern": "simple_granth.md",
+            "expected_seq_num": 3,  # Shlok 3
+            "expected_type": "Shlok",
+            "expected_type_start_num": 3,
+            "expected_type_end_num": 3,
+            "expected_page_num": 18
+        },
+        {
+            "query": "જ્ઞાન ક્યારેય",
+            "language": "gu",
+            "expected_file_pattern": "simple_granth.md",
+            "expected_seq_num": 4,  # Shlok 4
+            "expected_type": "Shlok",
+            "expected_type_start_num": 4,
+            "expected_type_end_num": 4,
+            "expected_page_num": 22
+        },
+        {
+            "query": "नियमित अध्ययन से बुद्धि का विकास",
+            "language": "hi",
+            "expected_file_pattern": "adhikar_granth.md",
+            "expected_seq_num": 3,  # Shlok 3-8 (range)
+            "expected_type": "Shlok",
+            "expected_type_start_num": 3,
+            "expected_type_end_num": 8,
+            "expected_page_num": 15
+        },
+        {
+            "query": "નિયમિત અભ્યાસથી બુદ્ધિનો વિકાસ",
+            "language": "gu",
+            "expected_file_pattern": "adhikar_granth.md",
+            "expected_seq_num": 3,  # Shlok 3-8 (range)
+            "expected_type": "Shlok",
+            "expected_type_start_num": 3,
+            "expected_type_end_num": 8,
+            "expected_page_num": 15
+        }
+    ]
+
+    for i, test_case in enumerate(test_cases):
+        # Step 1: Issue exact match search query to get a single granth result
+        search_payload = {
+            "query": test_case["query"],
+            "language": test_case["language"],
+            "exact_match": True,
+            "exclude_words": [],
+            "categories": {},
+            "search_types": {
+                "Pravachan": {
+                    "enabled": False,
+                    "page_size": 10,
+                    "page_number": 1
+                },
+                "Granth": {
+                    "enabled": True,
+                    "page_size": 10,
+                    "page_number": 1
+                }
+            },
+            "enable_reranking": True
+        }
+
+        search_response = requests.post(
+            f"http://{api_server.host}:{api_server.port}/api/search",
+            json=search_payload
+        )
+
+        assert search_response.status_code == 200
+        search_data = search_response.json()
+        log_handle.info(f"Search response for '{test_case['query']}': {json_dumps(search_data, truncate_fields=['vector_embedding'])}")
+
+        # Validate we have exactly one granth result (exact match)
+        assert search_data["granth_results"]["total_hits"] > 0, f"Expected granth results for '{test_case['query']}'"
+
+        # Get the first result
+        first_result = search_data["granth_results"]["results"][0]
+        assert test_case["expected_file_pattern"] in first_result["original_filename"], \
+            f"Expected result from file containing '{test_case['expected_file_pattern']}'"
+
+        # Extract metadata from search result
+        search_metadata = first_result.get("metadata", {})
+        search_doc_id = first_result.get("document_id")
+        search_seq_num = search_metadata.get("verse_seq_num")
+        search_type = search_metadata.get("verse_type")
+        search_type_start_num = search_metadata.get("verse_type_start_num")
+        search_type_end_num = search_metadata.get("verse_type_end_num")
+        search_page_num = first_result.get("page_number")
+
+        assert search_seq_num is not None, "Expected verse_seq_num in search result metadata"
+
+        # Step 2: Issue get_granth_verse API call
+        original_filename = first_result["original_filename"]
+        verse_response = requests.get(
+            f"http://{api_server.host}:{api_server.port}/api/granth/verse",
+            params={
+                "original_filename": original_filename,
+                "verse_seq_num": search_seq_num
+            }
+        )
+
+        assert verse_response.status_code == 200, f"Granth verse API should return 200 for {original_filename}, seq_num={search_seq_num}"
+        verse_data = verse_response.json()
+        log_handle.info(f"Granth verse response: {json_dumps(verse_data)}")
+
+        # Step 3: Validate response structure
+        assert "verse" in verse_data, "Expected 'verse' in granth verse response"
+        assert "granth_id" in verse_data, "Expected 'granth_id' in granth verse response"
+        assert "granth_name" in verse_data, "Expected 'granth_name' in granth verse response"
+        assert "metadata" in verse_data, "Expected 'metadata' in granth verse response"
+
+        verse = verse_data["verse"]
+
+        # Step 4: Validate that seq_num, type_start_num, type_end_num, page_num match between search result and get_granth_verse
+        assert verse.get("seq_num") == search_seq_num, \
+            f"Expected seq_num {search_seq_num} in verse, got {verse.get('seq_num')}"
+        assert verse.get("type") == search_type, \
+            f"Expected type '{search_type}' in verse, got '{verse.get('type')}'"
+        assert verse.get("type_start_num") == search_type_start_num, \
+            f"Expected type_start_num {search_type_start_num} in verse, got {verse.get('type_start_num')}"
+        assert verse.get("type_end_num") == search_type_end_num, \
+            f"Expected type_end_num {search_type_end_num} in verse, got {verse.get('type_end_num')}"
+        assert verse.get("page_num") == search_page_num, \
+            f"Expected page_num {search_page_num} in verse, got {verse.get('page_num')}"
+
+        # Step 5: Validate against expected values from test case
+        assert verse.get("seq_num") == test_case["expected_seq_num"], \
+            f"Expected seq_num {test_case['expected_seq_num']}, got {verse.get('seq_num')}"
+        assert verse.get("type") == test_case["expected_type"], \
+            f"Expected type '{test_case['expected_type']}', got '{verse.get('type')}'"
+        assert verse.get("type_start_num") == test_case["expected_type_start_num"], \
+            f"Expected type_start_num {test_case['expected_type_start_num']}, got {verse.get('type_start_num')}"
+        assert verse.get("type_end_num") == test_case["expected_type_end_num"], \
+            f"Expected type_end_num {test_case['expected_type_end_num']}, got {verse.get('type_end_num')}"
+        assert verse.get("page_num") == test_case["expected_page_num"], \
+            f"Expected page_num {test_case['expected_page_num']}, got {verse.get('page_num')}"
+
+        # Step 6: Validate verse content fields exist (not empty)
+        assert verse.get("verse") and verse.get("verse").strip(), "Expected non-empty verse content"
+
+        log_handle.info(f"✓ {test_case['language']} get_granth_verse test passed - "
+                       f"original_filename: {original_filename}, "
+                       f"seq_num: {verse.get('seq_num')}, "
+                       f"type: {verse.get('type')}, "
+                       f"type_start_num: {verse.get('type_start_num')}, "
+                       f"type_end_num: {verse.get('type_end_num')}, "
+                       f"page_num: {verse.get('page_num')}")
+
+    log_handle.info("✓ All get_granth_verse tests passed")
+
 
 def validate_result_schema(data, lexical_results):
     # Check for lexical results structure
