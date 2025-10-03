@@ -309,7 +309,7 @@ granth_index:
           type:
             type: keyword
           type_num:
-            type: integer
+            type: keyword
           translation:
             type: text
             analyzer: mixed_indic_analyzer

@@ -112,11 +112,6 @@ def index_granth(file_path: str, dry_run: bool = False):
     log_handle.info(f"{'[DRY RUN] ' if dry_run else ''}Indexing Granth into OpenSearch...")
     try:
         indexer.index_granth(granth, dry_run=dry_run)
-
-        log_handle.info("=" * 80)
-        log_handle.info("DRY RUN COMPLETE - No data was indexed")
-        log_handle.info("To actually index, run without --dry-run flag")
-        log_handle.info("=" * 80)
     except Exception as e:
         log_handle.error(f"Failed to index Granth: {e}", exc_info=True)
         sys.exit(1)

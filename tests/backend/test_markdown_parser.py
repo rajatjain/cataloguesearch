@@ -51,7 +51,7 @@ class TestMarkdownParser:
             assert verse._adhikar is None, f"Verse {i+1} should have adhikar=None"
             assert verse._seq_num == i + 1
             assert verse._type == "Shlok"
-            assert verse._type_num == i + 1
+            assert verse._type_num == str(i + 1)
         
         # Verify specific verse content
         first_verse = granth._verses[0]
@@ -90,7 +90,7 @@ class TestMarkdownParser:
             assert isinstance(verse, Verse)
             assert verse._seq_num == i + 1
             assert verse._type == "Shlok"
-            assert verse._type_num == shlok_num
+            assert verse._type_num == str(shlok_num)
             assert verse._adhikar == expected_adhikar, f"Verse {shlok_num} should belong to '{expected_adhikar}'"
         
         # Verify specific content from different Adhikars
@@ -187,7 +187,7 @@ class TestMarkdownParser:
         
         # Verify type_num reflects actual Shlok numbers
         type_nums = [verse._type_num for verse in granth._verses]
-        assert type_nums == [1, 2, 3, 4, 5, 6, 7]
+        assert type_nums == ["1", "2", "3", "4", "5", "6", "7"]
     
     def test_empty_adhikar_handling(self, parser):
         """Test handling of empty or malformed content."""
@@ -250,7 +250,7 @@ Test translation
             assert isinstance(verse, Verse)
             assert verse._seq_num == seq_num, f"Verse {i+1} seq_num should be {seq_num}"
             assert verse._type == verse_type, f"Verse {i+1} type should be {verse_type}"
-            assert verse._type_num == type_num, f"Verse {i+1} type_num should be {type_num}"
+            assert verse._type_num == str(type_num), f"Verse {i+1} type_num should be {type_num}"
             assert verse._adhikar == adhikar, f"Verse {i+1} adhikar should be '{adhikar}'"
         
         # Test specific verse content
@@ -258,7 +258,7 @@ Test translation
         gatha1 = granth._verses[0]
         assert "सत्य वचन बोलना धर्म है" in gatha1._verse
         assert gatha1._type == "Gatha"
-        assert gatha1._type_num == 1
+        assert gatha1._type_num == "1"
         assert gatha1._adhikar == "ज्ञान अधिकार"
         assert gatha1._page_num == 5
         
@@ -266,7 +266,7 @@ Test translation
         kalash1 = granth._verses[1]
         assert "ज्ञान प्राप्ति से आत्मा का कल्याण" in kalash1._verse
         assert kalash1._type == "Kalash"
-        assert kalash1._type_num == 1
+        assert kalash1._type_num == "1"
         assert kalash1._adhikar == "ज्ञान अधिकार"
         assert kalash1._page_num == 8
         

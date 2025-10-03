@@ -11,7 +11,7 @@ class Verse:
                          sequence number of 35 if there are 13 Gathas before Kalash 24. etc.
         - verse:         The original Sanskrit/Prakrit/Hindi verse
         - type:          Gatha/Kalash/Shlok etc.
-        - type_num:      The actual number of the gatha/kalash/shlok.
+        - type_num:      The actual number/range of the gatha/kalash/shlok (e.g., "1", "1-6", "356-365").
         - translation:   The hindi/gujarati translation
         - language:      The language in which the verse is translated and the meaning/teeka etc.
                          is written

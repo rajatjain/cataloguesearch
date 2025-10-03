@@ -176,21 +176,28 @@ class MarkdownParser:
             adhikar=adhikar
         )
     
-    def _parse_verse_header(self, header_text: str) -> tuple[Optional[str], Optional[int]]:
-        """Parse verse header to extract type and number."""
+    def _parse_verse_header(self, header_text: str) -> tuple[Optional[str], Optional[str]]:
+        """Parse verse header to extract type and number (as string to support ranges)."""
         # Define valid verse types
-        VALID_VERSE_TYPES = {"Shlok", "Gatha", "Kalash"}
+        VALID_VERSE_TYPES = {"Shlok", "Gatha", "Kalash", "Uthanika"}
 
-        # Match patterns like "Shlok 1", "Gatha 15", "Kalash 3"
-        match = re.match(r'^(Shlok|Gatha|Kalash)\s+(\d+)', header_text, re.IGNORECASE)
-        if match:
-            verse_type = match.group(1).capitalize()
-            type_num = int(match.group(2))
+        # Match patterns like "Shlok 1-6", "Gatha 356-365" (ranges)
+        range_match = re.match(r'^(Shlok|Gatha|Kalash|Sutra|Uthanika)\s+(\d+)-(\d+)', header_text, re.IGNORECASE)
+        if range_match:
+            verse_type = range_match.group(1).capitalize()
+            type_num = f"{range_match.group(2)}-{range_match.group(3)}"
+            return verse_type, type_num
+
+        # Match patterns like "Shlok 1", "Gatha 15", "Kalash 3" (single)
+        single_match = re.match(r'^(Shlok|Gatha|Kalash|Sutra|Uthanika)\s+(\d+)', header_text, re.IGNORECASE)
+        if single_match:
+            verse_type = single_match.group(1).capitalize()
+            type_num = single_match.group(2)
             return verse_type, type_num
 
         # If we have an H2 heading but it doesn't match the expected pattern, throw an error
         if header_text:
-            raise ValueError(f"Invalid H2 heading found: '{header_text}'. Valid verse types are: {', '.join(sorted(VALID_VERSE_TYPES))} followed by a number (e.g., 'Shlok 1')")
+            raise ValueError(f"Invalid H2 heading found: '{header_text}'. Valid verse types are: {', '.join(sorted(VALID_VERSE_TYPES))} followed by a number or range (e.g., 'Shlok 1' or 'Shlok 1-6')")
 
         return None, None
     

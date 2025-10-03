@@ -124,11 +124,11 @@ const ScriptureEval = ({ selectedFile, onFileSelect, basePaths, baseDirectoryHan
 
     const jumpToVerse = (type, typeNum) => {
         if (!scriptureData) return;
-        
-        const verseIndex = scriptureData.verses.findIndex(v => v.type === type && v.type_num === typeNum);
+
+        const verseIndex = scriptureData.verses.findIndex(v => v.type === type && v.type_num === String(typeNum));
         if (verseIndex !== -1) {
             setCurrentVerse(verseIndex);
-            
+
             // Auto-navigate to the verse's page in PDF if available
             const verse = scriptureData.verses[verseIndex];
             if (verse && verse.page_num && pdfDoc) {
