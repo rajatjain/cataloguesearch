@@ -26,6 +26,18 @@ const WhatsNew = () => {
 
     const updates = [
         {
+            date: "October 5, 2025",
+            newContent: [
+                "Hindi Pravachans on Bahinshree Nu Vachanamrut",
+                "Gujarati Pravachans on Pravachansar 1968-69 Series",
+                "Total Indexed Pravachans: ~4000"
+            ],
+            newFeatures: [
+                "NEW! Swalakshya now supports indexing of Mool Shastra as well!",
+                "Purusharth Siddhi Upay and Ishtopadesh are now searchable"
+            ]
+        }
+        {
             date: "September 19, 2025",
             newContent: [
                 "Gujarati Pravachans on Samaysar 1966 (15th time) Series",
