@@ -73,6 +73,18 @@ export const api = {
         }
     },
 
+    getGranthProse: async (originalFilename, proseSeqNum) => {
+        try {
+            const encodedFilename = encodeURIComponent(originalFilename);
+            const response = await fetch(`${API_BASE_URL}/granth/prose?original_filename=${encodedFilename}&prose_seq_num=${proseSeqNum}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return await response.json();
+        } catch (error) {
+            console.error("API Error: Could not fetch granth prose", error);
+            return null;
+        }
+    },
+
     submitFeedback: async (feedbackData) => {
         try {
             const response = await fetch(`${API_BASE_URL}/feedback`, {

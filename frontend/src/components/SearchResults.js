@@ -121,11 +121,15 @@ export const ResultCard = ({ result, onFindSimilar, onExpand, onExpandGranth, re
 
     const handleExpandClick = () => {
         if (resultType === 'granth') {
-            // For Granth results, extract original_filename and verse_seq_num from metadata
+            // For Granth results, extract original_filename and seq_num from metadata
             const originalFilename = result.original_filename;
             const verseSeqNum = result.metadata?.verse_seq_num;
+            const proseSeqNum = result.metadata?.prose_seq_num;
+
             if (originalFilename && verseSeqNum !== undefined && onExpandGranth) {
-                onExpandGranth(originalFilename, verseSeqNum);
+                onExpandGranth(originalFilename, verseSeqNum, 'verse');
+            } else if (originalFilename && proseSeqNum !== undefined && onExpandGranth) {
+                onExpandGranth(originalFilename, proseSeqNum, 'prose');
             }
         } else {
             // For Pravachan and other results, use document_id

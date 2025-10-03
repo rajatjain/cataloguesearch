@@ -5,7 +5,7 @@ import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from
 import { Navigation, Header } from './components/Navigation';
 import { SearchBar, MetadataFilters, AdvancedSearch, SearchOptions } from './components/SearchInterface';
 import { ResultsList, SuggestionsCard, Tabs, SimilarSourceInfoCard } from './components/SearchResults';
-import { ExpandModal, GranthVerseModal, WelcomeModal } from './components/Modals';
+import { ExpandModal, GranthVerseModal, GranthProseModal, WelcomeModal } from './components/Modals';
 import { FeedbackForm } from './components/Feedback';
 import About from './components/About';
 import WhatsNew from './components/WhatsNew';
@@ -229,6 +229,8 @@ const AppContent = () => {
     const [isContextLoading, setIsContextLoading] = useState(false);
     const [granthVerseData, setGranthVerseData] = useState(null);
     const [isGranthVerseLoading, setIsGranthVerseLoading] = useState(false);
+    const [granthProseData, setGranthProseData] = useState(null);
+    const [isGranthProseLoading, setIsGranthProseLoading] = useState(false);
     const [showWelcomePopup, setShowWelcomePopup] = useState(false);
     const [showTipsModal, setShowTipsModal] = useState(false);
     const PAGE_SIZE = 20;
@@ -368,17 +370,27 @@ const AppContent = () => {
         setIsContextLoading(false);
     };
 
-    const handleExpandGranthVerse = async (originalFilename, verseSeqNum) => {
-        setIsGranthVerseLoading(true);
-        setGranthVerseData(null);
-        const data = await api.getGranthVerse(originalFilename, verseSeqNum);
-        setGranthVerseData(data);
-        setIsGranthVerseLoading(false);
+    const handleExpandGranth = async (originalFilename, seqNum, contentType) => {
+        if (contentType === 'verse') {
+            setIsGranthVerseLoading(true);
+            setGranthVerseData(null);
+            const data = await api.getGranthVerse(originalFilename, seqNum);
+            setGranthVerseData(data);
+            setIsGranthVerseLoading(false);
+        } else if (contentType === 'prose') {
+            setIsGranthProseLoading(true);
+            setGranthProseData(null);
+            const data = await api.getGranthProse(originalFilename, seqNum);
+            setGranthProseData(data);
+            setIsGranthProseLoading(false);
+        }
     };
 
     const handleCloseModal = () => setModalData(null);
 
     const handleCloseGranthVerseModal = () => setGranthVerseData(null);
+
+    const handleCloseGranthProseModal = () => setGranthProseData(null);
 
     const handleWelcomeClose = () => {
         setShowWelcomePopup(false);
@@ -475,6 +487,16 @@ const AppContent = () => {
                     metadata={granthVerseData.metadata}
                     onClose={handleCloseGranthVerseModal}
                     isLoading={isGranthVerseLoading}
+                />
+            )}
+
+            {granthProseData && (
+                <GranthProseModal
+                    prose={granthProseData.prose}
+                    granthName={granthProseData.granth_name}
+                    metadata={granthProseData.metadata}
+                    onClose={handleCloseGranthProseModal}
+                    isLoading={isGranthProseLoading}
                 />
             )}
 
@@ -611,7 +633,7 @@ const AppContent = () => {
                                             resultType="granth"
                                             onFindSimilar={handleFindSimilar}
                                             onExpand={handleExpand}
-                                            onExpandGranth={handleExpandGranthVerse}
+                                            onExpandGranth={handleExpandGranth}
                                             searchType={searchType}
                                             query={query}
                                             currentFilters={activeFilters}
