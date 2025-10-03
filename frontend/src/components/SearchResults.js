@@ -40,17 +40,30 @@ export const GranthResultCard = ({ result, isFirst }) => {
             <div className="space-y-4">
                 {verses.map((verse, index) => (
                     <div key={index} className="border-l-4 border-sky-200 pl-3">
-                        <div className="flex items-center gap-2 mb-2">
-                            {verse.type && (
-                                <span className="inline-block bg-sky-100 text-sky-800 text-xs font-semibold px-2 py-0.5 rounded">
-                                    {verse.type} {verse.type_num}
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <span className="font-bold text-slate-800">{granth.name}</span>
+                            {verse.adhikar && (
+                                <span className="font-bold text-slate-700">Adhikar: {verse.adhikar}</span>
+                            )}
+                            {verse.type && verse.type_start_num !== undefined && verse.type_end_num !== undefined && (
+                                <span className="text-slate-700">
+                                    Verse Type ({verse.type}): {verse.type_start_num === verse.type_end_num
+                                        ? verse.type_start_num
+                                        : `${verse.type_start_num}-${verse.type_end_num}`}
                                 </span>
                             )}
                             {verse.page_num && (
-                                <span className="text-xs text-slate-500">Page: {verse.page_num}</span>
+                                <span className="text-slate-700">Page Number: {verse.page_num}</span>
                             )}
-                            {verse.adhikar && (
-                                <span className="text-xs text-slate-600">Adhikar: {verse.adhikar}</span>
+                            {granth.metadata?.file_url && (
+                                <a
+                                    href={granth.metadata.file_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 font-medium flex items-center"
+                                >
+                                    <PdfIcon />View PDF
+                                </a>
                             )}
                         </div>
 
@@ -127,9 +140,19 @@ export const ResultCard = ({ result, onFindSimilar, onExpand, onExpandGranth, re
             <div className="border-b border-slate-200 pb-2 mb-2 text-sm text-slate-500 flex flex-wrap gap-x-3 gap-y-1 items-center">
                 {result.metadata?.Granth && <span className="font-bold text-slate-700">{result.metadata.Granth}</span>}
                 {result.metadata?.title && resultType === 'granth' && <span className="font-bold text-slate-700">{result.metadata.title}</span>}
+                {resultType === 'granth' && result.metadata?.adhikar && (
+                    <span className="text-slate-700">Adhikar: {result.metadata.adhikar}</span>
+                )}
+                {resultType === 'granth' && result.metadata?.verse_type && result.metadata?.verse_type_start_num !== undefined && result.metadata?.verse_type_end_num !== undefined && (
+                    <span className="text-slate-700">
+                        {result.metadata.verse_type}: {result.metadata.verse_type_start_num === result.metadata.verse_type_end_num
+                            ? result.metadata.verse_type_start_num
+                            : `${result.metadata.verse_type_start_num}-${result.metadata.verse_type_end_num}`}
+                    </span>
+                )}
                 {result.metadata?.Series && <span>{result.metadata.Series}</span>}
                 {resultType !== 'granth' && <span className="text-slate-600">{result.filename}</span>}
-                <span>Page: {result.page_number}</span>
+                <span>Page Number: {result.page_number}</span>
                 {result.file_url && (
                     <a
                         href={`${result.file_url}#page=${result.page_number}`}
