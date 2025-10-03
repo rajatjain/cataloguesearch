@@ -1,15 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getScriptureData, getPDFWithCache, pdfCache } from '../../utils/scriptureCache';
+import VerseCard from './VerseCard';
+import VerseDetails from './VerseDetails';
+import ProseCard from './ProseCard';
+import ProseDetails from './ProseDetails';
 
 const ScriptureEval = ({ selectedFile, onFileSelect, basePaths, baseDirectoryHandles }) => {
     // Scripture data state
     const [scriptureData, setScriptureData] = useState(null);
+    const [allContent, setAllContent] = useState([]); // Merged verses + prose sorted by seq_num
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
-    
+
     // Navigation state
-    const [currentVerse, setCurrentVerse] = useState(0);
-    const [showAllVerses, setShowAllVerses] = useState(false);
+    const [currentItem, setCurrentItem] = useState(0); // Changed from currentVerse
+    const [showAllItems, setShowAllItems] = useState(false); // Changed from showAllVerses
     const [availableTypes, setAvailableTypes] = useState([]);
     
     // PDF viewer state
@@ -87,18 +92,25 @@ const ScriptureEval = ({ selectedFile, onFileSelect, basePaths, baseDirectoryHan
             // Load scripture data (always fresh from API)
             const data = await getScriptureData(relativePath);
             setScriptureData(data);
-            setCurrentVerse(0);
-            setShowAllVerses(false);
-            
+
+            // Merge verses and prose_sections, sorted by seq_num
+            const verses = (data.verses || []).map(v => ({ ...v, contentType: 'verse' }));
+            const proseSections = (data.prose_sections || []).map(p => ({ ...p, contentType: 'prose' }));
+            const merged = [...verses, ...proseSections].sort((a, b) => a.seq_num - b.seq_num);
+            setAllContent(merged);
+
+            setCurrentItem(0);
+            setShowAllItems(false);
+
             // Extract available verse types
             const types = [...new Set(data.verses.map(v => v.type))];
             setAvailableTypes(types);
-            
+
             // Try to load PDF from file_url
             if (data.metadata && data.metadata.file_url) {
                 setPdfUrl(data.metadata.file_url);
             }
-            
+
         } catch (err) {
             setError(err.message);
             console.error('Error loading scripture:', err);
@@ -107,120 +119,103 @@ const ScriptureEval = ({ selectedFile, onFileSelect, basePaths, baseDirectoryHan
         }
     };
 
-    const navigateVerse = (direction) => {
-        if (!scriptureData) return;
-        
-        const newIndex = direction === 'next' 
-            ? Math.min(currentVerse + 1, scriptureData.verses.length - 1)
-            : Math.max(currentVerse - 1, 0);
-        setCurrentVerse(newIndex);
-        
-        // Auto-navigate to the verse's page in PDF if available
-        const verse = scriptureData.verses[newIndex];
-        if (verse && verse.page_num && pdfDoc) {
-            navigateToPDFPage(verse.page_num);
+    // Navigate across all content (verses + prose)
+    const navigateContent = (direction) => {
+        if (allContent.length === 0) return;
+
+        const newIndex = direction === 'next'
+            ? Math.min(currentItem + 1, allContent.length - 1)
+            : Math.max(currentItem - 1, 0);
+        setCurrentItem(newIndex);
+
+        // Auto-navigate to the page in PDF if available
+        const item = allContent[newIndex];
+        if (item && item.page_num && pdfDoc) {
+            navigateToPDFPage(item.page_num);
         }
     };
 
     const jumpToVerse = (type, typeNum) => {
-        if (!scriptureData) return;
+        if (allContent.length === 0) return;
 
-        const verseIndex = scriptureData.verses.findIndex(v => v.type === type && v.type_num === String(typeNum));
-        if (verseIndex !== -1) {
-            setCurrentVerse(verseIndex);
+        const itemIndex = allContent.findIndex(
+            item => item.contentType === 'verse' && item.type === type && item.type_start_num <= typeNum && item.type_end_num >= typeNum
+        );
+        if (itemIndex !== -1) {
+            setCurrentItem(itemIndex);
 
-            // Auto-navigate to the verse's page in PDF if available
-            const verse = scriptureData.verses[verseIndex];
-            if (verse && verse.page_num && pdfDoc) {
-                navigateToPDFPage(verse.page_num);
+            // Auto-navigate to the page in PDF if available
+            const item = allContent[itemIndex];
+            if (item && item.page_num && pdfDoc) {
+                navigateToPDFPage(item.page_num);
             }
         }
     };
 
-    const getVersesByType = (type) => {
-        if (!scriptureData) return [];
-        return scriptureData.verses.filter(v => v.type === type);
-    };
+    const getDisplayContent = () => {
+        if (allContent.length === 0) return [];
 
-    const getDisplayVerses = () => {
-        if (!scriptureData) return [];
-        
-        if (showAllVerses) {
-            return scriptureData.verses;
+        if (showAllItems) {
+            return allContent;
         }
-        
-        const verses = scriptureData.verses;
-        const total = verses.length;
-        
-        if (total <= 10) return verses;
-        
+
+        const total = allContent.length;
+
+        if (total <= 10) return allContent;
+
         // Show first 5 and last 5
         return [
-            ...verses.slice(0, 5),
+            ...allContent.slice(0, 5),
             { isExpander: true },
-            ...verses.slice(-5)
+            ...allContent.slice(-5)
         ];
     };
 
-    const VerseCard = ({ verse, index, isActive }) => {
-        if (verse.isExpander) {
+    // Unified ContentCard that handles both verses and prose
+    const ContentCard = ({ item, index, isActive }) => {
+        if (item.isExpander) {
             return (
                 <div className="text-center py-4">
                     <button
-                        onClick={() => setShowAllVerses(true)}
+                        onClick={() => setShowAllItems(true)}
                         className="text-sky-600 hover:text-sky-800 font-medium text-sm flex items-center mx-auto"
                     >
                         <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
-                        Show All {scriptureData.verses.length} Verses
+                        Show All {allContent.length} Items
                     </button>
                 </div>
             );
         }
 
-        return (
-            <div 
-                className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                    isActive 
-                        ? 'border-sky-500 bg-sky-50' 
-                        : 'border-slate-200 hover:border-slate-300'
-                }`}
-                onClick={() => {
-                    setCurrentVerse(index);
-                    // Auto-navigate to the verse's page in PDF if available
-                    if (verse.page_num && pdfDoc) {
-                        navigateToPDFPage(verse.page_num);
-                    }
-                }}
-            >
-                <div className="flex items-center justify-between mb-2">
-                    <div className="flex flex-col">
-                        <span className="text-sm font-medium text-sky-600">
-                            {verse.type} {verse.type_num}
-                        </span>
-                        {verse.adhikar && (
-                            <span className="text-xs text-purple-600 font-medium">
-                                {verse.adhikar}
-                            </span>
-                        )}
-                    </div>
-                    {verse.page_num && (
-                        <span className="text-xs text-slate-500">
-                            Page {verse.page_num}
-                        </span>
-                    )}
-                </div>
-                <div className="text-sm text-slate-700 line-clamp-3">
-                    {verse.verse}
-                </div>
-                {verse.translation && (
-                    <div className="text-xs text-slate-600 mt-2 line-clamp-2">
-                        {verse.translation}
-                    </div>
-                )}
-            </div>
-        );
+        if (item.contentType === 'verse') {
+            return (
+                <VerseCard
+                    verse={item}
+                    index={index}
+                    isActive={isActive}
+                    onClick={setCurrentItem}
+                    pdfDoc={pdfDoc}
+                    navigateToPDFPage={navigateToPDFPage}
+                />
+            );
+        }
+
+        if (item.contentType === 'prose') {
+            return (
+                <ProseCard
+                    prose={item}
+                    index={index}
+                    isActive={isActive}
+                    onClick={setCurrentItem}
+                    pdfDoc={pdfDoc}
+                    navigateToPDFPage={navigateToPDFPage}
+                />
+            );
+        }
+
+        return null;
     };
 
     // PDF loading and rendering functions
@@ -506,14 +501,14 @@ const ScriptureEval = ({ selectedFile, onFileSelect, basePaths, baseDirectoryHan
                         </div>
                     </div>
 
-                    {/* Right Panel - Verse Display */}
+                    {/* Right Panel - Content Display */}
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
                             <h3 className="text-lg font-medium text-slate-800">
                                 {scriptureData.name}
                             </h3>
                             <div className="text-sm text-slate-600">
-                                {scriptureData.verses.length} verses
+                                {scriptureData.verses.length} verses • {scriptureData.prose_sections ? scriptureData.prose_sections.length : 0} prose
                             </div>
                         </div>
 
@@ -521,22 +516,22 @@ const ScriptureEval = ({ selectedFile, onFileSelect, basePaths, baseDirectoryHan
                         <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
                             <div className="flex items-center space-x-2">
                                 <button
-                                    onClick={() => navigateVerse('prev')}
-                                    disabled={currentVerse === 0}
+                                    onClick={() => navigateContent('prev')}
+                                    disabled={currentItem === 0}
                                     className="p-2 border border-slate-300 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                                     </svg>
                                 </button>
-                                
+
                                 <span className="text-sm text-slate-600">
-                                    {currentVerse + 1} of {scriptureData.verses.length}
+                                    {currentItem + 1} of {allContent.length}
                                 </span>
-                                
+
                                 <button
-                                    onClick={() => navigateVerse('next')}
-                                    disabled={currentVerse === scriptureData.verses.length - 1}
+                                    onClick={() => navigateContent('next')}
+                                    disabled={currentItem === allContent.length - 1}
                                     className="p-2 border border-slate-300 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -548,83 +543,25 @@ const ScriptureEval = ({ selectedFile, onFileSelect, basePaths, baseDirectoryHan
                             <JumpToVerseInput />
                         </div>
 
-                        {/* Verse List */}
+                        {/* Content List */}
                         <div className="space-y-3 max-h-96 overflow-y-auto">
-                            {getDisplayVerses().map((verse, index) => (
-                                <VerseCard
-                                    key={verse.isExpander ? 'expander' : verse.seq_num}
-                                    verse={verse}
-                                    index={verse.isExpander ? null : scriptureData.verses.findIndex(v => v.seq_num === verse.seq_num)}
-                                    isActive={!verse.isExpander && index === currentVerse}
+                            {getDisplayContent().map((item, index) => (
+                                <ContentCard
+                                    key={item.isExpander ? 'expander' : item.seq_num}
+                                    item={item}
+                                    index={item.isExpander ? null : allContent.findIndex(c => c.seq_num === item.seq_num)}
+                                    isActive={!item.isExpander && index === currentItem}
                                 />
                             ))}
                         </div>
 
-                        {/* Selected Verse Details */}
-                        {scriptureData.verses[currentVerse] && (
-                            <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex flex-col">
-                                            <h4 className="font-semibold text-slate-800">
-                                                {scriptureData.verses[currentVerse].type} {scriptureData.verses[currentVerse].type_num}
-                                            </h4>
-                                            {scriptureData.verses[currentVerse].adhikar && (
-                                                <span className="text-sm text-purple-600 font-medium">
-                                                    {scriptureData.verses[currentVerse].adhikar}
-                                                </span>
-                                            )}
-                                        </div>
-                                        {scriptureData.verses[currentVerse].page_num && (
-                                            <span className="text-sm text-slate-500">
-                                                Page {scriptureData.verses[currentVerse].page_num}
-                                            </span>
-                                        )}
-                                    </div>
-                                    
-                                    <div className="text-slate-700">
-                                        <strong>Original:</strong> {scriptureData.verses[currentVerse].verse}
-                                    </div>
-                                    
-                                    {scriptureData.verses[currentVerse].translation && (
-                                        <div className="text-slate-700">
-                                            <strong>Translation:</strong> {scriptureData.verses[currentVerse].translation}
-                                        </div>
-                                    )}
-                                    
-                                    {scriptureData.verses[currentVerse].meaning && (
-                                        <div className="text-slate-700">
-                                            <strong>Meaning:</strong> {scriptureData.verses[currentVerse].meaning}
-                                        </div>
-                                    )}
-                                    
-                                    {scriptureData.verses[currentVerse].teeka && scriptureData.verses[currentVerse].teeka.length > 0 && (
-                                        <div className="text-slate-700">
-                                            <strong>Teeka:</strong>
-                                            <div className="mt-1 space-y-2">
-                                                {scriptureData.verses[currentVerse].teeka.map((teekaItem, index) => (
-                                                    <div key={index} className="pl-2 border-l-2 border-slate-300">
-                                                        {teekaItem}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                    
-                                    {scriptureData.verses[currentVerse].bhavarth && scriptureData.verses[currentVerse].bhavarth.length > 0 && (
-                                        <div className="text-slate-700">
-                                            <strong>Bhavarth:</strong>
-                                            <div className="mt-1 space-y-2">
-                                                {scriptureData.verses[currentVerse].bhavarth.map((bhavarthItem, index) => (
-                                                    <div key={index} className="pl-2 border-l-2 border-slate-300">
-                                                        {bhavarthItem}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                        {/* Content Details */}
+                        {allContent[currentItem] && allContent[currentItem].contentType === 'verse' && (
+                            <VerseDetails verse={allContent[currentItem]} />
+                        )}
+
+                        {allContent[currentItem] && allContent[currentItem].contentType === 'prose' && (
+                            <ProseDetails prose={allContent[currentItem]} />
                         )}
                     </div>
                 </div>
