@@ -36,7 +36,7 @@ const WhatsNew = () => {
                 "NEW! Swalakshya now supports indexing of Mool Shastra as well!",
                 "Purusharth Siddhi Upay and Ishtopadesh are now searchable"
             ]
-        }
+        },
         {
             date: "September 19, 2025",
             newContent: [
