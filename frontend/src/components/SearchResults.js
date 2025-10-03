@@ -171,9 +171,11 @@ export const ResultCard = ({ result, onFindSimilar, onExpand, onExpandGranth, re
                     <button onClick={handleExpandClick} className="text-sky-600 hover:text-sky-800 font-medium flex items-center">
                         <ExpandIcon />Expand
                     </button>
-                    <button onClick={() => onFindSimilar(result)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center">
-                        <SimilarIcon />More Like This
-                    </button>
+                    {resultType !== 'granth' && (
+                        <button onClick={() => onFindSimilar(result)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center">
+                            <SimilarIcon />More Like This
+                        </button>
+                    )}
                 </div>
             </div>
             <div className={`${isFirst ? 'text-lg' : 'text-base'} text-slate-700 leading-relaxed font-sans`}>
