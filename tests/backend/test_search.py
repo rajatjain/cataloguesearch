@@ -97,7 +97,9 @@ def build_granth_index_for_search():
         granth = parser.parse_file(file_path)
         assert granth is not None, f"Failed to parse {file_path}"
 
-        log_handle.info(f"Indexing {granth_name} with {len(granth._verses)} verses")
+        verse_count = len(granth._verses) if granth._verses else 0
+        prose_count = len(granth._prose_sections) if hasattr(granth, '_prose_sections') and granth._prose_sections else 0
+        log_handle.info(f"Indexing {granth_name} with {verse_count} verses and {prose_count} prose sections")
         indexer.index_granth(granth, dry_run=False)
 
     # Refresh indices to make data available for search
@@ -584,7 +586,7 @@ def test_search_granth_content_exact_match():
     index_searcher = IndexSearcher(config)
 
     # List of test cases with exact phrases from different granth files
-    # Each test validates filename, language, verse type, and verse number
+    # Each test validates filename, language, verse type, type_start_num and type_end_num
     test_cases = [
         # simple_granth - Shlok 1 (Hindi)
         {
@@ -592,7 +594,8 @@ def test_search_granth_content_exact_match():
             "lang": "hi",
             "filename": "simple_granth",
             "type": "Shlok",
-            "type_num": "1"
+            "type_start_num": 1,
+            "type_end_num": 1
         },
         # simple_granth - Shlok 2 (Hindi)
         {
@@ -600,7 +603,8 @@ def test_search_granth_content_exact_match():
             "lang": "hi",
             "filename": "simple_granth",
             "type": "Shlok",
-            "type_num": "2"
+            "type_start_num": 2,
+            "type_end_num": 2
         },
         # simple_granth - Shlok 1 (Gujarati)
         {
@@ -608,7 +612,8 @@ def test_search_granth_content_exact_match():
             "lang": "gu",
             "filename": "simple_granth",
             "type": "Shlok",
-            "type_num": "1"
+            "type_start_num": 1,
+            "type_end_num": 1
         },
         # simple_granth - Shlok 2 (Gujarati)
         {
@@ -616,7 +621,8 @@ def test_search_granth_content_exact_match():
             "lang": "gu",
             "filename": "simple_granth",
             "type": "Shlok",
-            "type_num": "2"
+            "type_start_num": 2,
+            "type_end_num": 2
         },
         # adhikar_granth - Shlok 1 (Hindi)
         {
@@ -624,7 +630,9 @@ def test_search_granth_content_exact_match():
             "lang": "hi",
             "filename": "adhikar_granth",
             "type": "Shlok",
-            "type_num": "1"
+            "type_start_num": 1,
+            "type_end_num": 1,
+            "categories": {"anuyog": ["Charitra Anuyog"]}  # Filter to disambiguate from adhikar_prose_granth
         },
         # adhikar_granth - Shlok 2 (Hindi)
         {
@@ -632,15 +640,19 @@ def test_search_granth_content_exact_match():
             "lang": "hi",
             "filename": "adhikar_granth",
             "type": "Shlok",
-            "type_num": "2"
+            "type_start_num": 2,
+            "type_end_num": 2,
+            "categories": {"anuyog": ["Charitra Anuyog"]}
         },
-        # adhikar_granth - Shlok 3 (Hindi)
+        # adhikar_granth - Shlok 3-8 (Hindi)
         {
             "query": "नियमित अध्ययन से बुद्धि का विकास होता है",
             "lang": "hi",
             "filename": "adhikar_granth",
             "type": "Shlok",
-            "type_num": "3"
+            "type_start_num": 3,
+            "type_end_num": 8,
+            "categories": {"anuyog": ["Charitra Anuyog"]}
         },
         # adhikar_granth - Shlok 1 (Gujarati)
         {
@@ -648,7 +660,9 @@ def test_search_granth_content_exact_match():
             "lang": "gu",
             "filename": "adhikar_granth",
             "type": "Shlok",
-            "type_num": "1"
+            "type_start_num": 1,
+            "type_end_num": 1,
+            "categories": {"anuyog": ["Charitra Anuyog"]}
         },
         # adhikar_granth - Shlok 2 (Gujarati)
         {
@@ -656,7 +670,9 @@ def test_search_granth_content_exact_match():
             "lang": "gu",
             "filename": "adhikar_granth",
             "type": "Shlok",
-            "type_num": "2"
+            "type_start_num": 2,
+            "type_end_num": 2,
+            "categories": {"anuyog": ["Charitra Anuyog"]}
         },
         # mixed_granth - Gatha 1 (Hindi)
         {
@@ -664,23 +680,26 @@ def test_search_granth_content_exact_match():
             "lang": "hi",
             "filename": "mixed_granth",
             "type": "Gatha",
-            "type_num": "1"
+            "type_start_num": 1,
+            "type_end_num": 1
         },
-        # mixed_granth - Gatha 2 (Hindi)
+        # mixed_granth - Gatha 2-6 (Hindi)
         {
             "query": "अहिंसा का अर्थ है मन, वचन और कर्म से किसी को हानि न पहुंचाना",
             "lang": "hi",
             "filename": "mixed_granth",
             "type": "Gatha",
-            "type_num": "2"
+            "type_start_num": 2,
+            "type_end_num": 6
         },
-        # mixed_granth - Gatha 3 (Hindi)
+        # mixed_granth - Gatha 3 (Hindi) - This is within the range 2-6
         {
             "query": "कर्म का सिद्धांत प्रकृति का नियम है",
             "lang": "hi",
             "filename": "mixed_granth",
             "type": "Gatha",
-            "type_num": "3"
+            "type_start_num": 7,
+            "type_end_num": 7
         },
         # mixed_granth - Gatha 1 (Gujarati)
         {
@@ -688,7 +707,8 @@ def test_search_granth_content_exact_match():
             "lang": "gu",
             "filename": "mixed_granth",
             "type": "Gatha",
-            "type_num": "1"
+            "type_start_num": 1,
+            "type_end_num": 1
         },
         # mixed_granth - Gatha 1 (Gujarati) - from Bhavarth
         {
@@ -696,7 +716,8 @@ def test_search_granth_content_exact_match():
             "lang": "gu",
             "filename": "mixed_granth",
             "type": "Gatha",
-            "type_num": "1"
+            "type_start_num": 1,
+            "type_end_num": 1
         },
     ]
 
@@ -705,34 +726,40 @@ def test_search_granth_content_exact_match():
         lang = test_case["lang"]
         expected_filename = test_case["filename"]
         expected_type = test_case["type"]
-        expected_type_num = test_case["type_num"]
+        expected_type_start_num = test_case["type_start_num"]
+        expected_type_end_num = test_case["type_end_num"]
+        categories = test_case.get("categories", {})  # Get categories if provided
 
-        log_handle.info(f"Running exact match granth search for: '{query}' (expecting {expected_filename}, {expected_type} {expected_type_num})")
+        type_display = f"{expected_type_start_num}" if expected_type_start_num == expected_type_end_num else f"{expected_type_start_num}-{expected_type_end_num}"
+        log_handle.info(f"Running exact match granth search for: '{query}' (expecting {expected_filename}, {expected_type} {type_display})")
 
         results, total_hits = index_searcher.perform_granth_search(
             keywords=query,
             exact_match=True,  # Use exact match
             exclude_words=[],
-            categories={},
+            categories=categories,
             detected_language=lang,
             page_size=10,
             page_number=1
         )
 
-        log_handle.info(f"Found {len(results)} exact match granth results for query: '{query}'")
+        log_handle.info(f"Found {len(results)} exact match granth results for query: {query}")
         log_handle.info(f"Results: {json_dumps(results)}")
         assert len(results) == 1, f"Expected 1 result for exact match granth query: {query}, got {len(results)}"
 
-        # Validate that expected filename, verse type, and verse number appear in results
+        # Validate that expected filename, verse type, and verse numbers appear in results
         result = results[0]
         granth_name = result.get('filename', '').lower()
-        verse_type = result.get('type', '')
-        verse_type_num = str(result.get('type_num', ''))
+        metadata = result.get('metadata', {})
+        verse_type = metadata.get('verse_type', '')
+        verse_type_start_num = metadata.get('verse_type_start_num', 0)
+        verse_type_end_num = metadata.get('verse_type_end_num', 0)
 
-        if expected_filename in granth_name and verse_type == expected_type and verse_type_num == str(expected_type_num):
-            found_expected = True
-            log_handle.info(f"✓ Found expected granth {expected_filename}, {expected_type} {expected_type_num} in results for query: '{query}'")
-            break
+        assert expected_filename in granth_name, f"Expected filename '{expected_filename}' not in '{granth_name}'"
+        assert verse_type == expected_type, f"Expected type '{expected_type}', got '{verse_type}'"
+        assert verse_type_start_num == expected_type_start_num, f"Expected type_start_num '{expected_type_start_num}', got '{verse_type_start_num}'"
+        assert verse_type_end_num == expected_type_end_num, f"Expected type_end_num '{expected_type_end_num}', got '{verse_type_end_num}'"
+        log_handle.info(f"✓ Found expected granth {expected_filename}, {expected_type} {type_display} in results for query: '{query}'")
 
 def test_search_granth_content_with_categories():
     """Test granth search with category filters (Anuyog, Author, etc.)."""
@@ -883,6 +910,313 @@ def test_search_granth_content_with_categories():
         results_with_wrong_author, total_hits = index_searcher.perform_granth_search(
             keywords=query,
             exact_match=True,
+            exclude_words=[],
+            categories={"author": [not_expected_author]},
+            detected_language=lang,
+            page_size=10,
+            page_number=1
+        )
+
+        log_handle.info(f"Found {len(results_with_wrong_author)} results with incorrect Author filter '{not_expected_author}'")
+        assert len(results_with_wrong_author) == 0, f"Expected 0 results with incorrect Author '{not_expected_author}', got {len(results_with_wrong_author)}"
+        log_handle.info(f"✓ Correctly found no results with incorrect Author: {not_expected_author}")
+
+
+def test_search_prose_content():
+    """Test searching prose content (main paragraphs and H3 subsections) with metadata validation."""
+    config = Config()
+    index_searcher = IndexSearcher(config)
+
+    # Test cases for prose content from adhikar_prose_granth.md (Hindi & Gujarati)
+    # Tests both main prose paragraphs and H3 subsection paragraphs
+    test_cases = [
+        # Hindi - Main prose content
+        {
+            "query": "प्रकृति संसार का आधार है",
+            "lang": "hi",
+            "filename": "prose_granth",
+            "expected_content_type": "main",
+            "expected_prose_seq": 2,
+            "expected_heading": "प्रकृति का सार"
+        },
+        {
+            "query": "आजकल प्रदूषण बढ़ता जा रहा है",
+            "lang": "hi",
+            "filename": "prose_granth",
+            "expected_content_type": "main",
+            "expected_prose_seq": 5,
+            "expected_heading": "पर्यावरण संरक्षण की आवश्यकता"
+        },
+        {
+            "query": "शिक्षा मनुष्य के व्यक्तित्व का निर्माण",
+            "lang": "hi",
+            "filename": "prose_granth",
+            "expected_content_type": "main",
+            "expected_prose_seq": 9,
+            "expected_heading": "शिक्षा का महत्व"
+        },
+
+        # Hindi - H3 subsection content
+        {
+            "query": "पंच तत्व प्रकृति के मूल आधार हैं",
+            "lang": "hi",
+            "filename": "prose_granth",
+            "expected_content_type": "subsection",
+            "expected_prose_seq": 3,
+            "expected_heading": "प्रकृति के तत्व"
+        },
+        {
+            "query": "मनुष्य को प्रकृति की रक्षा करनी चाहिए",
+            "lang": "hi",
+            "filename": "prose_granth",
+            "expected_content_type": "subsection",
+            "expected_prose_seq": 4,
+            "expected_heading": "जीवन में प्रकृति की भूमिका"
+        },
+        {
+            "query": "वायु प्रदूषण से सांस की बीमारियां होती हैं",
+            "lang": "hi",
+            "filename": "prose_granth",
+            "expected_content_type": "subsection",
+            "expected_prose_seq": 6,
+            "expected_heading": "प्रदूषण के प्रकार"
+        },
+        {
+            "query": "प्रत्येक बच्चे को शिक्षा का अधिकार है।",
+            "lang": "hi",
+            "filename": "prose_granth",
+            "expected_content_type": "subsection",
+            "expected_prose_seq": 10,
+            "expected_heading": "शिक्षा और समाज"
+        },
+        {
+            "query": "गुरु केवल पुस्तकीय ज्ञान नहीं देता",
+            "lang": "hi",
+            "filename": "prose_granth",
+            "expected_content_type": "subsection",
+            "expected_prose_seq": 13,
+            "expected_heading": "गुरु की महिमा"
+        },
+
+        # Gujarati - Main prose content
+        {
+            "query": "પ્રકૃતિ સંસારનો આધાર છે",
+            "lang": "gu",
+            "filename": "prose_granth",
+            "expected_content_type": "main",
+            "expected_prose_seq": 2,
+            "expected_heading": "પ્રકૃતિનો સાર"
+        },
+        {
+            "query": "આજકાલ પ્રદૂષણ વધી રહ્યું છે",
+            "lang": "gu",
+            "filename": "prose_granth",
+            "expected_content_type": "main",
+            "expected_prose_seq": 5,
+            "expected_heading": "પર્યાવરણ સંરક્ષણની જરૂરિયાત"
+        },
+
+        # Gujarati - H3 subsection content
+        {
+            "query": "પંચતત્વો પ્રકૃતિના મૂળભૂત આધાર છે",
+            "lang": "gu",
+            "filename": "prose_granth",
+            "expected_content_type": "subsection",
+            "expected_prose_seq": 3,
+            "expected_heading": "પ્રકૃતિના તત્વો"
+        },
+        {
+            "query": "માનવે પ્રકૃતિનું રક્ષણ કરવું જોઈએ",
+            "lang": "gu",
+            "filename": "prose_granth",
+            "expected_content_type": "subsection",
+            "expected_prose_seq": 4,
+            "expected_heading": "જીવનમાં પ્રકૃતિની ભૂમિકા"
+        },
+        {
+            "query": "શિક્ષણથી રોજગારની તકો મળે છે",
+            "lang": "gu",
+            "filename": "prose_granth",
+            "expected_content_type": "subsection",
+            "expected_prose_seq": 11,
+            "expected_heading": "શિક્ષણના લાભો"
+        },
+    ]
+
+    for test_case in test_cases:
+        query = test_case["query"]
+        lang = test_case["lang"]
+        expected_filename = test_case["filename"]
+        expected_content_type = test_case["expected_content_type"]
+        expected_prose_seq = test_case["expected_prose_seq"]
+        expected_heading = test_case["expected_heading"]
+
+        log_handle.info(f"Running prose search for: '{query}' (expecting {expected_filename}, {expected_content_type}, seq={expected_prose_seq})")
+
+        results, total_hits = index_searcher.perform_granth_search(
+            keywords=query,
+            exact_match=False,
+            exclude_words=[],
+            categories={},
+            detected_language=lang,
+            page_size=10,
+            page_number=1
+        )
+
+        log_handle.info(f"Found {len(results)} prose results for query: '{query}'")
+        assert len(results) > 0, f"No results found for prose query: {query}"
+
+        # Validate that expected prose content appears in results
+        found_expected = False
+        for result in results:
+            # Check metadata for prose-specific fields
+            metadata = result.get('metadata', {})
+
+            # Validate prose-specific fields exist
+            if 'prose_seq_num' not in metadata:
+                continue  # Skip non-prose results
+
+            prose_seq_num = metadata.get('prose_seq_num')
+            prose_heading = metadata.get('prose_heading', '')
+            prose_content_type = metadata.get('prose_content_type', '')
+            granth_name = result.get('filename', '').lower()
+
+            # Check if this result matches our expectations
+            if (expected_filename in granth_name and
+                prose_seq_num == expected_prose_seq and
+                expected_heading in prose_heading and
+                prose_content_type == expected_content_type):
+
+                found_expected = True
+                log_handle.info(f"✓ Found expected prose {expected_filename} (seq={prose_seq_num}, type={prose_content_type}, heading={prose_heading})")
+
+                # Additional validation: verify adhikar exists
+                assert 'adhikar' in metadata, "adhikar field missing from prose metadata"
+
+                # Additional validation: verify language matches
+                result_lang = metadata.get('language', '')
+                assert result_lang == lang, f"Expected language {lang}, got {result_lang}"
+
+                break
+
+        assert found_expected, f"Expected prose (seq={expected_prose_seq}, type={expected_content_type}) not found for query '{query}'"
+
+
+def test_search_prose_with_categories():
+    """Test prose search with category filters (Anuyog, Author, Teekakar)."""
+    config = Config()
+    index_searcher = IndexSearcher(config)
+
+    # Test cases with category filtering for prose content
+    test_cases = [
+        # Hindi test cases
+        {
+            "query": "प्रकृति संसार का आधार है",
+            "lang": "hi",
+            "expected_anuyog": "Prose Anuyog",
+            "expected_author": "Prose Author",
+            "expected_teekakar": "Prose Teekakar",
+            "not_expected_anuyog": "Simple Anuyog",
+            "not_expected_author": "Simple Author"
+        },
+        {
+            "query": "पंच तत्व प्रकृति के मूल आधार हैं",
+            "lang": "hi",
+            "expected_anuyog": "Prose Anuyog",
+            "expected_author": "Prose Author",
+            "expected_teekakar": "Prose Teekakar",
+            "not_expected_anuyog": "Charitra Anuyog",
+            "not_expected_author": "Acharya Kundkund"
+        },
+        # Gujarati test cases
+        {
+            "query": "પ્રકૃતિ સંસારનો આધાર છે",
+            "lang": "gu",
+            "expected_anuyog": "Prose Anuyog",
+            "expected_author": "Prose Author",
+            "expected_teekakar": "Prose Teekakar",
+            "not_expected_anuyog": "Dravya Anuyog",
+            "not_expected_author": "Acharya Haribhadra"
+        },
+    ]
+
+    for test_case in test_cases:
+        query = test_case["query"]
+        lang = test_case["lang"]
+        expected_anuyog = test_case["expected_anuyog"]
+        expected_author = test_case["expected_author"]
+        expected_teekakar = test_case["expected_teekakar"]
+        not_expected_anuyog = test_case["not_expected_anuyog"]
+        not_expected_author = test_case["not_expected_author"]
+
+        # Test 1: Search with expected Anuyog filter - should return results
+        log_handle.info(f"Running prose search with Anuyog filter: '{query}' (expecting Anuyog: {expected_anuyog})")
+
+        results_with_anuyog, total_hits = index_searcher.perform_granth_search(
+            keywords=query,
+            exact_match=False,
+            exclude_words=[],
+            categories={"anuyog": [expected_anuyog]},
+            detected_language=lang,
+            page_size=10,
+            page_number=1
+        )
+
+        log_handle.info(f"Found {len(results_with_anuyog)} results with Anuyog filter '{expected_anuyog}'")
+        assert len(results_with_anuyog) > 0, f"Expected results with Anuyog '{expected_anuyog}', got {len(results_with_anuyog)}"
+
+        # Validate the result has the expected Anuyog and is prose content
+        result = results_with_anuyog[0]
+        metadata = result.get('metadata', {})
+        result_anuyog = metadata.get('anuyog', '')
+        assert result_anuyog == expected_anuyog, f"Expected Anuyog '{expected_anuyog}', got '{result_anuyog}'"
+        assert 'prose_seq_num' in metadata, "Result should be prose content with prose_seq_num"
+        log_handle.info(f"✓ Found prose result with expected Anuyog: {expected_anuyog}")
+
+        # Test 2: Search with unexpected Anuyog filter - should return no results
+        log_handle.info(f"Running prose search with incorrect Anuyog filter: '{query}' (using Anuyog: {not_expected_anuyog})")
+
+        results_with_wrong_anuyog, total_hits = index_searcher.perform_granth_search(
+            keywords=query,
+            exact_match=False,
+            exclude_words=[],
+            categories={"anuyog": [not_expected_anuyog]},
+            detected_language=lang,
+            page_size=10,
+            page_number=1
+        )
+
+        log_handle.info(f"Found {len(results_with_wrong_anuyog)} results with incorrect Anuyog filter '{not_expected_anuyog}'")
+        assert len(results_with_wrong_anuyog) == 0, f"Expected 0 results with incorrect Anuyog '{not_expected_anuyog}', got {len(results_with_wrong_anuyog)}"
+        log_handle.info(f"✓ Correctly found no results with incorrect Anuyog: {not_expected_anuyog}")
+
+        # Test 3: Search with expected Author filter - should return results
+        log_handle.info(f"Running prose search with Author filter: '{query}' (expecting Author: {expected_author})")
+
+        results_with_author, total_hits = index_searcher.perform_granth_search(
+            keywords=query,
+            exact_match=False,
+            exclude_words=[],
+            categories={"author": [expected_author]},
+            detected_language=lang,
+            page_size=10,
+            page_number=1
+        )
+
+        log_handle.info(f"Found {len(results_with_author)} results with Author filter '{expected_author}'")
+        assert len(results_with_author) > 0, f"Expected results with Author '{expected_author}', got {len(results_with_author)}"
+
+        # Validate the result has the expected Author
+        result_author = results_with_author[0].get('metadata', {}).get('author', '')
+        assert result_author == expected_author, f"Expected Author '{expected_author}', got '{result_author}'"
+        log_handle.info(f"✓ Found prose result with expected Author: {expected_author}")
+
+        # Test 4: Search with unexpected Author filter - should return no results
+        log_handle.info(f"Running prose search with incorrect Author filter: '{query}' (using Author: {not_expected_author})")
+
+        results_with_wrong_author, total_hits = index_searcher.perform_granth_search(
+            keywords=query,
+            exact_match=False,
             exclude_words=[],
             categories={"author": [not_expected_author]},
             detected_language=lang,

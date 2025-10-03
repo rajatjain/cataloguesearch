@@ -100,6 +100,30 @@ class GranthIndexer:
 
         log_handle.info(f"Completed indexing Granth: {granth._name}")
     
+    def _prose_section_to_dict(self, prose_section) -> dict:
+        """
+        Convert a ProseSection object to dictionary, including nested subsections.
+        """
+        subsections_list = []
+        if prose_section._subsections:
+            for subsection in prose_section._subsections:
+                subsections_list.append({
+                    "seq_num": subsection._seq_num,
+                    "heading": subsection._heading,
+                    "content": subsection._content,
+                    "page_num": subsection._page_num,
+                    "adhikar": subsection._adhikar
+                })
+
+        return {
+            "seq_num": prose_section._seq_num,
+            "heading": prose_section._heading,
+            "content": prose_section._content,
+            "subsections": subsections_list,
+            "page_num": prose_section._page_num,
+            "adhikar": prose_section._adhikar
+        }
+
     def _store_granth_in_granth_index(self, granth: Granth, granth_id: str, timestamp: str):
         """
         Function 1: Store the complete Granth object in granth_index
@@ -147,6 +171,10 @@ class GranthIndexer:
                 }
                 for verse in granth._verses
             ],
+            "prose_sections": [
+                self._prose_section_to_dict(prose_section)
+                for prose_section in (granth._prose_sections or [])
+            ],
             "timestamp_indexed": timestamp
         }
         
@@ -163,9 +191,9 @@ class GranthIndexer:
     
     def _store_paragraphs_in_search_index(self, granth: Granth, granth_id: str, timestamp: str):
         """
-        Function 2: Store all verse fields in search_index
+        Function 2: Store all verse fields and prose content paragraphs in search_index
         """
-        log_handle.info(f"Storing all verse fields for Granth: {granth._name}")
+        log_handle.info(f"Storing all verse fields and prose paragraphs for Granth: {granth._name}")
 
         # Define fields to index with/without embeddings
         fields_config = {
@@ -175,6 +203,7 @@ class GranthIndexer:
 
         all_docs = []
 
+        # Index verse fields
         for verse in granth._verses:
             verse_seq = verse._seq_num or 0
             language = granth._metadata._language or "hi"
@@ -207,8 +236,41 @@ class GranthIndexer:
                             )
                             all_docs.append(doc)
 
+        # Index prose content paragraphs
+        for prose_section in (granth._prose_sections or []):
+            prose_seq = prose_section._seq_num
+            language = granth._metadata._language or "hi"
+            page_num = prose_section._page_num or 1
+            lang_key = self._index_keys_per_lang.get(language, self._index_keys_per_lang["hi"])
+
+            # Index main prose content paragraphs
+            if prose_section._content:
+                for i, paragraph in enumerate(prose_section._content):
+                    if paragraph and paragraph.strip():
+                        doc = self._create_prose_document(
+                            granth, granth_id, prose_section, prose_seq, language, lang_key,
+                            page_num, paragraph.strip(), timestamp, i
+                        )
+                        all_docs.append(doc)
+
+            # Index subsection content paragraphs
+            if prose_section._subsections:
+                for subsection in prose_section._subsections:
+                    subsection_seq = subsection._seq_num
+                    subsection_page_num = subsection._page_num or page_num
+
+                    if subsection._content:
+                        for i, paragraph in enumerate(subsection._content):
+                            if paragraph and paragraph.strip():
+                                doc = self._create_prose_document(
+                                    granth, granth_id, subsection, subsection_seq, language, lang_key,
+                                    subsection_page_num, paragraph.strip(), timestamp, i,
+                                    parent_seq=prose_seq
+                                )
+                                all_docs.append(doc)
+
         if not all_docs:
-            log_handle.info("No verse fields found to index")
+            log_handle.info("No verse fields or prose paragraphs found to index")
             return
 
         # Separate docs by whether they need embeddings
@@ -284,6 +346,55 @@ class GranthIndexer:
             "timestamp_indexed": timestamp,
             "language": language,
             "needs_embedding": include_embedding,
+            "text_content": content  # Temporary field for embedding generation
+        }
+
+        # Add text content to appropriate language field
+        doc[lang_key] = content
+
+        return doc
+
+    def _create_prose_document(
+        self, granth: Granth, granth_id: str, prose_section, prose_seq: int,
+        language: str, lang_key: str, page_num: int, content: str,
+        timestamp: str, array_index: int, parent_seq: int = None
+    ) -> dict:
+        """
+        Create a document for a prose paragraph to be indexed in search_index
+
+        Args:
+            parent_seq: If this is a subsection, the parent prose section's seq_num
+        """
+        # Create chunk_id
+        if parent_seq is not None:
+            # Subsection: granth_id_p{parent_seq}_sub{prose_seq}_content_{array_index}
+            chunk_id = f"{granth_id}_p{parent_seq}_sub{prose_seq}_content_{array_index}"
+        else:
+            # Main prose: granth_id_p{prose_seq}_content_{array_index}
+            chunk_id = f"{granth_id}_p{prose_seq}_content_{array_index}"
+
+        doc = {
+            "chunk_id": chunk_id,
+            "document_id": granth_id,
+            "original_filename": granth._original_filename,
+            "page_number": page_num,
+            "paragraph_id": f"prose_{prose_seq}_content_{array_index}",
+            "metadata": {
+                "title": granth._name,
+                "language": language,
+                "author": granth._metadata._author,
+                "teekakar": granth._metadata._teekakar,
+                "anuyog": granth._metadata._anuyog,
+                "category": "Granth",
+                "prose_content_type": "subsection" if parent_seq is not None else "main",
+                "prose_seq_num": prose_seq,
+                "prose_heading": prose_section._heading,
+                "adhikar": prose_section._adhikar,
+                "file_url": granth._metadata._file_url
+            },
+            "timestamp_indexed": timestamp,
+            "language": language,
+            "needs_embedding": True,  # All prose paragraphs get embeddings
             "text_content": content  # Temporary field for embedding generation
         }
 

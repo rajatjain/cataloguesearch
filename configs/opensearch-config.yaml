@@ -331,5 +331,35 @@ granth_index:
             type: integer
           adhikar:
             type: keyword
+      prose_sections:
+        type: nested
+        properties:
+          seq_num:
+            type: integer
+          heading:
+            type: text
+            analyzer: mixed_indic_analyzer
+          content:
+            type: text
+            analyzer: mixed_indic_analyzer
+          subsections:
+            type: nested
+            properties:
+              seq_num:
+                type: integer
+              heading:
+                type: text
+                analyzer: mixed_indic_analyzer
+              content:
+                type: text
+                analyzer: mixed_indic_analyzer
+              page_num:
+                type: integer
+              adhikar:
+                type: keyword
+          page_num:
+            type: integer
+          adhikar:
+            type: keyword
       timestamp_indexed:
         type: date

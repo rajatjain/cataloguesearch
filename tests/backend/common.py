@@ -298,10 +298,12 @@ def setup_granth():
         simple_md_dir = f"{pdf_dir}/Granth/{lang}/simple_md"
         adhikar_md_dir = f"{pdf_dir}/Granth/{lang}/adhikar_md"
         mixed_md_dir = f"{pdf_dir}/Granth/{lang}/mixed_md"
-    
+        prose_md_dir = f"{pdf_dir}/Granth/{lang}/prose_md"
+
         os.makedirs(simple_md_dir, exist_ok=True)
         os.makedirs(adhikar_md_dir, exist_ok=True)
         os.makedirs(mixed_md_dir, exist_ok=True)
+        os.makedirs(prose_md_dir, exist_ok=True)
 
         # Config for simple_granth.md
         simple_md_config = {
@@ -336,17 +338,30 @@ def setup_granth():
         }
         write_config_file(f"{mixed_md_dir}/config.json", mixed_md_config)
 
+        # Config for adhikar_prose_granth.md
+        prose_md_config = {
+            "name": "Prose Granth",
+            "Anuyog": "Prose Anuyog",
+            "Author": "Prose Author",
+            "Teekakar": "Prose Teekakar",
+            "language": lang_codes[lang],
+            "file_url": f"http://prose_file_{lang}_url"
+        }
+        write_config_file(f"{prose_md_dir}/config.json", prose_md_config)
+
         # Copy test MD files to their directories
         TEST_BASE_DIR = os.getenv("TEST_BASE_DIR")
         test_md_path = os.path.join(TEST_BASE_DIR, "data", "md", lang)
-    
+
         simple_granth_path = f"{simple_md_dir}/simple_granth.md"
         adhikar_granth_path = f"{adhikar_md_dir}/adhikar_granth.md"
         mixed_granth_path = f"{mixed_md_dir}/mixed_granth.md"
-    
+        prose_granth_path = f"{prose_md_dir}/adhikar_prose_granth.md"
+
         shutil.copy(os.path.join(test_md_path, "simple_granth.md"), simple_granth_path)
         shutil.copy(os.path.join(test_md_path, "adhikar_granth.md"), adhikar_granth_path)
         shutil.copy(os.path.join(test_md_path, "mixed_granth.md"), mixed_granth_path)
+        shutil.copy(os.path.join(test_md_path, "adhikar_prose_granth.md"), prose_granth_path)
 
         granth_files[f"simple_granth_{lang_codes[lang]}"] = {
             "file_path": simple_granth_path,
@@ -355,11 +370,14 @@ def setup_granth():
         granth_files[f"adhikar_granth_{lang_codes[lang]}"] = {
             "file_path": adhikar_granth_path,
             "config": adhikar_md_config
-
         }
         granth_files[f"mixed_granth_{lang_codes[lang]}"] = {
             "file_path": mixed_granth_path,
             "config": mixed_md_config
+        }
+        granth_files[f"prose_granth_{lang_codes[lang]}"] = {
+            "file_path": prose_granth_path,
+            "config": prose_md_config
         }
 
     # Return the structure
