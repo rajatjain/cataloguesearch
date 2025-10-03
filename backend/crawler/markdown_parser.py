@@ -119,7 +119,6 @@ class MarkdownParser:
             if header.name == 'h1':
                 # Update current Adhikar
                 current_adhikar = self.clean_text(header.get_text())
-                log_handle.info(f"Found Adhikar: {current_adhikar}")
             elif header.name == 'h2':
                 # Extract verse with current Adhikar
                 verse = self._extract_single_verse(header, seq_num, soup, current_adhikar)
@@ -131,34 +130,34 @@ class MarkdownParser:
     
     def _extract_single_verse(self, h2_tag, seq_num: int, soup: BeautifulSoup, adhikar: Optional[str] = None) -> Optional[Verse]:
         """Extract a single verse from an H2 tag and its following content."""
-        # Extract type and type_num from H1 text
+        # Extract type, start_num and end_num from H2 text
         h2_text = self.clean_text(h2_tag.get_text())
-        verse_type, type_num = self._parse_verse_header(h2_text)
-        
+        verse_type, type_start_num, type_end_num = self._parse_verse_header(h2_text)
+
         if not verse_type:
             return None
-        
+
         # Get all content until the next H1 or H2
         content_elements = []
         current = h2_tag.next_sibling
-        
+
         while current and (not hasattr(current, 'name') or current.name not in ['h1', 'h2']):
             if hasattr(current, 'name') and current.name:
                 content_elements.append(current)
             current = current.next_sibling
-        
+
         # Extract verse text (first non-header content)
         verse_text = self._extract_verse_text(content_elements)
-        
+
         # Extract sections
         sections = self._extract_sections(content_elements)
-        
+
         # Map sections to verse fields
         translation = self._get_section_content(sections, ["Translation"])
         meaning = self._get_section_content(sections, ["Meaning"])
         teeka = self._get_section_content_list(sections, ["Teeka"])
         bhavarth = self._get_section_content_list(sections, ["Bhavarth"])
-        
+
         # Extract page number from "Page <num>" section
         page_num = self._extract_page_number(sections)
 
@@ -166,7 +165,8 @@ class MarkdownParser:
             seq_num=seq_num,
             verse=self.clean_text(verse_text),
             type=verse_type,
-            type_num=type_num,
+            type_start_num=type_start_num,
+            type_end_num=type_end_num,
             translation=self.clean_text(translation),
             language="Hindi",
             meaning=self.clean_text(meaning),
@@ -176,8 +176,8 @@ class MarkdownParser:
             adhikar=adhikar
         )
     
-    def _parse_verse_header(self, header_text: str) -> tuple[Optional[str], Optional[str]]:
-        """Parse verse header to extract type and number (as string to support ranges)."""
+    def _parse_verse_header(self, header_text: str) -> tuple[Optional[str], Optional[int], Optional[int]]:
+        """Parse verse header to extract type, start_num and end_num."""
         # Define valid verse types
         VALID_VERSE_TYPES = {"Shlok", "Gatha", "Kalash", "Uthanika"}
 
@@ -185,21 +185,22 @@ class MarkdownParser:
         range_match = re.match(r'^(Shlok|Gatha|Kalash|Sutra|Uthanika)\s+(\d+)-(\d+)', header_text, re.IGNORECASE)
         if range_match:
             verse_type = range_match.group(1).capitalize()
-            type_num = f"{range_match.group(2)}-{range_match.group(3)}"
-            return verse_type, type_num
+            start_num = int(range_match.group(2))
+            end_num = int(range_match.group(3))
+            return verse_type, start_num, end_num
 
         # Match patterns like "Shlok 1", "Gatha 15", "Kalash 3" (single)
         single_match = re.match(r'^(Shlok|Gatha|Kalash|Sutra|Uthanika)\s+(\d+)', header_text, re.IGNORECASE)
         if single_match:
             verse_type = single_match.group(1).capitalize()
-            type_num = single_match.group(2)
-            return verse_type, type_num
+            num = int(single_match.group(2))
+            return verse_type, num, num
 
         # If we have an H2 heading but it doesn't match the expected pattern, throw an error
         if header_text:
             raise ValueError(f"Invalid H2 heading found: '{header_text}'. Valid verse types are: {', '.join(sorted(VALID_VERSE_TYPES))} followed by a number or range (e.g., 'Shlok 1' or 'Shlok 1-6')")
 
-        return None, None
+        return None, None, None
     
     def _extract_verse_text(self, content_elements: List) -> str:
         """Extract the main verse text (Sanskrit/Prakrit) from content elements."""

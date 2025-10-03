@@ -135,7 +135,8 @@ class GranthIndexer:
                     "seq_num": verse._seq_num,
                     "verse": verse._verse,
                     "type": verse._type,
-                    "type_num": verse._type_num,
+                    "type_start_num": verse._type_start_num,
+                    "type_end_num": verse._type_end_num,
                     "translation": verse._translation,
                     "language": verse._language,
                     "meaning": verse._meaning,
@@ -275,7 +276,8 @@ class GranthIndexer:
                 "verse_content_type": field_name,
                 "verse_seq_num": verse_seq,
                 "verse_type": verse._type,
-                "verse_type_num": verse._type_num,
+                "verse_type_start_num": verse._type_start_num,
+                "verse_type_end_num": verse._type_end_num,
                 "adhikar": verse._adhikar,
                 "file_url": granth._metadata._file_url
             },
@@ -305,7 +307,7 @@ class GranthIndexer:
         
         try:
             success, failed = helpers.bulk(
-                self._opensearch_client, actions, stats_only=True, raise_on_error=False
+                self._opensearch_client, actions, stats_only=True, raise_on_error=True
             )
             log_handle.info(
                 f"Successfully indexed {success} chunks, failed to index {failed} chunks in search_index."

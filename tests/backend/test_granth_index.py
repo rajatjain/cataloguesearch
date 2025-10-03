@@ -171,7 +171,8 @@ def test_granth_indexing_pipeline_with_config():
             assert "seq_num" in verse, "seq_num missing from verse"
             assert "verse" in verse, "verse content missing from verse"
             assert "type" in verse, "type missing from verse"
-            assert "type_num" in verse, "type_num missing from verse"
+            assert "type_start_num" in verse, "type_start_num missing from verse"
+            assert "type_end_num" in verse, "type_end_num missing from verse"
             
             # Count verse types
             verse_type = verse["type"]
