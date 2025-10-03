@@ -51,7 +51,8 @@ class TestMarkdownParser:
             assert verse._adhikar is None, f"Verse {i+1} should have adhikar=None"
             assert verse._seq_num == i + 1
             assert verse._type == "Shlok"
-            assert verse._type_num == i + 1
+            assert verse._type_start_num == i + 1
+            assert verse._type_end_num == i + 1
         
         # Verify specific verse content
         first_verse = granth._verses[0]
@@ -75,23 +76,24 @@ class TestMarkdownParser:
         
         # Expected Adhikar mapping
         expected_adhikars = [
-            (1, "प्रकृति अधिकार"),  # Shlok 1
-            (2, "प्रकृति अधिकार"),  # Shlok 2
-            (3, "शिक्षा अधिकार"),   # Shlok 3
-            (4, "शिक्षा अधिकार"),   # Shlok 4
-            (5, "शिक्षा अधिकार"),   # Shlok 5
-            (6, "सामाजिक अधिकार"), # Shlok 6
-            (7, "सामाजिक अधिकार"), # Shlok 7
+            (1, 1, "प्रकृति अधिकार"),  # Shlok 1
+            (2, 2, "प्रकृति अधिकार"),  # Shlok 2
+            (3, 8, "शिक्षा अधिकार"),   # Shlok 3-8 (range)
+            (9, 9, "शिक्षा अधिकार"),   # Shlok 9
+            (10, 10, "शिक्षा अधिकार"), # Shlok 10
+            (11, 11, "सामाजिक अधिकार"), # Shlok 11
+            (12, 12, "सामाजिक अधिकार"), # Shlok 12
         ]
         
         # Check verses and their Adhikars
-        for i, (shlok_num, expected_adhikar) in enumerate(expected_adhikars):
+        for i, (shlok_start, shlok_end, expected_adhikar) in enumerate(expected_adhikars):
             verse = granth._verses[i]
             assert isinstance(verse, Verse)
             assert verse._seq_num == i + 1
             assert verse._type == "Shlok"
-            assert verse._type_num == shlok_num
-            assert verse._adhikar == expected_adhikar, f"Verse {shlok_num} should belong to '{expected_adhikar}'"
+            assert verse._type_start_num == shlok_start
+            assert verse._type_end_num == shlok_end
+            assert verse._adhikar == expected_adhikar, f"Verse {shlok_start} should belong to '{expected_adhikar}'"
         
         # Verify specific content from different Adhikars
         # प्रकृति अधिकार verses
@@ -180,14 +182,25 @@ class TestMarkdownParser:
     def test_verse_numbering_with_adhikars(self, parser, adhikar_granth_path):
         """Test that verse sequence numbers are correct with Adhikars."""
         granth = parser.parse_file(adhikar_granth_path)
-        
+
         # Verify sequence numbering is continuous despite Adhikars
         for i, verse in enumerate(granth._verses):
             assert verse._seq_num == i + 1
-        
-        # Verify type_num reflects actual Shlok numbers
-        type_nums = [verse._type_num for verse in granth._verses]
-        assert type_nums == [1, 2, 3, 4, 5, 6, 7]
+
+        # Verify type_start_num and type_end_num reflect actual Shlok numbers
+        expected_ranges = [
+            (1, 1),    # Shlok 1
+            (2, 2),    # Shlok 2
+            (3, 8),    # Shlok 3-8 (range)
+            (9, 9),    # Shlok 9
+            (10, 10),  # Shlok 10
+            (11, 11),  # Shlok 11
+            (12, 12),  # Shlok 12
+        ]
+        for i, (expected_start, expected_end) in enumerate(expected_ranges):
+            verse = granth._verses[i]
+            assert verse._type_start_num == expected_start, f"Verse {i+1} type_start_num should be {expected_start}"
+            assert verse._type_end_num == expected_end, f"Verse {i+1} type_end_num should be {expected_end}"
     
     def test_empty_adhikar_handling(self, parser):
         """Test handling of empty or malformed content."""
@@ -227,30 +240,31 @@ Test translation
         
         # Expected verse types and Adhikars
         expected_verses = [
-            (1, "Gatha", 1, "ज्ञान अधिकार"),    # Gatha 1
-            (2, "Kalash", 1, "ज्ञान अधिकार"),   # Kalash 1
-            (3, "Gatha", 2, "ज्ञान अधिकार"),    # Gatha 2
-            (4, "Kalash", 2, "ज्ञान अधिकार"),   # Kalash 2
-            (5, "Gatha", 3, "कर्म अधिकार"),     # Gatha 3
-            (6, "Gatha", 4, "कर्म अधिकार"),     # Gatha 4
-            (7, "Kalash", 3, "कर्म अधिकार"),    # Kalash 3
-            (8, "Gatha", 5, "कर्म अधिकार"),     # Gatha 5
-            (9, "Kalash", 4, "कर्म अधिकार"),    # Kalash 4
-            (10, "Gatha", 6, "मोक्ष अधिकार"),   # Gatha 6
-            (11, "Gatha", 7, "मोक्ष अधिकार"),   # Gatha 7
-            (12, "Kalash", 5, "मोक्ष अधिकार"),  # Kalash 5
-            (13, "Gatha", 8, "मोक्ष अधिकार"),   # Gatha 8
-            (14, "Kalash", 6, "मोक्ष अधिकार"),  # Kalash 6
-            (15, "Gatha", 9, "मोक्ष अधिकार"),   # Gatha 9
+            (1, "Gatha", 1, 1, "ज्ञान अधिकार"),    # Gatha 1
+            (2, "Kalash", 1, 1, "ज्ञान अधिकार"),   # Kalash 1
+            (3, "Gatha", 2, 6, "ज्ञान अधिकार"),    # Gatha 2
+            (4, "Kalash", 2, 2, "ज्ञान अधिकार"),   # Kalash 2
+            (5, "Gatha", 7, 7, "कर्म अधिकार"),     # Gatha 3
+            (6, "Gatha", 8, 8, "कर्म अधिकार"),     # Gatha 4
+            (7, "Kalash", 3, 3, "कर्म अधिकार"),    # Kalash 3
+            (8, "Gatha", 9, 9, "कर्म अधिकार"),     # Gatha 5
+            (9, "Kalash", 4, 4, "कर्म अधिकार"),    # Kalash 4
+            (10, "Gatha", 10, 10,"मोक्ष अधिकार"),   # Gatha 6
+            (11, "Gatha", 11, 11, "मोक्ष अधिकार"),   # Gatha 7
+            (12, "Kalash", 5, 5, "मोक्ष अधिकार"),  # Kalash 5
+            (13, "Gatha", 12, 12, "मोक्ष अधिकार"),   # Gatha 8
+            (14, "Kalash", 6, 6, "मोक्ष अधिकार"),  # Kalash 6
+            (15, "Gatha", 13, 13, "मोक्ष अधिकार"),   # Gatha 9
         ]
         
         # Verify each verse
-        for i, (seq_num, verse_type, type_num, adhikar) in enumerate(expected_verses):
+        for i, (seq_num, verse_type, start, end, adhikar) in enumerate(expected_verses):
             verse = granth._verses[i]
             assert isinstance(verse, Verse)
             assert verse._seq_num == seq_num, f"Verse {i+1} seq_num should be {seq_num}"
             assert verse._type == verse_type, f"Verse {i+1} type should be {verse_type}"
-            assert verse._type_num == type_num, f"Verse {i+1} type_num should be {type_num}"
+            assert verse._type_start_num == start, f"Verse {i+1} type_start_num should be {start}"
+            assert verse._type_end_num == end, f"Verse {i+1} type_end_num should be {end}"
             assert verse._adhikar == adhikar, f"Verse {i+1} adhikar should be '{adhikar}'"
         
         # Test specific verse content
@@ -258,15 +272,17 @@ Test translation
         gatha1 = granth._verses[0]
         assert "सत्य वचन बोलना धर्म है" in gatha1._verse
         assert gatha1._type == "Gatha"
-        assert gatha1._type_num == 1
+        assert gatha1._type_start_num == 1
+        assert gatha1._type_end_num == 1
         assert gatha1._adhikar == "ज्ञान अधिकार"
         assert gatha1._page_num == 5
-        
+
         # First Kalash
         kalash1 = granth._verses[1]
         assert "ज्ञान प्राप्ति से आत्मा का कल्याण" in kalash1._verse
         assert kalash1._type == "Kalash"
-        assert kalash1._type_num == 1
+        assert kalash1._type_start_num == 1
+        assert kalash1._type_end_num == 1
         assert kalash1._adhikar == "ज्ञान अधिकार"
         assert kalash1._page_num == 8
         

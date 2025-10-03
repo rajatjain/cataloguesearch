@@ -134,7 +134,7 @@ def test_granth_indexing_pipeline_with_config():
     # Check total document count in granth_index
     granth_search_result = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"match_all": {}}, "size": 10}
+        body={"query": {"match_all": {}}, "size": 1000}
     )
     
     granth_docs = granth_search_result["hits"]["hits"]
@@ -171,7 +171,8 @@ def test_granth_indexing_pipeline_with_config():
             assert "seq_num" in verse, "seq_num missing from verse"
             assert "verse" in verse, "verse content missing from verse"
             assert "type" in verse, "type missing from verse"
-            assert "type_num" in verse, "type_num missing from verse"
+            assert "type_start_num" in verse, "type_start_num missing from verse"
+            assert "type_end_num" in verse, "type_end_num missing from verse"
             
             # Count verse types
             verse_type = verse["type"]
@@ -217,7 +218,7 @@ def test_granth_indexing_pipeline_with_config():
     # Check document count in search_index (should be paragraph chunks)
     search_result = opensearch_client.search(
         index=config.OPENSEARCH_INDEX_NAME,
-        body={"query": {"match_all": {}}, "size": 100}
+        body={"query": {"match_all": {}}, "size": 1000}
     )
     
     search_docs = search_result["hits"]["hits"]
@@ -231,20 +232,38 @@ def test_granth_indexing_pipeline_with_config():
     
     for doc in search_docs:
         source = doc["_source"]
-        
+
         # Validate required fields
         assert "chunk_id" in source, "chunk_id missing from search_index document"
         assert "document_id" in source, "document_id missing from search_index document"
-        assert "vector_embedding" in source, "vector_embedding missing from search_index document"
         assert "metadata" in source, "metadata missing from search_index document"
-        
-        # Validate vector embedding
-        embedding = source["vector_embedding"]
-        assert isinstance(embedding, list), "vector_embedding should be a list"
-        assert len(embedding) > 0, "vector_embedding should not be empty"
-        assert all(isinstance(x, (int, float)) for x in embedding), "vector_embedding should contain numbers"
-        embedding_count += 1
-        
+
+        # Get verse content type and language
+        verse_content_type = source["metadata"].get("verse_content_type")
+        language = source["metadata"].get("language")
+
+        # Validate language-specific text content field
+        if language == "hi":
+            assert "text_content_hindi" in source, f"text_content_hindi missing for Hindi document"
+            assert source["text_content_hindi"], "text_content_hindi should not be empty"
+        elif language == "gu":
+            assert "text_content_gujarati" in source, f"text_content_gujarati missing for Gujarati document"
+            assert source["text_content_gujarati"], "text_content_gujarati should not be empty"
+
+        # Fields WITH embeddings: teeka, bhavarth
+        # Fields WITHOUT embeddings: verse, translation, meaning
+        if verse_content_type in ["teeka", "bhavarth"]:
+            # Should have vector_embedding
+            assert "vector_embedding" in source, f"vector_embedding missing from {verse_content_type} document"
+            embedding = source["vector_embedding"]
+            assert isinstance(embedding, list), "vector_embedding should be a list"
+            assert len(embedding) > 0, "vector_embedding should not be empty"
+            assert all(isinstance(x, (int, float)) for x in embedding), "vector_embedding should contain numbers"
+            embedding_count += 1
+        else:
+            # Should NOT have vector_embedding for verse, translation, meaning
+            assert "vector_embedding" not in source, f"vector_embedding should not be present in {verse_content_type} document"
+
         # Collect metadata for validation
         document_ids.add(source["document_id"])
         metadata = source["metadata"]

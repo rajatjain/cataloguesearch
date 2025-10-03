@@ -115,16 +115,16 @@ def setup(copy_ocr_files=False, add_scan_config=False):
     shutil.copy(thanjavur_gujarati, thanjavur_gujarati_path)
 
     # Create config files for language base directories
-    hindi_config = {"language": "hi"}
-    gujarati_config = {"language": "gu"}
+    hindi_config = {"language": "hi", "category": "Pravachan"}
+    gujarati_config = {"language": "gu", "category": "Pravachan"}
     
     write_config_file(f"{hindi_base}/config.json", hindi_config)
     write_config_file(f"{gujarati_base}/config.json", gujarati_config)
     
     # Create config files for category directories
-    cities_config = {"category": "city"}
-    spiritual_config = {"category": "spiritual"}
-    history_config = {"category": "history"}
+    cities_config = {"Anuyog": "city"}
+    spiritual_config = {"Anuyog": "spiritual"}
+    history_config = {"Anuyog": "history"}
     metro_config = {"type": "metro"}
     non_metro_config = {"type": "non_metro"}
     
@@ -305,7 +305,7 @@ def setup_granth():
 
         # Config for simple_granth.md
         simple_md_config = {
-            "Granth": "Simple",
+            "name": "Simple",
             "Anuyog": "Simple Anuyog",
             "Author": "Simple Author",
             "Teekakar": "Simple Teekakar",
@@ -316,7 +316,7 @@ def setup_granth():
 
         # Config for adhikar_granth.md
         adhikar_md_config = {
-            "Granth": "Adhikar",
+            "name": "Adhikar",
             "Anuyog": "Charitra Anuyog",
             "Author": "Acharya Kundkund",
             "Teekakar": "Acharya Nemichandra",
@@ -327,7 +327,7 @@ def setup_granth():
 
         # Config for mixed_granth.md
         mixed_md_config = {
-            "Granth": "Mixed",
+            "name": "Mixed",
             "Anuyog": "Dravya Anuyog",
             "Author": "Acharya Haribhadra",
             "Teekakar": "Pandit Todarmal",

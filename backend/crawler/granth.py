@@ -5,30 +5,32 @@ class Verse:
     """Verse defines all the content of a single Verse within a Granth (scripture). The structure
     of the Verse is as follows:
 
-        - seq_num:       The sequence number in which this verse occurs. This may be different
-                         from the actual verse number in the Granth. For example, Samaysar,
-                         Niyamsar etc. have both Gathas and Kalash. So, Kalash 24 may have a
-                         sequence number of 35 if there are 13 Gathas before Kalash 24. etc.
-        - verse:         The original Sanskrit/Prakrit/Hindi verse
-        - type:          Gatha/Kalash/Shlok etc.
-        - type_num:      The actual number of the gatha/kalash/shlok.
-        - translation:   The hindi/gujarati translation
-        - language:      The language in which the verse is translated and the meaning/teeka etc.
-                         is written
-        - meaning:       The gaatharth/anyavarth/shlokarth
-        - teeka:         Full Teeka. This is a list comprising multiple paragraphs
-        - bhavarth:      Full Bhavarth. This is a list comprising multiple paragraphs
-        - page_num:      Page Number in the original PDF file.
-        - adhikar:       The Adhikar (chapter/section) this verse belongs to, if any.
+        - seq_num:             The sequence number in which this verse occurs. This may be different
+                               from the actual verse number in the Granth. For example, Samaysar,
+                               Niyamsar etc. have both Gathas and Kalash. So, Kalash 24 may have a
+                               sequence number of 35 if there are 13 Gathas before Kalash 24. etc.
+        - verse:               The original Sanskrit/Prakrit/Hindi verse
+        - type:                Gatha/Kalash/Shlok etc.
+        - type_start_num:      The starting number (e.g., 1 for "1-6", 247 for "247")
+        - type_end_num:        The ending number (e.g., 6 for "1-6", 247 for "247")
+        - translation:         The hindi/gujarati translation
+        - language:            The language in which the verse is translated and the meaning/teeka etc.
+                               is written
+        - meaning:             The gaatharth/anyavarth/shlokarth
+        - teeka:               Full Teeka. This is a list comprising multiple paragraphs
+        - bhavarth:            Full Bhavarth. This is a list comprising multiple paragraphs
+        - page_num:            Page Number in the original PDF file.
+        - adhikar:             The Adhikar (chapter/section) this verse belongs to, if any.
 
     """
     def __init__(
-        self, seq_num, verse, type, type_num, translation, language, meaning, teeka, bhavarth, page_num=None, adhikar=None
+        self, seq_num, verse, type, type_start_num, type_end_num, translation, language, meaning, teeka, bhavarth, page_num=None, adhikar=None
     ):
         self._seq_num = seq_num
         self._verse = verse
         self._type = type
-        self._type_num = type_num
+        self._type_start_num = type_start_num
+        self._type_end_num = type_end_num
         self._translation = translation
         self._language = language
         self._meaning = meaning
@@ -42,7 +44,8 @@ class Verse:
             Verse Seq: {self._seq_num}
             Verse: {self._verse}
             Type: {self._type}
-            Type Num: {self._type_num}
+            Type Start Num: {self._type_start_num}
+            Type End Num: {self._type_end_num}
             Translation: {self._translation}
             Language: {self._language}
             Meaning: {self._meaning}
@@ -59,7 +62,8 @@ class Verse:
             "seq_num": self._seq_num,
             "verse": self._verse,
             "type": self._type,
-            "type_num": self._type_num,
+            "type_start_num": self._type_start_num,
+            "type_end_num": self._type_end_num,
             "translation": self._translation,
             "language": self._language,
             "meaning": self._meaning,

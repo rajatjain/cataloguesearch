@@ -5,7 +5,7 @@ import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from
 import { Navigation, Header } from './components/Navigation';
 import { SearchBar, MetadataFilters, AdvancedSearch, SearchOptions } from './components/SearchInterface';
 import { ResultsList, SuggestionsCard, Tabs, SimilarSourceInfoCard } from './components/SearchResults';
-import { ExpandModal, WelcomeModal } from './components/Modals';
+import { ExpandModal, GranthVerseModal, WelcomeModal } from './components/Modals';
 import { FeedbackForm } from './components/Feedback';
 import About from './components/About';
 import WhatsNew from './components/WhatsNew';
@@ -176,9 +176,9 @@ const AppContent = () => {
         setShowFilters(true);
         setSearchData(null);
         setIsLoading(false);
-        setActiveTab('keyword');
-        setKeywordPage(1);
-        setVectorPage(1);
+        setActiveTab('pravachan');
+        setPravachanPage(1);
+        setGranthPage(1);
         setSimilarDocsPage(1);
         setSimilarDocumentsData(null);
         setSourceDocForSimilarity(null);
@@ -219,14 +219,16 @@ const AppContent = () => {
     const [metadata, setMetadata] = useState({});
     const [searchData, setSearchData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState('keyword');
-    const [keywordPage, setKeywordPage] = useState(1);
-    const [vectorPage, setVectorPage] = useState(1);
+    const [activeTab, setActiveTab] = useState('pravachan');
+    const [pravachanPage, setPravachanPage] = useState(1);
+    const [granthPage, setGranthPage] = useState(1);
     const [similarDocsPage, setSimilarDocsPage] = useState(1);
     const [similarDocumentsData, setSimilarDocumentsData] = useState(null);
     const [sourceDocForSimilarity, setSourceDocForSimilarity] = useState(null);
     const [modalData, setModalData] = useState(null);
     const [isContextLoading, setIsContextLoading] = useState(false);
+    const [granthVerseData, setGranthVerseData] = useState(null);
+    const [isGranthVerseLoading, setIsGranthVerseLoading] = useState(false);
     const [showWelcomePopup, setShowWelcomePopup] = useState(false);
     const [showTipsModal, setShowTipsModal] = useState(false);
     const PAGE_SIZE = 20;
@@ -271,44 +273,43 @@ const AppContent = () => {
     };
 
     const handleSearch = useCallback(async (page = 1) => {
-        if (!query.trim()) { 
-            alert("Please enter a search query."); 
-            return; 
+        if (!query.trim()) {
+            alert("Please enter a search query.");
+            return;
         }
-        setIsLoading(true); 
-        setKeywordPage(page); 
-        setVectorPage(1); 
-        setSimilarDocumentsData(null); 
+        setIsLoading(true);
+        setPravachanPage(page);
+        setSimilarDocumentsData(null);
         setSourceDocForSimilarity(null);
-        
-        const requestPayload = { 
-            query, 
+
+        const requestPayload = {
+            query,
             exact_match: exactMatch,
-            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0), 
-            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}), 
-            language: language, 
-            page_number: page, 
-            page_size: PAGE_SIZE, 
-            enable_reranking: searchType === 'relevance' 
+            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
+            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
+            language: language,
+            page_number: page,
+            page_size: PAGE_SIZE,
+            enable_reranking: searchType === 'relevance'
         };
-        
+
         const data = await api.search(requestPayload);
         setSearchData(data);
-        
-        if (data.results && data.results.length > 0) { 
-            setActiveTab('keyword'); 
-        } else { 
-            setActiveTab('vector'); 
+
+        if (data.pravachan_results?.total_hits > 0) {
+            setActiveTab('pravachan');
+        } else if (data.granth_results?.total_hits > 0) {
+            setActiveTab('granth');
         }
         setIsLoading(false);
     }, [query, activeFilters, language, exactMatch, excludeWords, searchType]);
 
-    const handleVectorSearch = useCallback(async (page = 1) => {
+    const handlePravachanSearch = useCallback(async (page = 1) => {
         if (!query.trim()) {
             return;
         }
         setIsLoading(true);
-        setVectorPage(page);
+        setPravachanPage(page);
 
         const requestPayload = {
             query,
@@ -326,6 +327,28 @@ const AppContent = () => {
         setIsLoading(false);
     }, [query, activeFilters, language, exactMatch, excludeWords, searchType]);
 
+    const handleGranthSearch = useCallback(async (page = 1) => {
+        if (!query.trim()) {
+            return;
+        }
+        setIsLoading(true);
+        setGranthPage(page);
+
+        const requestPayload = {
+            query,
+            exact_match: exactMatch,
+            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
+            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
+            language: language,
+            page_number: page,
+            page_size: PAGE_SIZE,
+            enable_reranking: searchType === 'relevance'
+        };
+
+        const data = await api.search(requestPayload);
+        setSearchData(data);
+        setIsLoading(false);
+    }, [query, activeFilters, language, exactMatch, excludeWords, searchType]);
 
     const handleFindSimilar = async (sourceDoc) => {
         setIsLoading(true); 
@@ -338,14 +361,24 @@ const AppContent = () => {
     };
 
     const handleExpand = async (chunkId) => {
-        setIsContextLoading(true); 
+        setIsContextLoading(true);
         setModalData({ previous: null, current: null, next: null });
         const data = await api.getParagraphContext(chunkId);
-        setModalData(data); 
+        setModalData(data);
         setIsContextLoading(false);
     };
 
+    const handleExpandGranthVerse = async (originalFilename, verseSeqNum) => {
+        setIsGranthVerseLoading(true);
+        setGranthVerseData(null);
+        const data = await api.getGranthVerse(originalFilename, verseSeqNum);
+        setGranthVerseData(data);
+        setIsGranthVerseLoading(false);
+    };
+
     const handleCloseModal = () => setModalData(null);
+
+    const handleCloseGranthVerseModal = () => setGranthVerseData(null);
 
     const handleWelcomeClose = () => {
         setShowWelcomePopup(false);
@@ -357,12 +390,12 @@ const AppContent = () => {
     };
 
     const handleClearSimilar = () => {
-        setSimilarDocumentsData(null); 
+        setSimilarDocumentsData(null);
         setSourceDocForSimilarity(null);
-        if (searchData?.results?.length > 0) { 
-            setActiveTab('keyword'); 
-        } else { 
-            setActiveTab('vector'); 
+        if (searchData?.pravachan_results?.total_hits > 0) {
+            setActiveTab('pravachan');
+        } else if (searchData?.granth_results?.total_hits > 0) {
+            setActiveTab('granth');
         }
     };
 
@@ -370,29 +403,28 @@ const AppContent = () => {
         setQuery(suggestion);
         // Trigger a new search with the suggestion
         const newQuery = suggestion;
-        setIsLoading(true); 
-        setKeywordPage(1); 
-        setVectorPage(1); 
-        setSimilarDocumentsData(null); 
+        setIsLoading(true);
+        setPravachanPage(1);
+        setSimilarDocumentsData(null);
         setSourceDocForSimilarity(null);
-        
-        const requestPayload = { 
-            query: newQuery, 
+
+        const requestPayload = {
+            query: newQuery,
             exact_match: exactMatch,
-            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0), 
-            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}), 
-            language: language, 
-            page_number: 1, 
-            page_size: PAGE_SIZE, 
-            enable_reranking: searchType === 'relevance' 
+            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
+            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
+            language: language,
+            page_number: 1,
+            page_size: PAGE_SIZE,
+            enable_reranking: searchType === 'relevance'
         };
-        
+
         api.search(requestPayload).then(data => {
             setSearchData(data);
-            if (data.results && data.results.length > 0) { 
-                setActiveTab('keyword'); 
-            } else { 
-                setActiveTab('vector'); 
+            if (data.pravachan_results?.total_hits > 0) {
+                setActiveTab('pravachan');
+            } else if (data.granth_results?.total_hits > 0) {
+                setActiveTab('granth');
             }
             setIsLoading(false);
         });
@@ -401,18 +433,18 @@ const AppContent = () => {
     const handlePageChange = (page) => {
         // Scroll to top when changing pages
         window.scrollTo({ top: 0, behavior: 'smooth' });
-        
+
         switch (activeTab) {
-            case 'keyword': 
-                handleSearch(page); 
+            case 'pravachan':
+                handlePravachanSearch(page);
                 break;
-            case 'vector': 
-                handleVectorSearch(page);
+            case 'granth':
+                handleGranthSearch(page);
                 break;
-            case 'similar': 
-                setSimilarDocsPage(page); 
+            case 'similar':
+                setSimilarDocsPage(page);
                 break;
-            default: 
+            default:
                 break;
         }
     };
@@ -429,17 +461,27 @@ const AppContent = () => {
     return (
         <div className="bg-slate-50 text-slate-900 min-h-screen font-sans">
             {modalData && (
-                <ExpandModal 
-                    data={modalData} 
-                    onClose={handleCloseModal} 
-                    isLoading={isContextLoading} 
+                <ExpandModal
+                    data={modalData}
+                    onClose={handleCloseModal}
+                    isLoading={isContextLoading}
                 />
             )}
-            
+
+            {granthVerseData && (
+                <GranthVerseModal
+                    verse={granthVerseData.verse}
+                    granthName={granthVerseData.granth_name}
+                    metadata={granthVerseData.metadata}
+                    onClose={handleCloseGranthVerseModal}
+                    isLoading={isGranthVerseLoading}
+                />
+            )}
+
             {showWelcomePopup && (
-                <WelcomeModal 
-                    onClose={handleWelcomeClose} 
-                    onGoToUsageGuide={handleWelcomeGoToUsageGuide} 
+                <WelcomeModal
+                    onClose={handleWelcomeClose}
+                    onGoToUsageGuide={handleWelcomeGoToUsageGuide}
                 />
             )}
 
@@ -530,10 +572,11 @@ const AppContent = () => {
                             
                             {!isLoading && (searchData || similarDocumentsData) && (
                                 <div className="mt-4">
-                                    <SuggestionsCard 
-                                        suggestions={searchData?.suggestions} 
-                                        originalQuery={query} 
-                                        onSuggestionClick={handleSuggestionClick} 
+                                    <SuggestionsCard
+                                        suggestions={searchData?.suggestions}
+                                        originalQuery={query}
+                                        onSuggestionClick={handleSuggestionClick}
+                                        hasResults={(searchData?.pravachan_results?.total_hits || 0) > 0 || (searchData?.granth_results?.total_hits || 0) > 0}
                                     />
                                     <Tabs 
                                         activeTab={activeTab} 
@@ -542,43 +585,38 @@ const AppContent = () => {
                                         similarDocumentsData={similarDocumentsData} 
                                         onClearSimilar={handleClearSimilar} 
                                     />
-                                    {activeTab === 'keyword' && searchData?.results.length > 0 && (
-                                        <ResultsList 
-                                            results={searchData.results} 
-                                            totalResults={searchData.total_results} 
-                                            pageSize={PAGE_SIZE} 
-                                            currentPage={keywordPage} 
-                                            onPageChange={handlePageChange} 
-                                            resultType="keyword" 
-                                            onFindSimilar={handleFindSimilar} 
-                                            onExpand={handleExpand} 
+                                    {activeTab === 'pravachan' && searchData?.pravachan_results?.results.length > 0 && (
+                                        <ResultsList
+                                            results={searchData.pravachan_results.results}
+                                            totalResults={searchData.pravachan_results.total_hits}
+                                            pageSize={PAGE_SIZE}
+                                            currentPage={pravachanPage}
+                                            onPageChange={handlePageChange}
+                                            resultType="pravachan"
+                                            onFindSimilar={handleFindSimilar}
+                                            onExpand={handleExpand}
                                             searchType={searchType}
                                             query={query}
                                             currentFilters={activeFilters}
-                                            language={language} 
+                                            language={language}
                                         />
                                     )}
-                                    {activeTab === 'vector' && (
-                                        searchData?.vector_results.length > 0 ? (
-                                            <ResultsList 
-                                                results={searchData.vector_results} 
-                                                totalResults={searchData.total_vector_results} 
-                                                pageSize={PAGE_SIZE} 
-                                                currentPage={vectorPage} 
-                                                onPageChange={handlePageChange} 
-                                                resultType="vector" 
-                                                onFindSimilar={handleFindSimilar} 
-                                                onExpand={handleExpand} 
-                                                searchType={searchType}
-                                                query={query}
-                                                currentFilters={activeFilters}
-                                                language={language} 
-                                            />
-                                        ) : searchData && (
-                                            <div className="text-center py-8 text-base text-slate-500 bg-white rounded-b-md border-t-0">
-                                                No results found. Try a different query.
-                                            </div>
-                                        )
+                                    {activeTab === 'granth' && searchData?.granth_results?.results.length > 0 && (
+                                        <ResultsList
+                                            results={searchData.granth_results.results}
+                                            totalResults={searchData.granth_results.total_hits}
+                                            pageSize={PAGE_SIZE}
+                                            currentPage={granthPage}
+                                            onPageChange={handlePageChange}
+                                            resultType="granth"
+                                            onFindSimilar={handleFindSimilar}
+                                            onExpand={handleExpand}
+                                            onExpandGranth={handleExpandGranthVerse}
+                                            searchType={searchType}
+                                            query={query}
+                                            currentFilters={activeFilters}
+                                            language={language}
+                                        />
                                     )}
                                     {activeTab === 'similar' && (
                                         <div className="bg-white p-3 md:p-4 rounded-b-md">

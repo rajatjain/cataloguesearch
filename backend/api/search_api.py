@@ -165,11 +165,46 @@ class SearchRequest(BaseModel):
     exact_match: bool = Field(False, description="Use exact phrase matching instead of regular match.")
     exclude_words: List[str] = Field([], description="List of words to exclude from search results.")
     categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
-    page_size: int = Field(20, ge=1, le=100, description="Number of results per page.")
-    page_number: int = Field(1, ge=1, description="Page number for pagination.")
+
+    # Search types configuration
+    search_types: Dict[str, Dict[str, Any]] = Field(
+        default={
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 20,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": True,
+                "page_size": 20,
+                "page_number": 1
+            }
+        },
+        description="Configuration for each search type",
+        example={
+            "Pravachan": {"enabled": True, "page_size": 20, "page_number": 1},
+            "Granth": {"enabled": True, "page_size": 10, "page_number": 1}
+        }
+    )
+
     enable_reranking: bool = Field(True, description="Enable re-ranking for better relevance.")
 
-@app.post("/api/search", response_model=Dict[str, Any])
+class SearchTypeResults(BaseModel):
+    """Results for a specific search type (Pravachan or Granth)."""
+    results: List[Dict[str, Any]] = Field(default_factory=list)
+    total_hits: int = Field(0)
+    page_size: int = Field(20)
+    page_number: int = Field(1)
+
+class SearchResponse(BaseModel):
+    """
+    Unified response model for both lexical and vector searches.
+    """
+    pravachan_results: SearchTypeResults = Field(default_factory=SearchTypeResults)
+    granth_results: SearchTypeResults = Field(default_factory=SearchTypeResults)
+    suggestions: List[str] = Field(default_factory=list, description="Spelling suggestions when no results found")
+
+@app.post("/api/search", response_model=SearchResponse)
 async def search(request: Request, request_data: SearchRequest = Body(...)):
     """
     Handles search requests to the OpenSearch index.
@@ -182,10 +217,13 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
     exact_match = request_data.exact_match
     exclude_words = request_data.exclude_words
     categories = request_data.categories
-    page_size = request_data.page_size
-    page_number = request_data.page_number
+    search_types = request_data.search_types
     enable_reranking = request_data.enable_reranking
     language = request_data.language
+
+    # Extract search type configurations
+    pravachan_config = search_types.get("Pravachan")
+    granth_config = search_types.get("Granth")
 
     has_advanced_options = exact_match or (exclude_words and len(exclude_words) > 0)
     is_lexical_query = (index_searcher.is_lexical_query(keywords) or
@@ -204,24 +242,42 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
 
         log_handle.info(f"Received search request: keywords='{keywords}', "
                         f"exact_match={exact_match}, exclude_words={exclude_words}, "
-                        f"categories={categories}, page={page_number}, size={page_size}, "
+                        f"categories={categories}, search_types={search_types}, "
                         f"language={language}, enable_reranking={enable_reranking}")
 
         if is_lexical_query:
-            # For lexical queries: only perform lexical search
-            lexical_results, lexical_total_hits = index_searcher.perform_lexical_search(
-                keywords=keywords,
-                exact_match=exact_match,
-                exclude_words=exclude_words,
-                categories=categories,
-                detected_language=language,
-                page_size=page_size,
-                page_number=page_number
-            )
-            log_handle.info(f"Lexical search returned {len(lexical_results)} results (total: {lexical_total_hits}).")
+            # For lexical queries: perform pravachan and/or granth search based on enabled flags
+            pravachan_results = []
+            pravachan_total_hits = 0
+            granth_results = []
+            granth_total_hits = 0
 
-            # If no lexical results, get spelling suggestions
-            if lexical_total_hits == 0:
+            if pravachan_config.get("enabled", False):
+                pravachan_results, pravachan_total_hits = index_searcher.perform_pravachan_search(
+                    keywords=keywords,
+                    exact_match=exact_match,
+                    exclude_words=exclude_words,
+                    categories=categories,
+                    detected_language=language,
+                    page_size=pravachan_config.get("page_size", 20),
+                    page_number=pravachan_config.get("page_number", 1)
+                )
+                log_handle.info(f"Pravachan search returned {len(pravachan_results)} results (total: {pravachan_total_hits}).")
+
+            if granth_config.get("enabled", False):
+                granth_results, granth_total_hits = index_searcher.perform_granth_search(
+                    keywords=keywords,
+                    exact_match=exact_match,
+                    exclude_words=exclude_words,
+                    categories=categories,
+                    detected_language=language,
+                    page_size=granth_config.get("page_size", 20),
+                    page_number=granth_config.get("page_number", 1)
+                )
+                log_handle.info(f"Granth search returned {len(granth_results)} results (total: {granth_total_hits}).")
+
+            # If no results from either search, get spelling suggestions
+            if pravachan_total_hits == 0 and granth_total_hits == 0:
                 suggestions = index_searcher.get_spelling_suggestions(
                     index_name=request.app.state.config.OPENSEARCH_INDEX_NAME,
                     text=keywords,
@@ -229,16 +285,23 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                     min_score=0.6,
                     num_suggestions=3
                 )
+                log_handle.info(f"Suggestions: {suggestions}")
 
-                response = {
-                    "total_results": 0,
-                    "page_size": page_size,
-                    "page_number": page_number,
-                    "results": [],
-                    "vector_results": [],
-                    "total_vector_results": 0,
-                    "suggestions": suggestions
-                }
+                response = SearchResponse(
+                    pravachan_results=SearchTypeResults(
+                        results=[],
+                        total_hits=0,
+                        page_size=pravachan_config.get("page_size", 20),
+                        page_number=pravachan_config.get("page_number", 1)
+                    ),
+                    granth_results=SearchTypeResults(
+                        results=[],
+                        total_hits=0,
+                        page_size=granth_config.get("page_size", 20),
+                        page_number=granth_config.get("page_number", 1)
+                    ),
+                    suggestions=suggestions
+                )
 
                 # Log metrics for zero results case
                 latency_ms = round((time.time() - start_time) * 1000, 2)
@@ -247,65 +310,115 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
 
                 log_handle.metrics(
                     f"{client_ip},{escaped_query},lexical,{exact_match},{escaped_categories},{language},"
-                    f"{enable_reranking},{page_size},{page_number},{latency_ms},0"
+                    f"{enable_reranking},{pravachan_config.get('page_size', 20)},{pravachan_config.get('page_number', 1)},{latency_ms},0"
                 )
 
-                log_handle.info(f"No lexical results found for lexical query '{keywords}'. Returning {len(suggestions)} suggestions.")
-                return JSONResponse(content=response, status_code=200)
+                log_handle.info(f"No results found for lexical query '{keywords}'. Returning {len(suggestions)} suggestions.")
+                return response
 
-            # Skip vector search for lexical queries
-            vector_results = []
-            vector_total_hits = 0
+            # Return structured response with both pravachan and granth results
+            response = SearchResponse(
+                pravachan_results=SearchTypeResults(
+                    results=pravachan_results,
+                    total_hits=pravachan_total_hits,
+                    page_size=pravachan_config.get("page_size", 20),
+                    page_number=pravachan_config.get("page_number", 1)
+                ),
+                granth_results=SearchTypeResults(
+                    results=granth_results,
+                    total_hits=granth_total_hits,
+                    page_size=granth_config.get("page_size", 20),
+                    page_number=granth_config.get("page_number", 1)
+                ),
+                suggestions=[]
+            )
+
+            # Calculate latency and log metrics
+            latency_ms = round((time.time() - start_time) * 1000, 2)
+            total_results = pravachan_total_hits + granth_total_hits
+
+            # Escape query for CSV
+            escaped_query = keywords.replace(',', ';').replace('"', "'").replace('\n', ' ').replace('\r', '')
+            escaped_categories = str(categories).replace(',', ';').replace('"', "'")
+
+            log_handle.metrics(
+                f"{client_ip},{escaped_query},lexical,{exact_match},{escaped_categories},{language},"
+                f"{enable_reranking},{pravachan_config.get('page_size', 20)},{pravachan_config.get('page_number', 1)},{latency_ms},{total_results}"
+            )
+
+            log_handle.info(f"Search response: {json_dumps(response.model_dump())}")
+            return response
+
         else:
-            # For non-lexical queries: only perform vector search
-            lexical_results = []
-            lexical_total_hits = 0
+            # For non-lexical queries: perform vector search on pravachan and/or granth based on enabled flags
+            pravachan_results = []
+            pravachan_total_hits = 0
+            granth_results = []
+            granth_total_hits = 0
 
             query_embedding = embedding_model.get_embedding(keywords)
             if not query_embedding:
                 log_handle.warning("Could not generate embedding for query. Vector search skipped.")
-                vector_results = []
-                vector_total_hits = 0
             else:
-                vector_results, vector_total_hits = index_searcher.perform_vector_search(
-                    keywords=keywords,
-                    embedding=query_embedding,
-                    categories=categories,
-                    page_size=page_size,
-                    page_number=page_number,
-                    language=language,
-                    rerank=enable_reranking
-                )
-                log_handle.info(
-                    f"Vector search returned {len(vector_results)} "
-                    f"results (total: {vector_total_hits}) with reranking={'enabled' if enable_reranking else 'disabled'}.")
+                if pravachan_config.get("enabled", False):
+                    pravachan_results, pravachan_total_hits = index_searcher.perform_vector_search(
+                        keywords=keywords,
+                        embedding=query_embedding,
+                        categories={**categories, 'category': ['Pravachan']},
+                        page_size=30,
+                        page_number=1,
+                        language=language,
+                        rerank=enable_reranking,
+                        rerank_top_k=30
+                    )
+                    log_handle.info(f"Pravachan vector search returned {len(pravachan_results)} results (total: {pravachan_total_hits}).")
 
-        response = {
-            "total_results": lexical_total_hits,
-            "page_size": page_size,
-            "page_number": page_number,
-            "results": lexical_results,
-            "vector_results": vector_results,
-            "total_vector_results": vector_total_hits
-        }
+                if granth_config.get("enabled", False):
+                    granth_results, granth_total_hits = index_searcher.perform_vector_search(
+                        keywords=keywords,
+                        embedding=query_embedding,
+                        categories={**categories, 'category': ['Granth']},
+                        page_size=20,
+                        page_number=1,
+                        language=language,
+                        rerank=enable_reranking,
+                        rerank_top_k=20
+                    )
+                    log_handle.info(f"Granth vector search returned {len(granth_results)} results (total: {granth_total_hits}).")
 
-        # Calculate latency and log metrics
-        latency_ms = round((time.time() - start_time) * 1000, 2)
-        search_type = "lexical" if is_lexical_query else "vector"
-        total_results = lexical_total_hits + vector_total_hits
+            # Use unified SearchResponse format for vector search too
+            response = SearchResponse(
+                pravachan_results=SearchTypeResults(
+                    results=pravachan_results,
+                    total_hits=pravachan_total_hits,
+                    page_size=30,
+                    page_number=1
+                ),
+                granth_results=SearchTypeResults(
+                    results=granth_results,
+                    total_hits=granth_total_hits,
+                    page_size=20,
+                    page_number=1
+                ),
+                suggestions=[]
+            )
 
-        # Escape query for CSV (replace commas with semicolons, quotes with single quotes)
-        escaped_query = keywords.replace(',', ';').replace('"', "'").replace('\n', ' ').replace('\r', '')
-        escaped_categories = str(categories).replace(',', ';').replace('"', "'")
+            # Calculate latency and log metrics
+            latency_ms = round((time.time() - start_time) * 1000, 2)
+            total_results = pravachan_total_hits + granth_total_hits
 
-        # Log metrics in CSV format: client_ip,query,search_type,exact_match,categories,language,enable_reranking,page_size,page_number,latency_ms,total_results
-        log_handle.metrics(
-            f"{client_ip},{escaped_query},{search_type},{exact_match},{escaped_categories},{language},"
-            f"{enable_reranking},{page_size},{page_number},{latency_ms},{total_results}"
-        )
+            # Escape query for CSV (replace commas with semicolons, quotes with single quotes)
+            escaped_query = keywords.replace(',', ';').replace('"', "'").replace('\n', ' ').replace('\r', '')
+            escaped_categories = str(categories).replace(',', ';').replace('"', "'")
 
-        log_handle.info(f"Search response: {json_dumps(response)}")
-        return JSONResponse(content=response, status_code=200)
+            # Log metrics in CSV format: client_ip,query,search_type,exact_match,categories,language,enable_reranking,page_size,page_number,latency_ms,total_results
+            log_handle.metrics(
+                f"{client_ip},{escaped_query},vector,{exact_match},{escaped_categories},{language},"
+                f"{enable_reranking},{pravachan_config.get('page_size', 20)},{pravachan_config.get('page_number', 1)},{latency_ms},{total_results}"
+            )
+
+            log_handle.info(f"Search response: {json_dumps(response.model_dump())}")
+            return response
 
     except Exception as e:
         log_handle.exception(f"An error occurred during search request processing: {e}")
@@ -352,4 +465,69 @@ async def get_context(request: Request, chunk_id: str, language: str = Query("hi
         return JSONResponse(content=context_data, status_code=200)
     except Exception as e:
         log_handle.exception(f"An error occurred while fetching context: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
+
+@app.get("/api/granth/verse", response_model=Dict[str, Any])
+async def get_granth_verse(request: Request, original_filename: str = Query(...), verse_seq_num: int = Query(...)):
+    """
+    Fetches the full verse from granth_index for a given original_filename and verse_seq_num.
+    """
+    try:
+        config = request.app.state.config
+        opensearch_client = get_opensearch_client(config)
+        granth_index_name = config.OPENSEARCH_GRANTH_INDEX_NAME
+
+        log_handle.info(f"Received request for granth verse: original_filename={original_filename}, verse_seq_num={verse_seq_num}")
+
+        # Search for the granth document by original_filename
+        # Use match query instead of term query to handle slight variations
+        search_body = {
+            "query": {
+                "match": {
+                    "original_filename": original_filename
+                }
+            },
+            "size": 1
+        }
+
+        response = opensearch_client.search(
+            index=granth_index_name,
+            body=search_body
+        )
+
+        hits = response.get("hits", {}).get("hits", [])
+        if not hits:
+            raise HTTPException(status_code=404, detail=f"Granth document not found: {original_filename}")
+
+        granth_doc = hits[0]["_source"]
+        verses = granth_doc.get("verses", [])
+
+        # Find the verse with matching seq_num
+        matching_verse = None
+        for verse in verses:
+            if verse.get("seq_num") == verse_seq_num:
+                matching_verse = verse
+                break
+
+        if not matching_verse:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Verse with seq_num {verse_seq_num} not found in document {original_filename}"
+            )
+
+        # Return the verse along with granth metadata
+        result = {
+            "granth_id": granth_doc.get("granth_id"),
+            "granth_name": granth_doc.get("name"),
+            "metadata": granth_doc.get("metadata", {}),
+            "verse": matching_verse
+        }
+
+        log_handle.info(f"Successfully retrieved verse {verse_seq_num} from granth {original_filename}")
+        return JSONResponse(content=result, status_code=200)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_handle.exception(f"An error occurred while fetching granth verse: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}")

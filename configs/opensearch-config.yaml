@@ -308,7 +308,9 @@ granth_index:
             analyzer: mixed_indic_analyzer
           type:
             type: keyword
-          type_num:
+          type_start_num:
+            type: integer
+          type_end_num:
             type: integer
           translation:
             type: text

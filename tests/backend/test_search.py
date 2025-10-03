@@ -511,7 +511,7 @@ def test_search_granth_content():
         {"query": "नदी पहाड़ों से समुद्र तक बहती", "lang": "hi", "filename": "simple_granth"},
 
         # simple_granth - Gujarati test cases
-        {"query": "નવી શરૂઆતનું પ્રતીક", "lang": "gu", "filename": "simple_granth"},
+        {"query": "સૂર્યનો ઉદય નવી શરૂઆતનું", "lang": "gu", "filename": "simple_granth"},
         {"query": "જળ જ જીવન છે", "lang": "gu", "filename": "simple_granth"},
         {"query": "સૂર્ય પૂર્વ દિશામાં ઉદય", "lang": "gu", "filename": "simple_granth"},
 
@@ -557,7 +557,7 @@ def test_search_granth_content():
             exact_match=False,
             exclude_words=[],
             categories={},
-            language=lang,
+            detected_language=lang,
             page_size=10,
             page_number=1
         )
@@ -592,7 +592,7 @@ def test_search_granth_content_exact_match():
             "lang": "hi",
             "filename": "simple_granth",
             "type": "Shlok",
-            "type_num": 1
+            "type_num": "1"
         },
         # simple_granth - Shlok 2 (Hindi)
         {
@@ -600,7 +600,7 @@ def test_search_granth_content_exact_match():
             "lang": "hi",
             "filename": "simple_granth",
             "type": "Shlok",
-            "type_num": 2
+            "type_num": "2"
         },
         # simple_granth - Shlok 1 (Gujarati)
         {
@@ -608,7 +608,7 @@ def test_search_granth_content_exact_match():
             "lang": "gu",
             "filename": "simple_granth",
             "type": "Shlok",
-            "type_num": 1
+            "type_num": "1"
         },
         # simple_granth - Shlok 2 (Gujarati)
         {
@@ -616,7 +616,7 @@ def test_search_granth_content_exact_match():
             "lang": "gu",
             "filename": "simple_granth",
             "type": "Shlok",
-            "type_num": 2
+            "type_num": "2"
         },
         # adhikar_granth - Shlok 1 (Hindi)
         {
@@ -624,7 +624,7 @@ def test_search_granth_content_exact_match():
             "lang": "hi",
             "filename": "adhikar_granth",
             "type": "Shlok",
-            "type_num": 1
+            "type_num": "1"
         },
         # adhikar_granth - Shlok 2 (Hindi)
         {
@@ -632,7 +632,7 @@ def test_search_granth_content_exact_match():
             "lang": "hi",
             "filename": "adhikar_granth",
             "type": "Shlok",
-            "type_num": 2
+            "type_num": "2"
         },
         # adhikar_granth - Shlok 3 (Hindi)
         {
@@ -640,7 +640,7 @@ def test_search_granth_content_exact_match():
             "lang": "hi",
             "filename": "adhikar_granth",
             "type": "Shlok",
-            "type_num": 3
+            "type_num": "3"
         },
         # adhikar_granth - Shlok 1 (Gujarati)
         {
@@ -648,7 +648,7 @@ def test_search_granth_content_exact_match():
             "lang": "gu",
             "filename": "adhikar_granth",
             "type": "Shlok",
-            "type_num": 1
+            "type_num": "1"
         },
         # adhikar_granth - Shlok 2 (Gujarati)
         {
@@ -656,7 +656,7 @@ def test_search_granth_content_exact_match():
             "lang": "gu",
             "filename": "adhikar_granth",
             "type": "Shlok",
-            "type_num": 2
+            "type_num": "2"
         },
         # mixed_granth - Gatha 1 (Hindi)
         {
@@ -664,7 +664,7 @@ def test_search_granth_content_exact_match():
             "lang": "hi",
             "filename": "mixed_granth",
             "type": "Gatha",
-            "type_num": 1
+            "type_num": "1"
         },
         # mixed_granth - Gatha 2 (Hindi)
         {
@@ -672,7 +672,7 @@ def test_search_granth_content_exact_match():
             "lang": "hi",
             "filename": "mixed_granth",
             "type": "Gatha",
-            "type_num": 2
+            "type_num": "2"
         },
         # mixed_granth - Gatha 3 (Hindi)
         {
@@ -680,7 +680,7 @@ def test_search_granth_content_exact_match():
             "lang": "hi",
             "filename": "mixed_granth",
             "type": "Gatha",
-            "type_num": 3
+            "type_num": "3"
         },
         # mixed_granth - Gatha 1 (Gujarati)
         {
@@ -688,7 +688,7 @@ def test_search_granth_content_exact_match():
             "lang": "gu",
             "filename": "mixed_granth",
             "type": "Gatha",
-            "type_num": 1
+            "type_num": "1"
         },
         # mixed_granth - Gatha 1 (Gujarati) - from Bhavarth
         {
@@ -696,7 +696,7 @@ def test_search_granth_content_exact_match():
             "lang": "gu",
             "filename": "mixed_granth",
             "type": "Gatha",
-            "type_num": 1
+            "type_num": "1"
         },
     ]
 
@@ -714,7 +714,7 @@ def test_search_granth_content_exact_match():
             exact_match=True,  # Use exact match
             exclude_words=[],
             categories={},
-            language=lang,
+            detected_language=lang,
             page_size=10,
             page_number=1
         )
@@ -727,9 +727,9 @@ def test_search_granth_content_exact_match():
         result = results[0]
         granth_name = result.get('filename', '').lower()
         verse_type = result.get('type', '')
-        verse_type_num = result.get('type_num', 0)
+        verse_type_num = str(result.get('type_num', ''))
 
-        if expected_filename in granth_name and verse_type == expected_type and verse_type_num == expected_type_num:
+        if expected_filename in granth_name and verse_type == expected_type and verse_type_num == str(expected_type_num):
             found_expected = True
             log_handle.info(f"✓ Found expected granth {expected_filename}, {expected_type} {expected_type_num} in results for query: '{query}'")
             break
@@ -826,7 +826,7 @@ def test_search_granth_content_with_categories():
             exact_match=True,
             exclude_words=[],
             categories={"anuyog": [expected_anuyog]},
-            language=lang,
+            detected_language=lang,
             page_size=10,
             page_number=1
         )
@@ -847,7 +847,7 @@ def test_search_granth_content_with_categories():
             exact_match=True,
             exclude_words=[],
             categories={"anuyog": [not_expected_anuyog]},
-            language=lang,
+            detected_language=lang,
             page_size=10,
             page_number=1
         )
@@ -864,7 +864,7 @@ def test_search_granth_content_with_categories():
             exact_match=True,
             exclude_words=[],
             categories={"author": [expected_author]},
-            language=lang,
+            detected_language=lang,
             page_size=10,
             page_number=1
         )
@@ -885,7 +885,7 @@ def test_search_granth_content_with_categories():
             exact_match=True,
             exclude_words=[],
             categories={"author": [not_expected_author]},
-            language=lang,
+            detected_language=lang,
             page_size=10,
             page_number=1
         )
