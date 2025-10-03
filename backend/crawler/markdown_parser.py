@@ -29,8 +29,8 @@ class MarkdownParser:
         text = text.replace('\u202F', ' ')  # Narrow no-break space
         text = text.replace('\uFEFF', '')   # Zero-width no-break space (BOM)
         
-        # Replace multiple spaces with single space
-        text = re.sub(r'\s+', ' ', text)
+        # Replace multiple spaces with single space (preserve newlines)
+        text = re.sub(r' +', ' ', text)
         
         # Strip leading/trailing whitespace
         text = text.strip()
