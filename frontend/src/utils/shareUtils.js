@@ -5,33 +5,82 @@ export const generateShareURL = () => {
     return window.location.origin;
 };
 
-// Format share content for different platforms
-export const formatShareContent = (query, result, shareUrl, language = 'hindi') => {
+// Format Granth share content
+export const formatGranthShareContent = (query, result, shareUrl) => {
+    const cleanContent = result?.content_snippet
+        ? result.content_snippet.replace(/<[^>]*>/g, '').trim()
+        : 'Search result from Aagam-Khoj';
+
+    const granthName = result?.original_filename ? result.original_filename.split('/').pop().replace('.md', '') : 'Unknown Granth';
+    const author = result?.metadata?.author || 'Unknown Author';
+    const adhikar = result?.metadata?.adhikar || '';
+
+    // Determine if it's verse or prose
+    let locationInfo = '';
+    if (result?.metadata?.verse_seq_num !== undefined) {
+        const verseType = result?.metadata?.verse_type || 'Verse';
+        const verseStart = result?.metadata?.verse_type_start_num;
+        const verseEnd = result?.metadata?.verse_type_end_num;
+        const verseNum = verseStart === verseEnd ? verseStart : `${verseStart}-${verseEnd}`;
+        locationInfo = adhikar ? `${adhikar} › ${verseType} ${verseNum}` : `${verseType} ${verseNum}`;
+    } else if (result?.metadata?.prose_seq_num !== undefined) {
+        const proseHeading = result?.metadata?.prose_heading || 'Prose Section';
+        locationInfo = adhikar ? `${adhikar} › ${proseHeading}` : proseHeading;
+    }
+
+    return {
+        title: `Found in Aagam-Khoj: "${query}"`,
+        text: `Query: ${query}\n\nExtract: "${cleanContent}"\n\nGranth: ${granthName}\n\nAuthor: ${author}\n\nLocation: ${locationInfo}\n\nSearch more at: ${shareUrl}`,
+        url: shareUrl,
+        isGranth: true,
+        granthName,
+        author,
+        locationInfo
+    };
+};
+
+// Format Pravachan share content
+export const formatPravachanShareContent = (query, result, shareUrl, language = 'hindi') => {
+    const cleanContent = result?.content_snippet
+        ? result.content_snippet.replace(/<[^>]*>/g, '').trim()
+        : 'Search result from Aagam-Khoj';
+
     const granth = result?.metadata?.Granth || 'Unknown Source';
     const series = result?.metadata?.Series || '';
     const pageNumber = result?.page_number || '';
     const filename = result?.original_filename ? result.original_filename.split('/').pop() : '';
     const pravachankar = result?.Pravachankar || 'Unknown';
-    
-    // Clean content snippet - remove HTML tags and don't truncate
-    const cleanContent = result?.content_snippet 
-        ? result.content_snippet.replace(/<[^>]*>/g, '').trim()
-        : 'Search result from Aagam-Khoj';
-    
+
     // Build pravachan details
     let pravachanDetails = '';
     if (series) pravachanDetails += `${series}, `;
     pravachanDetails += filename;
     pravachanDetails += `, Page ${pageNumber}`;
-    
+
     // Language-specific labels
     const pravachankarLabel = language === 'gujarati' ? 'પ્રવચનકાર' : 'प्रवचनकार';
-    
+
     return {
         title: `Found in Aagam-Khoj: "${query}"`,
         text: `Query: ${query}\n\nExtract: "${cleanContent}"\n\nGranth: ${granth}\n\n${pravachankarLabel}: ${pravachankar}\n\nPravachan Details: ${pravachanDetails}\n\nSearch more at: ${shareUrl}`,
-        url: shareUrl
+        url: shareUrl,
+        isGranth: false,
+        granth,
+        pravachankar,
+        pravachanDetails,
+        pravachankarLabel
     };
+};
+
+// Main dispatcher function - determines result type and calls appropriate formatter
+export const formatShareContent = (query, result, shareUrl, language = 'hindi') => {
+    const isGranthResult = result?.metadata?.verse_seq_num !== undefined || result?.metadata?.prose_seq_num !== undefined;
+
+    if (isGranthResult) {
+        return formatGranthShareContent(query, result, shareUrl);
+    } else {
+        return formatPravachanShareContent(query, result, shareUrl, language);
+    }
 };
 
 // Copy to clipboard function

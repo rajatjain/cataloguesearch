@@ -69,15 +69,34 @@ const ShareModal = ({ result, query, currentFilters, language, searchType, onClo
                         <div className="text-sm text-slate-700 mb-2 italic whitespace-pre-line">
                             <strong>Extract:</strong> "{result?.content_snippet ? result.content_snippet.replace(/<[^>]*>/g, '').trim() : 'Loading...'}"
                         </div>
-                        <div className="text-sm text-slate-700 mb-2">
-                            <strong>Granth:</strong> {result?.metadata?.Granth || 'Unknown Source'}
-                        </div>
-                        <div className="text-sm text-slate-700 mb-2">
-                            <strong>{language === 'gujarati' ? 'પ્રવચનકાર:' : 'प्रवचनकार:'}</strong> {result?.Pravachankar || 'Unknown'}
-                        </div>
-                        <div className="text-sm text-slate-700">
-                            <strong>Pravachan Details:</strong> {result?.metadata?.Series && `${result.metadata.Series}, `}{result?.original_filename ? result.original_filename.split('/').pop() : result?.filename || ''}, Page {result?.page_number || 'Unknown'}
-                        </div>
+
+                        {shareData.isGranth ? (
+                            // Granth result display
+                            <>
+                                <div className="text-sm text-slate-700 mb-2">
+                                    <strong>Granth:</strong> {shareData.granthName || 'Unknown Granth'}
+                                </div>
+                                <div className="text-sm text-slate-700 mb-2">
+                                    <strong>Author:</strong> {shareData.author || 'Unknown Author'}
+                                </div>
+                                <div className="text-sm text-slate-700">
+                                    <strong>Location:</strong> {shareData.locationInfo || 'Unknown'}
+                                </div>
+                            </>
+                        ) : (
+                            // Pravachan result display
+                            <>
+                                <div className="text-sm text-slate-700 mb-2">
+                                    <strong>Granth:</strong> {shareData.granth || 'Unknown Source'}
+                                </div>
+                                <div className="text-sm text-slate-700 mb-2">
+                                    <strong>{shareData.pravachankarLabel || (language === 'gujarati' ? 'પ્રવચનકાર:' : 'प्रवचनकार:')}</strong> {shareData.pravachankar || 'Unknown'}
+                                </div>
+                                <div className="text-sm text-slate-700">
+                                    <strong>Pravachan Details:</strong> {shareData.pravachanDetails || 'Unknown'}
+                                </div>
+                            </>
+                        )}
                     </div>
                     
                     {copiedFeedback && (
