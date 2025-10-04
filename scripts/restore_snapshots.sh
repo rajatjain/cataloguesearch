@@ -32,13 +32,19 @@ fi
 echo "Snapshots folder is accessible"
 
 # Check for required snapshot files
-REQUIRED_FILES=("index-1" "index.latest" "indices")
+REQUIRED_FILES=("index.latest" "indices")
 for file in "${REQUIRED_FILES[@]}"; do
     if [ ! -e "$SNAPSHOTS_DIR/$file" ]; then
         echo "Error: Required snapshot file '$file' not found in '$SNAPSHOTS_DIR'"
         exit 1
     fi
 done
+
+# Check for at least one index-* file
+if ! ls "$SNAPSHOTS_DIR"/index-* 1> /dev/null 2>&1; then
+    echo "Error: No index-* file found in '$SNAPSHOTS_DIR'"
+    exit 1
+fi
 
 # Check if any .dat files exist
 if ! ls "$SNAPSHOTS_DIR"/*.dat 1> /dev/null 2>&1; then
