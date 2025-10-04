@@ -16,7 +16,7 @@ index:
   chunk_strategy: "paragraph"
 
 search:
-  filtered_metadata_fields: ["Year", "Granth", "Anuyog"]
+  filtered_metadata_fields: ["Year", "Granth", "Anuyog", "Author"]
 
 opensearch:
   host: "{OPENSEARCH_HOST}"

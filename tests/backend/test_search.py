@@ -632,7 +632,7 @@ def test_search_granth_content_exact_match():
             "type": "Shlok",
             "type_start_num": 1,
             "type_end_num": 1,
-            "categories": {"anuyog": ["Charitra Anuyog"]}  # Filter to disambiguate from adhikar_prose_granth
+            "categories": {"Anuyog": ["Charitra Anuyog"]}  # Filter to disambiguate from adhikar_prose_granth
         },
         # adhikar_granth - Shlok 2 (Hindi)
         {
@@ -642,7 +642,7 @@ def test_search_granth_content_exact_match():
             "type": "Shlok",
             "type_start_num": 2,
             "type_end_num": 2,
-            "categories": {"anuyog": ["Charitra Anuyog"]}
+            "categories": {"Anuyog": ["Charitra Anuyog"]}
         },
         # adhikar_granth - Shlok 3-8 (Hindi)
         {
@@ -652,7 +652,7 @@ def test_search_granth_content_exact_match():
             "type": "Shlok",
             "type_start_num": 3,
             "type_end_num": 8,
-            "categories": {"anuyog": ["Charitra Anuyog"]}
+            "categories": {"Anuyog": ["Charitra Anuyog"]}
         },
         # adhikar_granth - Shlok 1 (Gujarati)
         {
@@ -662,7 +662,7 @@ def test_search_granth_content_exact_match():
             "type": "Shlok",
             "type_start_num": 1,
             "type_end_num": 1,
-            "categories": {"anuyog": ["Charitra Anuyog"]}
+            "categories": {"Anuyog": ["Charitra Anuyog"]}
         },
         # adhikar_granth - Shlok 2 (Gujarati)
         {
@@ -672,7 +672,7 @@ def test_search_granth_content_exact_match():
             "type": "Shlok",
             "type_start_num": 2,
             "type_end_num": 2,
-            "categories": {"anuyog": ["Charitra Anuyog"]}
+            "categories": {"Anuyog": ["Charitra Anuyog"]}
         },
         # mixed_granth - Gatha 1 (Hindi)
         {
@@ -852,7 +852,7 @@ def test_search_granth_content_with_categories():
             keywords=query,
             exact_match=True,
             exclude_words=[],
-            categories={"anuyog": [expected_anuyog]},
+            categories={"Anuyog": [expected_anuyog]},
             detected_language=lang,
             page_size=10,
             page_number=1
@@ -862,7 +862,7 @@ def test_search_granth_content_with_categories():
         assert len(results_with_anuyog) == 1, f"Expected 1 result with Anuyog '{expected_anuyog}', got {len(results_with_anuyog)}"
 
         # Validate the result has the expected Anuyog
-        result_anuyog = results_with_anuyog[0].get('metadata', {}).get('anuyog', '')
+        result_anuyog = results_with_anuyog[0].get('metadata', {}).get('Anuyog', '')
         assert result_anuyog == expected_anuyog, f"Expected Anuyog '{expected_anuyog}', got '{result_anuyog}'"
         log_handle.info(f"✓ Found result with expected Anuyog: {expected_anuyog}")
 
@@ -890,7 +890,7 @@ def test_search_granth_content_with_categories():
             keywords=query,
             exact_match=True,
             exclude_words=[],
-            categories={"author": [expected_author]},
+            categories={"Author": [expected_author]},
             detected_language=lang,
             page_size=10,
             page_number=1
@@ -900,7 +900,7 @@ def test_search_granth_content_with_categories():
         assert len(results_with_author) == 1, f"Expected 1 result with Author '{expected_author}', got {len(results_with_author)}"
 
         # Validate the result has the expected Author
-        result_author = results_with_author[0].get('metadata', {}).get('author', '')
+        result_author = results_with_author[0].get('metadata', {}).get('Author', '')
         assert result_author == expected_author, f"Expected Author '{expected_author}', got '{result_author}'"
         log_handle.info(f"✓ Found result with expected Author: {expected_author}")
 
@@ -911,7 +911,7 @@ def test_search_granth_content_with_categories():
             keywords=query,
             exact_match=True,
             exclude_words=[],
-            categories={"author": [not_expected_author]},
+            categories={"Author": [not_expected_author]},
             detected_language=lang,
             page_size=10,
             page_number=1
@@ -1156,7 +1156,7 @@ def test_search_prose_with_categories():
             keywords=query,
             exact_match=False,
             exclude_words=[],
-            categories={"anuyog": [expected_anuyog]},
+            categories={"Anuyog": [expected_anuyog]},
             detected_language=lang,
             page_size=10,
             page_number=1
@@ -1168,7 +1168,7 @@ def test_search_prose_with_categories():
         # Validate the result has the expected Anuyog and is prose content
         result = results_with_anuyog[0]
         metadata = result.get('metadata', {})
-        result_anuyog = metadata.get('anuyog', '')
+        result_anuyog = metadata.get('Anuyog', '')
         assert result_anuyog == expected_anuyog, f"Expected Anuyog '{expected_anuyog}', got '{result_anuyog}'"
         assert 'prose_seq_num' in metadata, "Result should be prose content with prose_seq_num"
         log_handle.info(f"✓ Found prose result with expected Anuyog: {expected_anuyog}")
@@ -1180,7 +1180,7 @@ def test_search_prose_with_categories():
             keywords=query,
             exact_match=False,
             exclude_words=[],
-            categories={"anuyog": [not_expected_anuyog]},
+            categories={"Anuyog": [not_expected_anuyog]},
             detected_language=lang,
             page_size=10,
             page_number=1
@@ -1197,7 +1197,7 @@ def test_search_prose_with_categories():
             keywords=query,
             exact_match=False,
             exclude_words=[],
-            categories={"author": [expected_author]},
+            categories={"Author": [expected_author]},
             detected_language=lang,
             page_size=10,
             page_number=1
@@ -1207,7 +1207,7 @@ def test_search_prose_with_categories():
         assert len(results_with_author) > 0, f"Expected results with Author '{expected_author}', got {len(results_with_author)}"
 
         # Validate the result has the expected Author
-        result_author = results_with_author[0].get('metadata', {}).get('author', '')
+        result_author = results_with_author[0].get('metadata', {}).get('Author', '')
         assert result_author == expected_author, f"Expected Author '{expected_author}', got '{result_author}'"
         log_handle.info(f"✓ Found prose result with expected Author: {expected_author}")
 
@@ -1218,7 +1218,7 @@ def test_search_prose_with_categories():
             keywords=query,
             exact_match=False,
             exclude_words=[],
-            categories={"author": [not_expected_author]},
+            categories={"Author": [not_expected_author]},
             detected_language=lang,
             page_size=10,
             page_number=1

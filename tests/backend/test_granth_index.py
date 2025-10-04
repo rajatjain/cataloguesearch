@@ -164,7 +164,7 @@ def test_granth_indexing_pipeline_with_config():
         # Validate metadata structure
         metadata = source["metadata"]
         assert "language" in metadata, "language missing from metadata"
-        assert "author" in metadata, "author missing from metadata"
+        assert "Author" in metadata, "author missing from metadata"
         
         # Validate verses structure and count verse types
         verses = source["verses"]
@@ -354,21 +354,21 @@ def test_granth_indexing_pipeline_with_config():
     log_handle.info("Testing queries by Anuyog...")
     simple_anuyog_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.anuyog.keyword": "Simple Anuyog"}}}
+        body={"query": {"term": {"metadata.Anuyog.keyword": "Simple Anuyog"}}}
     )
     assert simple_anuyog_query["hits"]["total"]["value"] == 2, "Should find 2 document with Simple Anuyog"
     log_handle.info("✓ Query by Anuyog 'Simple Anuyog': 2 document found")
     
     charitra_anuyog_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.anuyog.keyword": "Charitra Anuyog"}}}
+        body={"query": {"term": {"metadata.Anuyog.keyword": "Charitra Anuyog"}}}
     )
     assert charitra_anuyog_query["hits"]["total"]["value"] == 2, "Should find 2 document with Charitra Anuyog"
     log_handle.info("✓ Query by Anuyog 'Charitra Anuyog': 2 document found")
     
     dravya_anuyog_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.anuyog.keyword": "Dravya Anuyog"}}}
+        body={"query": {"term": {"metadata.Anuyog.keyword": "Dravya Anuyog"}}}
     )
     assert dravya_anuyog_query["hits"]["total"]["value"] == 2, "Should find 2 document with Dravya Anuyog"
     log_handle.info("✓ Query by Anuyog 'Dravya Anuyog': 2 document found")
@@ -377,21 +377,21 @@ def test_granth_indexing_pipeline_with_config():
     log_handle.info("Testing queries by Author...")
     simple_author_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.author.keyword": "Simple Author"}}}
+        body={"query": {"term": {"metadata.Author.keyword": "Simple Author"}}}
     )
     assert simple_author_query["hits"]["total"]["value"] == 2, "Should find 2 document with Simple Author"
     log_handle.info("✓ Query by Author 'Simple Author': 2 document found")
     
     kundkund_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.author.keyword": "Acharya Kundkund"}}}
+        body={"query": {"term": {"metadata.Author.keyword": "Acharya Kundkund"}}}
     )
     assert kundkund_query["hits"]["total"]["value"] == 2, "Should find 2 document with Acharya Kundkund"
     log_handle.info("✓ Query by Author 'Acharya Kundkund': 2 document found")
     
     haribhadra_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.author.keyword": "Acharya Haribhadra"}}}
+        body={"query": {"term": {"metadata.Author.keyword": "Acharya Haribhadra"}}}
     )
     assert haribhadra_query["hits"]["total"]["value"] == 2, "Should find 2 document with Acharya Haribhadra"
     log_handle.info("✓ Query by Author 'Acharya Haribhadra': 2 document found")
@@ -400,21 +400,21 @@ def test_granth_indexing_pipeline_with_config():
     log_handle.info("Testing queries by Teekakar...")
     simple_teekakar_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.teekakar.keyword": "Simple Teekakar"}}}
+        body={"query": {"term": {"metadata.Teekakar.keyword": "Simple Teekakar"}}}
     )
     assert simple_teekakar_query["hits"]["total"]["value"] == 2, "Should find 2 document with Simple Teekakar"
     log_handle.info("✓ Query by Teekakar 'Simple Teekakar': 2 document found")
     
     amritchandra_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.teekakar.keyword": "Acharya Nemichandra"}}}
+        body={"query": {"term": {"metadata.Teekakar.keyword": "Acharya Nemichandra"}}}
     )
     assert amritchandra_query["hits"]["total"]["value"] == 2, "Should find 2 document with Acharya Nemichandra"
     log_handle.info("✓ Query by Teekakar 'Acharya Nemichandra': 2 document found")
     
     todarmal_query = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.teekakar.keyword": "Pandit Todarmal"}}}
+        body={"query": {"term": {"metadata.Teekakar.keyword": "Pandit Todarmal"}}}
     )
     assert todarmal_query["hits"]["total"]["value"] == 2, "Should find 2 document with Pandit Todarmal"
     log_handle.info("✓ Query by Teekakar 'Pandit Todarmal': 2 document found")
@@ -450,14 +450,14 @@ def test_granth_indexing_pipeline_with_config():
     # Try match query instead of term query for better text matching
     search_anuyog_query = opensearch_client.search(
         index=config.OPENSEARCH_INDEX_NAME,
-        body={"query": {"match": {"metadata.anuyog.keyword": "Simple Anuyog"}}}
+        body={"query": {"match": {"metadata.Anuyog.keyword": "Simple Anuyog"}}}
     )
     assert search_anuyog_query["hits"]["total"]["value"] > 0, f"Should find paragraph chunks with Simple Anuyog. Found: {search_anuyog_query['hits']['total']['value']}"
     log_handle.info(f"✓ Search index query by Anuyog: {search_anuyog_query['hits']['total']['value']} chunks found")
     
     search_author_query = opensearch_client.search(
         index=config.OPENSEARCH_INDEX_NAME,
-        body={"query": {"match": {"metadata.author.keyword": "Acharya Kundkund"}}}
+        body={"query": {"match": {"metadata.Author.keyword": "Acharya Kundkund"}}}
     )
     assert search_author_query["hits"]["total"]["value"] > 0, f"Should find paragraph chunks with Acharya Kundkund. Found: {search_author_query['hits']['total']['value']}"
     log_handle.info(f"✓ Search index query by Author: {search_author_query['hits']['total']['value']} chunks found")
@@ -472,7 +472,7 @@ def test_granth_indexing_pipeline_with_config():
                     "bool": {
                         "must": [
                             {"term": {"metadata.language.keyword": lang}},
-                            {"term": {"metadata.anuyog.keyword": "Simple Anuyog"}}
+                            {"term": {"metadata.Anuyog.keyword": "Simple Anuyog"}}
                         ]
                     }
                 }
@@ -541,7 +541,7 @@ def test_granth_prose_indexing():
 
     granth_search = opensearch_client.search(
         index=config.OPENSEARCH_GRANTH_INDEX_NAME,
-        body={"query": {"term": {"metadata.anuyog.keyword": "Prose Anuyog"}}, "size": 100}
+        body={"query": {"term": {"metadata.Anuyog.keyword": "Prose Anuyog"}}, "size": 100}
     )
 
     granth_docs = granth_search["hits"]["hits"]
@@ -592,7 +592,7 @@ def test_granth_prose_indexing():
                 "bool": {
                     "must": [
                         {"exists": {"field": "metadata.prose_seq_num"}},
-                        {"term": {"metadata.anuyog.keyword": "Prose Anuyog"}}
+                        {"term": {"metadata.Anuyog.keyword": "Prose Anuyog"}}
                     ]
                 }
             },

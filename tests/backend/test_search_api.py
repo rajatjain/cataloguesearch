@@ -141,6 +141,7 @@ def build_index(initialise):
     # Refresh indices to make data available for search
     opensearch_client.indices.refresh(index=config.OPENSEARCH_GRANTH_INDEX_NAME)
     opensearch_client.indices.refresh(index=config.OPENSEARCH_INDEX_NAME)
+    opensearch_client.indices.refresh(index=config.OPENSEARCH_METADATA_INDEX_NAME)
 
     log_handle.info("Granth indexing complete")
 
@@ -269,27 +270,72 @@ def test_api_metadata_endpoint(api_server):
     """Test the /api/metadata endpoint."""
     response = requests.get(f"http://{api_server.host}:{api_server.port}/api/metadata")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert isinstance(data, dict)
-    
+
     # Check new language-specific structure
-    expected_language_keys = {"hindi", "gujarati"}
+    expected_language_keys = {"hi", "gu"}
     actual_keys = set(data.keys())
-    
+
     # Should have both language keys
     assert expected_language_keys.issubset(actual_keys), f"Expected language keys {expected_language_keys} in metadata, got {actual_keys}"
     
+    # Expected values based on granth setup in tests/backend/common.py
+    expected_values = {
+        "Anuyog": {'Charitra Anuyog',
+                   'Dravya Anuyog',
+                   'Prose Anuyog',
+                   'Simple Anuyog',
+                   'city',
+                   'history',
+                   'spiritual'},
+        "Granth": {"Adhikar", "Mixed", "Prose Granth", "Simple"},
+        "Author": {"Acharya Haribhadra", "Acharya Kundkund", "Prose Author", "Simple Author"}
+    }
+
     # Each language should have its own metadata dictionary
     for language in expected_language_keys:
         lang_metadata = data[language]
         assert isinstance(lang_metadata, dict), f"Expected dict for {language} metadata"
-        
-        # Each language metadata can have various keys like Granth, Anuyog, Year, etc.
-        # Just verify it's a dict structure - specific keys depend on indexed data
-        log_handle.info(f"{language} metadata keys: {list(lang_metadata.keys())}")
-    
-    log_handle.info(f"API metadata test passed - received language-specific structure with keys: {list(data.keys())}")
+
+        # Verify expected metadata keys exist (based on what's indexed by update_metadata_index)
+        # These are: "Anuyog", "Granth", "Author" (Year is optional)
+        expected_metadata_keys = {"Anuyog", "Granth", "Author"}
+
+        for key in expected_metadata_keys:
+            assert key in lang_metadata, f"Expected '{key}' in {language} metadata, got keys: {list(lang_metadata.keys())}"
+
+            # Each metadata key should have a list of string values
+            assert isinstance(lang_metadata[key], list), \
+                f"Expected list for {language} metadata['{key}'], got {type(lang_metadata[key])}"
+            assert len(lang_metadata[key]) > 0, \
+                f"Expected non-empty list for {language} metadata['{key}']"
+
+            # Each value should be a string and non-empty
+            for value in lang_metadata[key]:
+                assert isinstance(value, str), \
+                    f"Expected string values in {language} metadata['{key}'], got {type(value)}"
+                assert value.strip(), \
+                    f"Expected non-empty string values in {language} metadata['{key}']"
+
+        # Values should be sorted (as per update_metadata_index implementation)
+        for key in expected_metadata_keys:
+            values = lang_metadata[key]
+            assert values == sorted(values), \
+                f"Expected sorted values for {language} metadata['{key}'], got {values}"
+
+        # Verify actual values match expected values from granth setup
+        for key in expected_metadata_keys:
+            actual_values_set = set(lang_metadata[key])
+            expected_values_set = expected_values[key]
+
+            assert actual_values_set == expected_values_set, \
+                f"Expected {key} values {expected_values_set} for {language}, got {actual_values_set}"
+
+        log_handle.info(f"{language} metadata: {json_dumps(lang_metadata)}")
+
+    log_handle.info(f"✓ API metadata test passed - validated language-specific metadata structure with expected keys and values")
 
 
 def test_api_exact_phrase_search(api_server):
@@ -1015,7 +1061,8 @@ def test_get_granth_verse(api_server):
             "expected_type": "Shlok",
             "expected_type_start_num": 3,
             "expected_type_end_num": 3,
-            "expected_page_num": 18
+            "expected_page_num": 18,
+            "granth_filter": ["Simple"]
         },
         {
             "query": "જ્ઞાન ક્યારેય",
@@ -1025,7 +1072,8 @@ def test_get_granth_verse(api_server):
             "expected_type": "Shlok",
             "expected_type_start_num": 4,
             "expected_type_end_num": 4,
-            "expected_page_num": 22
+            "expected_page_num": 22,
+            "granth_filter": ["Simple"]
         },
         {
             "query": "नियमित अध्ययन से बुद्धि का विकास",
@@ -1035,7 +1083,8 @@ def test_get_granth_verse(api_server):
             "expected_type": "Shlok",
             "expected_type_start_num": 3,
             "expected_type_end_num": 8,
-            "expected_page_num": 15
+            "expected_page_num": 15,
+            "granth_filter": ["Adhikar"]
         },
         {
             "query": "નિયમિત અભ્યાસથી બુદ્ધિનો વિકાસ",
@@ -1045,7 +1094,8 @@ def test_get_granth_verse(api_server):
             "expected_type": "Shlok",
             "expected_type_start_num": 3,
             "expected_type_end_num": 8,
-            "expected_page_num": 15
+            "expected_page_num": 15,
+            "granth_filter": ["Adhikar"]
         }
     ]
 
@@ -1056,7 +1106,9 @@ def test_get_granth_verse(api_server):
             "language": test_case["language"],
             "exact_match": True,
             "exclude_words": [],
-            "categories": {},
+            "categories": {
+                "Granth": test_case["granth_filter"]
+            },
             "search_types": {
                 "Pravachan": {
                     "enabled": False,

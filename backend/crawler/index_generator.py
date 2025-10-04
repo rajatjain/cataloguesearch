@@ -7,11 +7,10 @@ from datetime import datetime, timezone
 from opensearchpy import OpenSearch, helpers
 
 from backend.common.embedding_models import get_embedding_model_factory
-from backend.common.opensearch import delete_documents_by_filename
+from backend.common.opensearch import delete_documents_by_filename, update_metadata_index
 from backend.config import Config
 from backend.crawler.paragraph_generator.gujarati import GujaratiParagraphGenerator
 from backend.crawler.paragraph_generator.hindi import HindiParagraphGenerator
-from backend.utils import json_dumps
 
 # Setup logging for this module
 log_handle = logging.getLogger(__name__)
@@ -39,9 +38,6 @@ class IndexGenerator:
         self._paragraph_generators = {
             "hi": HindiParagraphGenerator(self._config),
             "gu": GujaratiParagraphGenerator(self._config)
-        }
-        self._lang_keys_map = {
-            "hi": "hi", "gu": "gu", "gujarati": "gu", "hindi": "hi"
         }
 
 
@@ -116,7 +112,7 @@ class IndexGenerator:
         self._bulk_index_chunks(chunks_with_embeddings)
 
         # 5. Update the metadata index with the new metadata
-        self._update_metadata_index(metadata)
+        update_metadata_index(self._config, self._opensearch_client, metadata)
 
         log_handle.info(
             f"Finished full indexing for document {document_id}: total_chunks: {len(chunks)}.")
@@ -172,7 +168,7 @@ class IndexGenerator:
                 helpers.bulk(self._opensearch_client, update_actions)
 
             # Also update the dedicated metadata index
-            self._update_metadata_index(metadata)
+            update_metadata_index(self._config, self._opensearch_client, metadata)
 
             log_handle.info(f"Metadata re-indexed for document {document_id}.")
         except Exception as e:
@@ -255,70 +251,6 @@ class IndexGenerator:
                 )
         except Exception as e:
             log_handle.error(f"An exception occurred during bulk indexing: {e}")
-
-    def _update_metadata_index(self, metadata: dict):
-        """
-        Updates the dedicated metadata index with new values from a document.
-        Uses a scripted upsert for efficiency and atomicity.
-        Now includes language information for each metadata entry.
-        """
-        if not metadata:
-            return
-
-        # Extract language, default to "hindi" for backward compatibility
-        language = metadata.get("language", "hi")
-        lang_key = self._lang_keys_map[language]
-        log_handle.info(f"Updating metadata index for keys: {list(metadata.keys())} with language: {lang_key}")
-        log_handle.info(f"Metadata: {json_dumps(metadata)}")
-
-        actions = []
-        for key, value in metadata.items():
-            if not value:
-                continue
-            
-            # Skip file_url as it's not useful for metadata filtering
-            if key not in ["Anuyog", "Granth", "Year"]:
-                continue
-
-            # Ensure new_values is a list of strings
-            new_values = [str(v) for v in value] if isinstance(value, list) else [str(value)]
-
-            # Create unique document ID per language: key_language
-            doc_id = f"{key}_{lang_key}"
-
-            action = {
-                "_op_type": "update",
-                "_index": self._metadata_index_name,
-                "_id": doc_id,
-                "script": {
-                    "source": """
-                        boolean changed = false;
-                        for (item in params.newValues) {
-                            if (!ctx._source.values.contains(item)) {
-                                ctx._source.values.add(item);
-                                changed = true;
-                            }
-                        }
-                        if (changed) {
-                            Collections.sort(ctx._source.values);
-                        }
-                        ctx._source.language = params.language;
-                        ctx._source.key = params.key;
-                    """,
-                    "lang": "painless",
-                    "params": {"newValues": new_values, "language": lang_key, "key": key}
-                },
-                "upsert": {
-                    "key": key,
-                    "values": sorted(new_values),
-                    "language": language
-                }
-            }
-            actions.append(action)
-
-        if actions:
-            helpers.bulk(self._opensearch_client, actions, stats_only=True, raise_on_error=True)
-            log_handle.info(f"Successfully sent {len(actions)} updates to the metadata index for language {language}.")
 
     def _get_paras(self, page_text_paths: list[str]) -> list[tuple[int, str]]:
         """

@@ -15,7 +15,7 @@ index:
   chunk_strategy: "paragraph"
 
 search:
-  filtered_metadata_fields: ["type", "category", "language"]
+  filtered_metadata_fields: ["type", "category", "language", "Author", "Anuyog", "Granth"]
 
 opensearch:
   host: localhost

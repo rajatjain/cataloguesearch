@@ -8,14 +8,23 @@ import os
 import traceback
 
 import yaml
-from opensearchpy import OpenSearch
+from opensearchpy import OpenSearch, helpers
 from backend.config import Config
 from backend.common.embedding_models import get_embedding_model_factory
+from backend.utils import json_dumps
 
 # Module-level variables for singleton pattern
 # These variables hold cached client instance and settings
 _CLIENT = None
 _OPENSEARCH_SETTINGS = None
+
+# Language key mapping for metadata indexing
+_LANG_KEYS_MAP = {
+    "hi": "hi",
+    "gu": "gu",
+    "gujarati": "gu",
+    "hindi": "hi"
+}
 
 log_handle = logging.getLogger(__name__)
 
@@ -328,3 +337,74 @@ def delete_documents_by_filename(config: Config, original_filename: str):
         log_handle.error(
             f"Error deleting documents for '{original_filename}': {e}", exc_info=True)
         raise
+
+def update_metadata_index(config: Config, opensearch_client: OpenSearch, metadata: dict):
+    """
+    Updates the dedicated metadata index with new values from a document.
+    Uses a scripted upsert for efficiency and atomicity.
+    Includes language information for each metadata entry.
+
+    Args:
+        config: Config object containing OpenSearch settings
+        opensearch_client: OpenSearch client instance
+        metadata: Dictionary containing metadata to index
+    """
+    if not metadata:
+        return
+
+    metadata_index_name = config.OPENSEARCH_METADATA_INDEX_NAME
+
+    # Extract language, default to "hi" for backward compatibility
+    language = metadata.get("language", "hi")
+    lang_key = _LANG_KEYS_MAP[language]
+    log_handle.info(f"Updating metadata index for keys: {list(metadata.keys())} with language: {lang_key}")
+    log_handle.info(f"Metadata: {json_dumps(metadata)}")
+
+    actions = []
+    for key, value in metadata.items():
+        if not value:
+            continue
+
+        # Skip file_url as it's not useful for metadata filtering
+        if key not in ["Anuyog", "Granth", "Year", "Author"]:
+            continue
+
+        # Ensure new_values is a list of strings
+        new_values = [str(v) for v in value] if isinstance(value, list) else [str(value)]
+
+        # Create unique document ID per language: key_language
+        doc_id = f"{key}_{lang_key}"
+
+        action = {
+            "_op_type": "update",
+            "_index": metadata_index_name,
+            "_id": doc_id,
+            "script": {
+                "source": """
+                    boolean changed = false;
+                    for (item in params.newValues) {
+                        if (!ctx._source.values.contains(item)) {
+                            ctx._source.values.add(item);
+                            changed = true;
+                        }
+                    }
+                    if (changed) {
+                        Collections.sort(ctx._source.values);
+                    }
+                    ctx._source.language = params.language;
+                    ctx._source.key = params.key;
+                """,
+                "lang": "painless",
+                "params": {"newValues": new_values, "language": lang_key, "key": key}
+            },
+            "upsert": {
+                "key": key,
+                "values": sorted(new_values),
+                "language": language
+            }
+        }
+        actions.append(action)
+
+    if actions:
+        helpers.bulk(opensearch_client, actions, stats_only=True, raise_on_error=True)
+        log_handle.info(f"Successfully sent {len(actions)} updates to the metadata index for language {language}.")

@@ -7,6 +7,7 @@ from opensearchpy import OpenSearch, helpers
 
 from backend.config import Config
 from backend.common.embedding_models import get_embedding_model_factory
+from backend.common.opensearch import update_metadata_index
 from backend.crawler.granth import Granth
 
 log_handle = logging.getLogger(__name__)
@@ -98,6 +99,27 @@ class GranthIndexer:
         # Function 2: Store teeka & bhavarth paragraphs in search_index
         self._store_paragraphs_in_search_index(granth, granth_id, timestamp)
 
+        # Function 3: Update the metadata index
+        language_to_code = {
+            "hindi": "hi",
+            "gujarati": "gu",
+            "hi": "hi",
+            "gu": "gu"
+        }
+        language_code = language_to_code.get(
+            granth._metadata._language.lower() if granth._metadata._language else "",
+            "hi"
+        )
+
+        metadata_dict = {
+            "Granth": granth._name,
+            "Anuyog": granth._metadata._anuyog,
+            "Author": granth._metadata._author or granth._metadata._teekakar,
+            "language": language_code,
+            "file_url": granth._metadata._file_url
+        }
+        update_metadata_index(self._config, self._opensearch_client, metadata_dict)
+
         log_handle.info(f"Completed indexing Granth: {granth._name}")
     
     def _prose_section_to_dict(self, prose_section) -> dict:
@@ -148,10 +170,10 @@ class GranthIndexer:
             "original_filename": granth._original_filename,
             "name": granth._name,
             "metadata": {
-                "anuyog": granth._metadata._anuyog,
+                "Anuyog": granth._metadata._anuyog,
                 "language": language_code,
-                "author": granth._metadata._author,
-                "teekakar": granth._metadata._teekakar,
+                "Author": granth._metadata._author,
+                "Teekakar": granth._metadata._teekakar,
                 "file_url": granth._metadata._file_url
             },
             "verses": [
@@ -329,18 +351,18 @@ class GranthIndexer:
             "page_number": page_num,
             "paragraph_id": f"{field_name}_{verse_seq}",
             "metadata": {
-                "title": granth._name,
+                "Granth": granth._name,
                 "language": language,
-                "author": granth._metadata._author,
-                "teekakar": granth._metadata._teekakar,
-                "anuyog": granth._metadata._anuyog,
+                "Author": granth._metadata._author,
+                "Teekakar": granth._metadata._teekakar,
+                "Anuyog": granth._metadata._anuyog,
                 "category": "Granth",
                 "verse_content_type": field_name,
                 "verse_seq_num": verse_seq,
                 "verse_type": verse._type,
                 "verse_type_start_num": verse._type_start_num,
                 "verse_type_end_num": verse._type_end_num,
-                "adhikar": verse._adhikar,
+                "Adhikar": verse._adhikar,
                 "file_url": granth._metadata._file_url
             },
             "timestamp_indexed": timestamp,
@@ -380,11 +402,11 @@ class GranthIndexer:
             "page_number": page_num,
             "paragraph_id": f"prose_{prose_seq}_content_{array_index}",
             "metadata": {
-                "title": granth._name,
+                "Granth": granth._name,
                 "language": language,
-                "author": granth._metadata._author,
-                "teekakar": granth._metadata._teekakar,
-                "anuyog": granth._metadata._anuyog,
+                "Author": granth._metadata._author,
+                "Teekakar": granth._metadata._teekakar,
+                "Anuyog": granth._metadata._anuyog,
                 "category": "Granth",
                 "prose_content_type": "subsection" if parent_seq is not None else "main",
                 "prose_seq_num": prose_seq,

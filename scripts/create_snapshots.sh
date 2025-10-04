@@ -73,14 +73,34 @@ chmod 755 "$LOCAL_SNAPSHOTS_DIR"
 echo "Restarting OpenSearch..."
 $COMPOSE_COMMAND start opensearch
 
-# Wait for OpenSearch to be ready
-echo "Waiting for OpenSearch to start..."
-sleep 15
-while ! curl -s localhost:9200/_cluster/health >/dev/null 2>&1; do
-    echo "Waiting for OpenSearch..."
-    sleep 5
+# Wait for OpenSearch to be ready and for shards to be allocated
+echo "Waiting for OpenSearch cluster to be healthy..."
+max_attempts=30
+attempt=0
+while [ $attempt -lt $max_attempts ]; do
+  health_response=$(curl -s http://localhost:9200/_cluster/health 2>/dev/null || true)
+
+  if [ -n "$health_response" ]; then
+    status=$(echo "$health_response" | grep -o '"status":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+
+    if [ "$status" = "green" ] || [ "$status" = "yellow" ]; then
+      echo "Cluster status: $status - ready for snapshots!"
+      break
+    fi
+
+    echo "Cluster status: $status - waiting for shards to be allocated... (attempt $((attempt + 1))/$max_attempts)"
+  else
+    echo "Waiting for OpenSearch to respond... (attempt $((attempt + 1))/$max_attempts)"
+  fi
+
+  attempt=$((attempt + 1))
+  sleep 2
 done
-echo "OpenSearch is ready!"
+
+if [ $attempt -eq $max_attempts ]; then
+  echo "ERROR: Cluster did not reach healthy state within expected time"
+  exit 1
+fi
 
 # Step 3: Register snapshot repository
 echo "Step 3: Registering snapshot repository..."
