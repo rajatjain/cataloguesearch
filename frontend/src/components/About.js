@@ -16,7 +16,18 @@ const About = () => {
             <p className="mb-4 text-gray-700 leading-relaxed">
                 Gurudev Shri Kanji Swami delivered tens of thousands of Pravachans throughout his lifetime, with over 9,500 publicly available today on vitragvani.com. Many spiritual seekers (Mumukshus) begin their day by listening to them. Beyond the original scriptures by our Acharyas, Muniraaj, and Gyaani Vidvaan, his Pravachans are a unique source that comprehensively discuss the core spiritual concepts of Jain Philosophy (द्रव्यानुयोग / आध्यात्म).
             </p>
-            
+
+            <figure className="mb-4 md:float-right md:ml-6 md:mb-4 md:max-w-md w-full md:w-1/2">
+                <img
+                    src="/images/Gurudevshri_Pravachan1.jpg"
+                    alt="Gurudevshri Kanji Swami delivering his daily Pravachans"
+                    className="w-full rounded-lg shadow-md"
+                />
+                <figcaption className="text-center text-sm text-gray-600 mt-2 italic">
+                    Gurudevshri Kanji Swami delivering his daily Pravachans
+                </figcaption>
+            </figure>
+
             <p className="mb-4 text-gray-700 leading-relaxed">
                 His Pravachans are delivered in an accessible language and delve into fundamental topics of Jain Spirituality, such as:
             </p>

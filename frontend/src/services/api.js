@@ -6,10 +6,24 @@ export const api = {
         try {
             const response = await fetch(`${API_BASE_URL}/metadata`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            return await response.json();
-        } catch (error) { 
-            console.error("API Error: Could not fetch metadata", error); 
-            return {}; 
+            const data = await response.json();
+
+            // Map language codes to full names
+            const langKeyMap = {
+                'hi': 'hindi',
+                'gu': 'gujarati'
+            };
+
+            const mappedData = {};
+            for (const [key, value] of Object.entries(data)) {
+                const mappedKey = langKeyMap[key] || key;
+                mappedData[mappedKey] = value;
+            }
+
+            return mappedData;
+        } catch (error) {
+            console.error("API Error: Could not fetch metadata", error);
+            return {};
         }
     },
     

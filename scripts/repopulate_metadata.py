@@ -32,8 +32,17 @@ def repopulate_metadata_index():
     # Load configuration
     config = Config()
     
-    # Get OpenSearch client and ensure indices exist
+    # Get OpenSearch client
     client = get_opensearch_client(config)
+
+    # Delete metadata index if it exists
+    metadata_index = config.OPENSEARCH_METADATA_INDEX_NAME
+    if client.indices.exists(metadata_index):
+        log_handle.info(f"Deleting existing metadata index: {metadata_index}")
+        client.indices.delete(index=metadata_index)
+        log_handle.info(f"Metadata index deleted successfully")
+
+    # Ensure indices exist (will recreate the metadata index)
     create_indices_if_not_exists(config, client)
     
     # Create IndexGenerator instance to reuse the _update_metadata_index method

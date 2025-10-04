@@ -347,6 +347,50 @@ class Discovery:
 
         return directories_to_crawl
 
+    def process_directory(self, directory, process=False, index=False, dry_run=False, scan_time=None):
+        """
+        Process all PDF files in a single directory (non-recursive).
+
+        Args:
+            directory: Path to directory to process
+            process: Whether to process (OCR) files
+            index: Whether to index files
+            dry_run: Whether to perform dry run (no actual indexing)
+            scan_time: Timestamp for this scan (uses current time if not provided)
+        """
+        if scan_time is None:
+            scan_time = datetime.now().isoformat()
+
+        try:
+            files = os.listdir(directory)
+        except (OSError, PermissionError) as e:
+            log_handle.warning(f"Cannot access directory {directory}: {e}")
+            return
+
+        for file_name in files:
+            if not file_name.lower().endswith(".pdf"):
+                continue
+            pdf_file_path = os.path.abspath(os.path.join(directory, file_name))
+
+            single_file_processor = SingleFileProcessor(
+                config=self._config,
+                file_path=pdf_file_path,
+                indexing_mod=self._indexing_module,
+                index_state=self._index_state,
+                pdf_processor=self._pdf_processor,
+                scan_time=scan_time
+            )
+            if process:
+                log_handle.info(f"Processing PDF file {file_name}")
+                single_file_processor.process()
+
+            if index:
+                if dry_run:
+                    log_handle.info(f"[DRY RUN] Would index file {file_name}")
+                else:
+                    log_handle.info(f"Indexing file {file_name}")
+                single_file_processor.index(dry_run)
+
     def crawl(self, process=False, index=False, dry_run=False):
         """
         Scans the base PDF folder, identifies new or changed files/configs,
@@ -368,35 +412,7 @@ class Discovery:
 
         # Second, crawl each directory for PDF files
         for directory in directories_to_crawl:
-            try:
-                files = os.listdir(directory)
-            except (OSError, PermissionError) as e:
-                log_handle.warning(f"Cannot access directory {directory}: {e}")
-                continue
-
-            for file_name in files:
-                if not file_name.lower().endswith(".pdf"):
-                    continue
-                pdf_file_path = os.path.abspath(os.path.join(directory, file_name))
-
-                single_file_processor = SingleFileProcessor(
-                    config=self._config,
-                    file_path=pdf_file_path,
-                    indexing_mod=self._indexing_module,
-                    index_state=self._index_state,
-                    pdf_processor=self._pdf_processor,
-                    scan_time=current_scan_time
-                )
-                if process:
-                    log_handle.info(f"Processing PDF file {file_name}")
-                    single_file_processor.process()
-
-                if index:
-                    if dry_run:
-                        log_handle.info(f"[DRY RUN] Would index file {file_name}")
-                    else:
-                        log_handle.info(f"Indexing file {file_name}")
-                    single_file_processor.index(dry_run)
+            self.process_directory(directory, process, index, dry_run, current_scan_time)
 
         self._index_state.garbage_collect(self.base_pdf_folder)
 

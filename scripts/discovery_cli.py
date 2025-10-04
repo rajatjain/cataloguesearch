@@ -220,6 +220,35 @@ def delete_index(config: Config):
     index_state = IndexState(config.SQLITE_DB_PATH)
     index_state.delete_index_state()
 
+def process_folder(config: Config, folder_path: str, dry_run=False):
+    """Process all PDF files in a specific folder (non-recursive)"""
+    if not os.path.exists(folder_path):
+        log_handle.error(f"Folder does not exist: {folder_path}")
+        sys.exit(1)
+
+    if not os.path.isdir(folder_path):
+        log_handle.error(f"Path is not a directory: {folder_path}")
+        sys.exit(1)
+
+    log_handle.info(f"Processing folder: {folder_path}")
+
+    # Initialize components
+    index_state = IndexState(config.SQLITE_DB_PATH)
+    pdf_processor = PDFProcessor(config)
+    indexing_module = IndexGenerator(config, get_opensearch_client(config))
+    discovery = Discovery(config, indexing_module, pdf_processor, index_state)
+
+    client = get_opensearch_client(config)
+    create_indices_if_not_exists(config, client)
+
+    # Process the directory (both process OCR and index)
+    discovery.process_directory(folder_path, process=True, index=True, dry_run=dry_run)
+
+    if dry_run:
+        log_handle.warning("DRY RUN was enabled. No documents were actually indexed.")
+    else:
+        log_handle.info(f"Folder processing completed: {folder_path}")
+
 def cleanup_files(config: Config, path: str):
     """
     Cleans up all data associated with a specific PDF file or directory of files.
@@ -313,6 +342,8 @@ def main():
                         help="Actually index documents (disable dry run mode).")
     parser.add_argument('--cleanup', type=str, metavar='PATH',
                         help='Clean up all data for a specific PDF file or directory.')
+    parser.add_argument('--process-folder', type=str, metavar='PATH',
+                        help='Process all PDF files in a specific folder (non-recursive).')
 
 
     args = parser.parse_args()
@@ -331,6 +362,10 @@ def main():
     if args.cleanup:
         cleanup_files(config, args.cleanup)
         sys.exit(0) # Exit after cleanup is done
+
+    if args.process_folder:
+        process_folder(config, args.process_folder, args.dry_run)
+        sys.exit(0) # Exit after processing folder is done
 
     if args.command == 'discover':
         if args.delete_index:

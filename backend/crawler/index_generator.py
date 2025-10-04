@@ -11,6 +11,7 @@ from backend.common.opensearch import delete_documents_by_filename
 from backend.config import Config
 from backend.crawler.paragraph_generator.gujarati import GujaratiParagraphGenerator
 from backend.crawler.paragraph_generator.hindi import HindiParagraphGenerator
+from backend.utils import json_dumps
 
 # Setup logging for this module
 log_handle = logging.getLogger(__name__)
@@ -38,6 +39,9 @@ class IndexGenerator:
         self._paragraph_generators = {
             "hi": HindiParagraphGenerator(self._config),
             "gu": GujaratiParagraphGenerator(self._config)
+        }
+        self._lang_keys_map = {
+            "hi": "hi", "gu": "gu", "gujarati": "gu", "hindi": "hi"
         }
 
 
@@ -262,8 +266,10 @@ class IndexGenerator:
             return
 
         # Extract language, default to "hindi" for backward compatibility
-        language = metadata.get("language", "hindi")
-        log_handle.info(f"Updating metadata index for keys: {list(metadata.keys())} with language: {language}")
+        language = metadata.get("language", "hi")
+        lang_key = self._lang_keys_map[language]
+        log_handle.info(f"Updating metadata index for keys: {list(metadata.keys())} with language: {lang_key}")
+        log_handle.info(f"Metadata: {json_dumps(metadata)}")
 
         actions = []
         for key, value in metadata.items():
@@ -271,15 +277,15 @@ class IndexGenerator:
                 continue
             
             # Skip file_url as it's not useful for metadata filtering
-            if key == 'file_url':
+            if key not in ["Anuyog", "Granth", "Year"]:
                 continue
 
             # Ensure new_values is a list of strings
             new_values = [str(v) for v in value] if isinstance(value, list) else [str(value)]
 
             # Create unique document ID per language: key_language
-            doc_id = f"{key}_{language}"
-            
+            doc_id = f"{key}_{lang_key}"
+
             action = {
                 "_op_type": "update",
                 "_index": self._metadata_index_name,
@@ -300,7 +306,7 @@ class IndexGenerator:
                         ctx._source.key = params.key;
                     """,
                     "lang": "painless",
-                    "params": {"newValues": new_values, "language": language, "key": key}
+                    "params": {"newValues": new_values, "language": lang_key, "key": key}
                 },
                 "upsert": {
                     "key": key,
@@ -311,7 +317,7 @@ class IndexGenerator:
             actions.append(action)
 
         if actions:
-            helpers.bulk(self._opensearch_client, actions, stats_only=True, raise_on_error=False)
+            helpers.bulk(self._opensearch_client, actions, stats_only=True, raise_on_error=True)
             log_handle.info(f"Successfully sent {len(actions)} updates to the metadata index for language {language}.")
 
     def _get_paras(self, page_text_paths: list[str]) -> list[tuple[int, str]]:
