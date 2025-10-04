@@ -1160,6 +1160,156 @@ def test_get_granth_verse(api_server):
     log_handle.info("✓ All get_granth_verse tests passed")
 
 
+def test_get_granth_prose(api_server):
+    """Test the /api/granth/prose endpoint with Hindi and Gujarati queries for both main and subsection prose content."""
+    test_cases = [
+        # Hindi - Main prose section
+        {
+            "query": "प्रकृति संसार का आधार है",
+            "language": "hi",
+            "expected_file_pattern": "prose_granth.md",
+            "expected_seq_num": 2,
+            "expected_heading": "प्रकृति का सार",
+            "expected_content_type": "main",
+            "is_subsection": False
+        },
+        # Hindi - Subsection
+        {
+            "query": "पंच तत्व प्रकृति के मूल आधार हैं",
+            "language": "hi",
+            "expected_file_pattern": "prose_granth.md",
+            "expected_seq_num": 3,
+            "expected_heading": "प्रकृति के तत्व",
+            "expected_content_type": "subsection",
+            "is_subsection": True,
+            "expected_parent_seq_num": 2,
+            "expected_parent_heading": "प्रकृति का सार"
+        },
+        # Gujarati - Main prose section
+        {
+            "query": "પ્રકૃતિ સંસારનો આધાર છે",
+            "language": "gu",
+            "expected_file_pattern": "prose_granth.md",
+            "expected_seq_num": 2,
+            "expected_heading": "પ્રકૃતિનો સાર",
+            "expected_content_type": "main",
+            "is_subsection": False
+        },
+        # Gujarati - Subsection
+        {
+            "query": "પંચતત્વો પ્રકૃતિના મૂળભૂત આધાર છે",
+            "language": "gu",
+            "expected_file_pattern": "prose_granth.md",
+            "expected_seq_num": 3,
+            "expected_heading": "પ્રકૃતિના તત્વો",
+            "expected_content_type": "subsection",
+            "is_subsection": True,
+            "expected_parent_seq_num": 2,
+            "expected_parent_heading": "પ્રકૃતિનો સાર"
+        }
+    ]
+
+    for i, test_case in enumerate(test_cases):
+        # Step 1: Issue search query to get a granth prose result
+        search_payload = {
+            "query": test_case["query"],
+            "language": test_case["language"],
+            "exact_match": False,
+            "exclude_words": [],
+            "categories": {},
+            "search_types": {
+                "Pravachan": {
+                    "enabled": False,
+                    "page_size": 10,
+                    "page_number": 1
+                },
+                "Granth": {
+                    "enabled": True,
+                    "page_size": 10,
+                    "page_number": 1
+                }
+            },
+            "enable_reranking": True
+        }
+
+        search_response = requests.post(
+            f"http://{api_server.host}:{api_server.port}/api/search",
+            json=search_payload
+        )
+
+        assert search_response.status_code == 200
+        search_data = search_response.json()
+        log_handle.info(f"Search response for '{test_case['query']}': {json_dumps(search_data, truncate_fields=['vector_embedding'])}")
+
+        # Validate we have granth results
+        assert search_data["granth_results"]["total_hits"] > 0, f"Expected granth results for '{test_case['query']}'"
+
+        # Get the first result
+        first_result = search_data["granth_results"]["results"][0]
+        assert test_case["expected_file_pattern"] in first_result["original_filename"], \
+            f"Expected result from file containing '{test_case['expected_file_pattern']}'"
+
+        # Extract metadata from search result
+        search_metadata = first_result.get("metadata", {})
+        search_prose_seq_num = search_metadata.get("prose_seq_num")
+        search_prose_heading = search_metadata.get("prose_heading")
+        search_prose_content_type = search_metadata.get("prose_content_type")
+
+        assert search_prose_seq_num is not None, "Expected prose_seq_num in search result metadata"
+
+        # Step 2: Issue get_granth_prose API call
+        original_filename = first_result["original_filename"]
+        prose_response = requests.get(
+            f"http://{api_server.host}:{api_server.port}/api/granth/prose",
+            params={
+                "original_filename": original_filename,
+                "prose_seq_num": search_prose_seq_num
+            }
+        )
+
+        assert prose_response.status_code == 200, f"Granth prose API should return 200 for {original_filename}, prose_seq_num={search_prose_seq_num}"
+        prose_data = prose_response.json()
+        log_handle.info(f"Granth prose response: {json_dumps(prose_data)}")
+
+        # Step 3: Validate response structure
+        assert "prose" in prose_data, "Expected 'prose' in granth prose response"
+        assert "granth_id" in prose_data, "Expected 'granth_id' in granth prose response"
+        assert "granth_name" in prose_data, "Expected 'granth_name' in granth prose response"
+        assert "metadata" in prose_data, "Expected 'metadata' in granth prose response"
+
+        prose = prose_data["prose"]
+
+        # Step 4: Validate that seq_num and heading match between search result and get_granth_prose
+        assert prose.get("seq_num") == search_prose_seq_num, \
+            f"Expected seq_num {search_prose_seq_num} in prose, got {prose.get('seq_num')}"
+        assert prose.get("heading") == search_prose_heading, \
+            f"Expected heading '{search_prose_heading}' in prose, got '{prose.get('heading')}'"
+
+        # Step 5: Validate against expected values from test case
+        assert prose.get("seq_num") == test_case["expected_seq_num"], \
+            f"Expected seq_num {test_case['expected_seq_num']}, got {prose.get('seq_num')}"
+        assert prose.get("heading") == test_case["expected_heading"], \
+            f"Expected heading '{test_case['expected_heading']}', got '{prose.get('heading')}'"
+
+        # Step 6: Validate subsection-specific fields
+        if test_case["is_subsection"]:
+            assert prose.get("parent_seq_num") == test_case["expected_parent_seq_num"], \
+                f"Expected parent_seq_num {test_case['expected_parent_seq_num']}, got {prose.get('parent_seq_num')}"
+            assert prose.get("parent_heading") == test_case["expected_parent_heading"], \
+                f"Expected parent_heading '{test_case['expected_parent_heading']}', got '{prose.get('parent_heading')}'"
+
+        # Step 7: Validate prose content exists (not empty)
+        assert prose.get("content") and len(prose.get("content")) > 0, "Expected non-empty prose content"
+
+        log_handle.info(f"✓ {test_case['language']} get_granth_prose test passed - "
+                       f"original_filename: {original_filename}, "
+                       f"seq_num: {prose.get('seq_num')}, "
+                       f"heading: {prose.get('heading')}, "
+                       f"content_type: {test_case['expected_content_type']}")
+
+    log_handle.info("✓ All get_granth_prose tests passed")
+
+
 def validate_result_schema(data, lexical_results):
     # Check for lexical results structure
     assert "pravachan_results" in data, "Expected pravachan_results in response"

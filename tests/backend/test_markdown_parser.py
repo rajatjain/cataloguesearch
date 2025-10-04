@@ -9,7 +9,7 @@ Tests both scenarios:
 import pytest
 import os
 from backend.crawler.markdown_parser import MarkdownParser, parse_markdown_file
-from backend.crawler.granth import Verse, Granth
+from backend.crawler.granth import Verse, Granth, ProseSection
 
 
 class TestMarkdownParser:
@@ -297,3 +297,138 @@ Test translation
         kalash_count = sum(1 for v in granth._verses if v._type == "Kalash")
         assert gatha_count == 9, "Should have 9 Gatha verses"
         assert kalash_count == 6, "Should have 6 Kalash verses"
+
+    def test_adhikar_prose_granth_mixed_content(self, parser):
+        """Test parsing of mixed verse + prose content with global sequence numbering."""
+        # Test data for both languages
+        test_cases = {
+            "hindi": {
+                "prose_heading_1": "प्रकृति का सार",
+                "content_snippet": "प्रकृति संसार का आधार है"
+            },
+            "gujarati": {
+                "prose_heading_1": "પ્રકૃતિનો સાર",
+                "content_snippet": "પ્રકૃતિ સંસારનો આધાર છે"
+            }
+        }
+
+        for language, expected_data in test_cases.items():
+            # Path to prose granth file
+            prose_granth_path = os.path.join("tests", "data", "md", language, "adhikar_prose_granth.md")
+
+            # Parse the file
+            granth = parser.parse_file(prose_granth_path)
+
+            # Basic structure assertions
+            assert isinstance(granth, Granth)
+            assert len(granth._verses) == 2, f"[{language}] Should have 2 verses"
+            assert len(granth._prose_sections) == 4, f"[{language}] Should have 4 prose sections"
+
+            # Assert global sequence numbering continues across verses, prose, and H3 subsections
+            # Expected: Verse(1), Prose(2), H3(3), H3(4), Prose(5), H3(6), H3(7), Verse(8), Prose(9), H3(10), H3(11), Prose(12), H3(13), H3(14)
+            assert granth._verses[0]._seq_num == 1, f"[{language}] First verse should be seq_num 1"
+            assert granth._prose_sections[0]._seq_num == 2, f"[{language}] First prose should be seq_num 2"
+            assert granth._prose_sections[1]._seq_num == 5, f"[{language}] Second prose should be seq_num 5"
+            assert granth._verses[1]._seq_num == 8, f"[{language}] Second verse should be seq_num 8"
+            assert granth._prose_sections[2]._seq_num == 9, f"[{language}] Third prose should be seq_num 9"
+            assert granth._prose_sections[3]._seq_num == 12, f"[{language}] Fourth prose should be seq_num 12"
+
+            # Assert verse properties
+            verse1 = granth._verses[0]
+            assert verse1._type == "Shlok"
+            assert verse1._type_start_num == 1
+            assert verse1._type_end_num == 1
+            assert verse1._adhikar == "प्रकृति अधिकार"
+            assert verse1._page_num == 8
+
+            verse2 = granth._verses[1]
+            assert verse2._type == "Shlok"
+            assert verse2._type_start_num == 3
+            assert verse2._type_end_num == 8
+            assert verse2._adhikar == "शिक्षा अधिकार"
+            assert verse2._page_num == 15
+
+            # Assert prose section properties
+            prose1 = granth._prose_sections[0]
+            assert isinstance(prose1, ProseSection)
+            assert prose1._heading == expected_data["prose_heading_1"]
+            assert prose1._adhikar == "प्रकृति अधिकार"
+            assert len(prose1._content) == 1, f"[{language}] First prose should have 1 paragraph (before H3s)"
+            assert prose1._page_num == 10
+            assert expected_data["content_snippet"] in prose1._content[0], \
+                f"[{language}] First paragraph should match expected content"
+
+            # Check H3 subsections are parsed correctly
+            assert len(prose1._subsections) == 2, f"[{language}] First prose should have 2 H3 subsections"
+
+            # First H3 subsection: "प्रकृति के तत्व" or "પ્રકૃતિના તત્વો"
+            subsection1 = prose1._subsections[0]
+            assert isinstance(subsection1, ProseSection)
+            assert subsection1._seq_num == 3, f"[{language}] First H3 should be seq_num 3"
+            assert len(subsection1._content) == 2, f"[{language}] First H3 should have 2 paragraphs"
+            assert subsection1._adhikar == "प्रकृति अधिकार"
+
+            # Second H3 subsection: "जीवन में प्रकृति की भूमिका" or "જીવનમાં પ્રકૃતિની ભૂમિકા"
+            subsection2 = prose1._subsections[1]
+            assert isinstance(subsection2, ProseSection)
+            assert subsection2._seq_num == 4, f"[{language}] Second H3 should be seq_num 4"
+            assert len(subsection2._content) == 2, f"[{language}] Second H3 should have 2 paragraphs"
+            assert subsection2._adhikar == "प्रकृति अधिकार"
+
+            # Assert second prose section: "पर्यावरण संरक्षण की आवश्यकता"
+            prose2 = granth._prose_sections[1]
+            assert prose2._seq_num == 5, f"[{language}] Second prose should be seq_num 5"
+            assert prose2._adhikar == "प्रकृति अधिकार"
+            assert len(prose2._content) == 1, f"[{language}] Second prose should have 1 paragraph (before H3s)"
+            assert prose2._page_num == 12
+
+            # Check H3 subsections for prose2
+            assert len(prose2._subsections) == 2, f"[{language}] Second prose should have 2 H3 subsections"
+            assert prose2._subsections[0]._seq_num == 6, f"[{language}] Third H3 should be seq_num 6"
+            assert len(prose2._subsections[0]._content) == 2, f"[{language}] Third H3 should have 2 paragraphs"
+            assert prose2._subsections[1]._seq_num == 7, f"[{language}] Fourth H3 should be seq_num 7"
+            assert len(prose2._subsections[1]._content) == 2, f"[{language}] Fourth H3 should have 2 paragraphs"
+
+            # Assert third prose section (under शिक्षा अधिकार): "शिक्षा का महत्व"
+            prose3 = granth._prose_sections[2]
+            assert prose3._seq_num == 9, f"[{language}] Third prose should be seq_num 9"
+            assert prose3._adhikar == "शिक्षा अधिकार"
+            assert len(prose3._content) == 1, f"[{language}] Third prose should have 1 paragraph (before H3s)"
+            assert prose3._page_num == 17
+
+            # Check H3 subsections for prose3
+            assert len(prose3._subsections) == 2, f"[{language}] Third prose should have 2 H3 subsections"
+            assert prose3._subsections[0]._seq_num == 10, f"[{language}] Fifth H3 should be seq_num 10"
+            assert len(prose3._subsections[0]._content) == 2, f"[{language}] Fifth H3 should have 2 paragraphs"
+            assert prose3._subsections[1]._seq_num == 11, f"[{language}] Sixth H3 should be seq_num 11"
+            assert len(prose3._subsections[1]._content) == 2, f"[{language}] Sixth H3 should have 2 paragraphs"
+
+            # Assert fourth prose section: "गुरु-शिष्य परंपरा"
+            prose4 = granth._prose_sections[3]
+            assert prose4._seq_num == 12, f"[{language}] Fourth prose should be seq_num 12"
+            assert prose4._adhikar == "शिक्षा अधिकार"
+            assert len(prose4._content) == 1, f"[{language}] Fourth prose should have 1 paragraph (before H3s)"
+            assert prose4._page_num == 19
+
+            # Check H3 subsections for prose4
+            assert len(prose4._subsections) == 2, f"[{language}] Fourth prose should have 2 H3 subsections"
+            assert prose4._subsections[0]._seq_num == 13, f"[{language}] Seventh H3 should be seq_num 13"
+            assert len(prose4._subsections[0]._content) == 2, f"[{language}] Seventh H3 should have 2 paragraphs"
+            assert prose4._subsections[1]._seq_num == 14, f"[{language}] Eighth H3 should be seq_num 14"
+            assert len(prose4._subsections[1]._content) == 2, f"[{language}] Eighth H3 should have 2 paragraphs"
+
+            # Test HTTP response includes prose_sections
+            response = granth.get_http_response()
+            assert "verses" in response
+            assert "prose_sections" in response
+            assert len(response["verses"]) == 2
+            assert len(response["prose_sections"]) == 4
+
+            # Check prose section in HTTP response
+            prose_response = response["prose_sections"][0]
+            assert "seq_num" in prose_response
+            assert "heading" in prose_response
+            assert "content" in prose_response
+            assert "adhikar" in prose_response
+            assert prose_response["seq_num"] == 2
+            assert prose_response["heading"] == expected_data["prose_heading_1"]

@@ -5,7 +5,7 @@ import markdown
 from bs4 import BeautifulSoup
 import re
 from typing import List, Optional
-from .granth import Verse, Granth, GranthMetadata
+from .granth import Verse, Granth, GranthMetadata, ProseSection
 from backend.common.utils import get_merged_config
 
 log_handle = logging.getLogger(__name__)
@@ -50,8 +50,8 @@ class MarkdownParser:
         html = self.md.convert(content)
         soup = BeautifulSoup(html, 'html.parser')
 
-        # Extract verses
-        verses = self._extract_verses(soup)
+        # Extract verses and prose sections
+        verses, prose_sections = self._extract_content(soup)
 
         # Convert absolute path to relative path (relative to base_folder)
         relative_filename = original_filename
@@ -103,30 +103,47 @@ class MarkdownParser:
             name=granth_name,
             original_filename=relative_filename,
             metadata=metadata,
-            verses=verses
+            verses=verses,
+            prose_sections=prose_sections
         )
     
-    def _extract_verses(self, soup: BeautifulSoup) -> List[Verse]:
-        """Extract all verses from the parsed HTML, tracking Adhikars."""
+    def _is_verse_header(self, header_text: str) -> bool:
+        """Check if H2 header is a verse (Gatha/Shlok/etc) or prose heading."""
+        verse_pattern = r'^(Shlok|Gatha|Kalash|Sutra|Chhand)\s+(\d+)(-\d+)?'
+        return bool(re.match(verse_pattern, header_text, re.IGNORECASE))
+
+    def _extract_content(self, soup: BeautifulSoup) -> tuple[List[Verse], List[ProseSection]]:
+        """Extract both verses AND prose sections from the parsed HTML."""
         verses = []
+        prose_sections = []
         current_adhikar = None
         seq_num = 1
-        
+
         # Find all H1 and H2 tags in document order
         all_headers = soup.find_all(['h1', 'h2'])
-        
+
         for header in all_headers:
             if header.name == 'h1':
                 # Update current Adhikar
                 current_adhikar = self.clean_text(header.get_text())
             elif header.name == 'h2':
-                # Extract verse with current Adhikar
-                verse = self._extract_single_verse(header, seq_num, soup, current_adhikar)
-                if verse:
-                    verses.append(verse)
-                    seq_num += 1
-        
-        return verses
+                h2_text = self.clean_text(header.get_text())
+
+                # Determine: verse or prose?
+                if self._is_verse_header(h2_text):
+                    # Parse as verse
+                    verse = self._extract_single_verse(header, seq_num, soup, current_adhikar)
+                    if verse:
+                        verses.append(verse)
+                        seq_num += 1
+                else:
+                    # Parse as prose
+                    prose, new_seq_num = self._extract_prose_section(header, seq_num, soup, current_adhikar)
+                    if prose:
+                        prose_sections.append(prose)
+                        seq_num = new_seq_num  # Update seq_num to account for subsections
+
+        return verses, prose_sections
     
     def _extract_single_verse(self, h2_tag, seq_num: int, soup: BeautifulSoup, adhikar: Optional[str] = None) -> Optional[Verse]:
         """Extract a single verse from an H2 tag and its following content."""
@@ -177,12 +194,9 @@ class MarkdownParser:
         )
     
     def _parse_verse_header(self, header_text: str) -> tuple[Optional[str], Optional[int], Optional[int]]:
-        """Parse verse header to extract type, start_num and end_num."""
-        # Define valid verse types
-        VALID_VERSE_TYPES = {"Shlok", "Gatha", "Kalash", "Uthanika"}
-
+        """Parse verse header to extract type, start_num and end_num. Returns None if not a verse."""
         # Match patterns like "Shlok 1-6", "Gatha 356-365" (ranges)
-        range_match = re.match(r'^(Shlok|Gatha|Kalash|Sutra|Uthanika)\s+(\d+)-(\d+)', header_text, re.IGNORECASE)
+        range_match = re.match(r'^(Shlok|Gatha|Kalash|Sutra|Chhand)\s+(\d+)-(\d+)', header_text, re.IGNORECASE)
         if range_match:
             verse_type = range_match.group(1).capitalize()
             start_num = int(range_match.group(2))
@@ -190,16 +204,13 @@ class MarkdownParser:
             return verse_type, start_num, end_num
 
         # Match patterns like "Shlok 1", "Gatha 15", "Kalash 3" (single)
-        single_match = re.match(r'^(Shlok|Gatha|Kalash|Sutra|Uthanika)\s+(\d+)', header_text, re.IGNORECASE)
+        single_match = re.match(r'^(Shlok|Gatha|Kalash|Sutra|Chhand)\s+(\d+)', header_text, re.IGNORECASE)
         if single_match:
             verse_type = single_match.group(1).capitalize()
             num = int(single_match.group(2))
             return verse_type, num, num
 
-        # If we have an H2 heading but it doesn't match the expected pattern, throw an error
-        if header_text:
-            raise ValueError(f"Invalid H2 heading found: '{header_text}'. Valid verse types are: {', '.join(sorted(VALID_VERSE_TYPES))} followed by a number or range (e.g., 'Shlok 1' or 'Shlok 1-6')")
-
+        # Not a verse - return None (it's prose)
         return None, None, None
     
     def _extract_verse_text(self, content_elements: List) -> str:
@@ -277,6 +288,99 @@ class MarkdownParser:
             if match:
                 return int(match.group(1))
         return None
+
+    def _extract_prose_section(self, h2_tag, seq_num: int, soup: BeautifulSoup, adhikar: Optional[str] = None) -> tuple[Optional[ProseSection], int]:
+        """
+        Extract a prose section from an H2 heading, including H3 subsections.
+
+        Returns:
+            tuple: (ProseSection or None, next_seq_num)
+                   next_seq_num accounts for the main section and all subsections
+        """
+        heading = self.clean_text(h2_tag.get_text())
+
+        # Get all content until the next H1 or H2
+        content_elements = []
+        current = h2_tag.next_sibling
+
+        while current and (not hasattr(current, 'name') or current.name not in ['h1', 'h2']):
+            if hasattr(current, 'name') and current.name:
+                content_elements.append(current)
+            current = current.next_sibling
+
+        # Extract paragraphs (before first H3) and subsections (H3 blocks)
+        paragraphs = []  # Paragraphs before first H3
+        subsections = []  # H3 subsections
+        page_num = None
+
+        current_h3_heading = None
+        current_h3_paragraphs = []
+        current_subsection_seq = seq_num + 1  # H3 subsections start after main section
+
+        for elem in content_elements:
+            if elem.name == 'h3':
+                # Save previous H3 subsection if exists
+                if current_h3_heading is not None:
+                    if current_h3_paragraphs:  # Only create subsection if it has content
+                        subsections.append(ProseSection(
+                            seq_num=current_subsection_seq,
+                            heading=current_h3_heading,
+                            content=current_h3_paragraphs,
+                            subsections=[],  # No H4 for now
+                            page_num=None,
+                            adhikar=adhikar
+                        ))
+                        current_subsection_seq += 1
+
+                # Start new H3 subsection
+                h3_text = self.clean_text(elem.get_text())
+
+                # Check if it's a page number heading
+                page_match = re.match(r'^Page\s+Number\s*-?\s*(\d+)$', h3_text, re.IGNORECASE)
+                if page_match:
+                    page_num = int(page_match.group(1))
+                    current_h3_heading = None  # Don't treat page number as subsection
+                else:
+                    current_h3_heading = h3_text
+                    current_h3_paragraphs = []
+
+            elif elem.name == 'p':
+                text = self.clean_text(elem.get_text())
+                if text:
+                    if current_h3_heading is None:
+                        # Before first H3, add to main content
+                        paragraphs.append(text)
+                    else:
+                        # Inside H3, add to current subsection
+                        current_h3_paragraphs.append(text)
+
+        # Save last H3 subsection if exists
+        if current_h3_heading is not None and current_h3_paragraphs:
+            subsections.append(ProseSection(
+                seq_num=current_subsection_seq,
+                heading=current_h3_heading,
+                content=current_h3_paragraphs,
+                subsections=[],
+                page_num=None,
+                adhikar=adhikar
+            ))
+            current_subsection_seq += 1
+
+        # Don't create empty prose sections
+        if not paragraphs and not subsections:
+            return None, seq_num + 1
+
+        prose_section = ProseSection(
+            seq_num=seq_num,
+            heading=heading,
+            content=paragraphs,
+            subsections=subsections,
+            page_num=page_num,
+            adhikar=adhikar
+        )
+
+        # Return the prose section and the next available seq_num
+        return prose_section, current_subsection_seq
 
 
 def parse_markdown_file(file_path: str, base_folder: Optional[str] = None) -> Granth:

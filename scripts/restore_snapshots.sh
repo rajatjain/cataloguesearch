@@ -150,8 +150,11 @@ elif ! echo "$SNAPSHOTS_LIST" | grep -q '"cataloguesearch_prod"'; then
 elif ! echo "$SNAPSHOTS_LIST" | grep -q '"cataloguesearch_prod_metadata"'; then
     echo "Error: cataloguesearch_prod_metadata snapshot not found in repository"
     check_status "Step 5: Verifying snapshots are accessible" 1
+elif ! echo "$SNAPSHOTS_LIST" | grep -q '"cataloguesearch_prod_granth"'; then
+    echo "Error: cataloguesearch_prod_granth snapshot not found in repository"
+    check_status "Step 5: Verifying snapshots are accessible" 1
 else
-    echo "Both required snapshots found in repository"
+    echo "All required snapshots found in repository"
     check_status "Step 5: Verifying snapshots are accessible" 0
 fi
 
@@ -160,11 +163,12 @@ wait_for_confirmation "Step 6: Deleting existing indices"
 echo "Deleting any existing indices..."
 curl -s -X DELETE "localhost:9200/cataloguesearch_prod" > /dev/null || echo "cataloguesearch_prod index may not exist, continuing..."
 curl -s -X DELETE "localhost:9200/cataloguesearch_prod_metadata" > /dev/null || echo "cataloguesearch_prod_metadata index may not exist, continuing..."
+curl -s -X DELETE "localhost:9200/cataloguesearch_prod_granth" > /dev/null || echo "cataloguesearch_prod_granth index may not exist, continuing..."
 check_status "Step 6: Deleting existing indices" 0
 
 # Step 7: Restore the snapshots with error checking
 wait_for_confirmation "Step 7: Restoring snapshots"
-echo "Initiating restoration of both indices..."
+echo "Initiating restoration of all indices..."
 
 echo "Restoring cataloguesearch_prod..."
 RESTORE_RESPONSE=$(curl -s -X POST "localhost:9200/_snapshot/local_backup/cataloguesearch_prod/_restore" -H 'Content-Type: application/json' -d'{
@@ -202,7 +206,25 @@ else
     RESTORE2_SUCCESS=1
 fi
 
-check_status "Step 7: Restoring snapshots" $((RESTORE1_SUCCESS + RESTORE2_SUCCESS))
+echo "Restoring cataloguesearch_prod_granth..."
+RESTORE_RESPONSE=$(curl -s -X POST "localhost:9200/_snapshot/local_backup/cataloguesearch_prod_granth/_restore" -H 'Content-Type: application/json' -d'{
+  "indices": "cataloguesearch_prod_granth",
+  "ignore_unavailable": true,
+  "include_global_state": false
+}')
+
+if echo "$RESTORE_RESPONSE" | grep -q '"accepted":true'; then
+    echo "cataloguesearch_prod_granth restore initiated successfully"
+    RESTORE3_SUCCESS=0
+elif echo "$RESTORE_RESPONSE" | grep -q "error"; then
+    echo "Error restoring cataloguesearch_prod_granth: $RESTORE_RESPONSE"
+    RESTORE3_SUCCESS=1
+else
+    echo "Unexpected response from cataloguesearch_prod_granth restore: $RESTORE_RESPONSE"
+    RESTORE3_SUCCESS=1
+fi
+
+check_status "Step 7: Restoring snapshots" $((RESTORE1_SUCCESS + RESTORE2_SUCCESS + RESTORE3_SUCCESS))
 
 # Print curl commands to check restoration status
 echo ""
@@ -221,16 +243,22 @@ echo ""
 echo "3. Check cataloguesearch_prod_metadata restoration status:"
 echo "curl -X GET \"localhost:9200/_cat/recovery/cataloguesearch_prod_metadata?v\""
 echo ""
-echo "4. Check document count in cataloguesearch_prod:"
+echo "4. Check cataloguesearch_prod_granth restoration status:"
+echo "curl -X GET \"localhost:9200/_cat/recovery/cataloguesearch_prod_granth?v\""
+echo ""
+echo "5. Check document count in cataloguesearch_prod:"
 echo "curl -X GET \"localhost:9200/cataloguesearch_prod/_count\""
 echo ""
-echo "5. Check document count in cataloguesearch_prod_metadata:"
+echo "6. Check document count in cataloguesearch_prod_metadata:"
 echo "curl -X GET \"localhost:9200/cataloguesearch_prod_metadata/_count\""
 echo ""
-echo "6. Check cluster health:"
+echo "7. Check document count in cataloguesearch_prod_granth:"
+echo "curl -X GET \"localhost:9200/cataloguesearch_prod_granth/_count\""
+echo ""
+echo "8. Check cluster health:"
 echo "curl -X GET \"localhost:9200/_cluster/health?pretty\""
 echo ""
-echo "7. List all snapshots:"
+echo "9. List all snapshots:"
 echo "curl -X GET \"localhost:9200/_snapshot/local_backup/_all?pretty\""
 
 echo ""

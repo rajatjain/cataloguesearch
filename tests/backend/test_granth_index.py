@@ -90,28 +90,32 @@ def test_granth_indexing_pipeline_with_config():
     granth_objects = []
     expected_metadata = {}
     
-    # Phase 2: Parse all markdown files with config merging
+    # Phase 2: Parse all markdown files with config merging (skip prose granth files)
     log_handle.info("=== Phase 2: Parsing markdown files with config merging ===")
     for granth_name, file_info in granth_files.items():
+        # Skip prose granth files (tested separately in test_granth_prose_indexing)
+        if "prose_granth" in granth_name:
+            continue
+
         file_path = file_info["file_path"]
         expected_config = file_info["config"]
-        
+
         log_handle.info(f"Parsing file: {file_path}")
         granth = parser.parse_file(file_path)
         granth_objects.append(granth)
         expected_metadata[granth_name] = expected_config
-        
+
         # Basic parsing validation
         assert granth is not None, f"Failed to parse {file_path}"
         assert len(granth._verses) > 0, f"No verses found in {file_path}"
-        
+
         # Validate that config was merged correctly
         metadata = granth._metadata
         assert metadata._anuyog == expected_config["Anuyog"], f"Anuyog mismatch for {granth_name}"
         assert metadata._author == expected_config["Author"], f"Author mismatch for {granth_name}"
         assert metadata._teekakar == expected_config["Teekakar"], f"Teekakar mismatch for {granth_name}"
         assert metadata._language == expected_config["language"], f"Language mismatch for {granth_name}"
-        
+
         log_handle.info(f"✓ Parsed {file_path}: {len(granth._verses)} verses")
         log_handle.info(f"✓ Config merged - Anuyog: {metadata._anuyog}, Author: {metadata._author}")
     
@@ -476,3 +480,191 @@ def test_granth_indexing_pipeline_with_config():
         )
         assert complex_query["hits"]["total"]["value"] == 1, f"Should find 1 document matching both language={lang} and anuyog=Simple Anuyog"
         log_handle.info(f"✓ Complex query (language={lang} AND anuyog=Simple Anuyog): 1 document found")
+
+
+def test_granth_prose_indexing():
+    """
+    Test indexing of prose sections with hierarchical subsections.
+
+    Tests:
+    1. Parse adhikar_prose_granth.md files with verses and prose sections
+    2. Index and verify prose_sections in granth_index
+    3. Verify prose paragraphs are indexed in search_index with embeddings
+    4. Validate subsection hierarchy and seq_num continuity
+    """
+    config = Config()
+    opensearch_client = get_opensearch_client(config)
+    indexer = GranthIndexer(config, opensearch_client)
+
+    # Setup directory structure with prose granth files
+    log_handle.info("=== Phase 1: Setting up prose granth files ===")
+    granth_setup = setup_granth()
+    base_dir = granth_setup["base_dir"]
+    granth_files = granth_setup["granth_files"]
+
+    # Create parser with base_folder
+    parser = MarkdownParser(base_folder=base_dir)
+
+    # Parse only the prose granth files (Hindi and Gujarati)
+    log_handle.info("=== Phase 2: Parsing prose granth files ===")
+    prose_granths = []
+    for granth_name, file_info in granth_files.items():
+        if "prose_granth" not in granth_name:
+            continue
+
+        file_path = file_info["file_path"]
+        log_handle.info(f"Parsing prose granth: {file_path}")
+
+        granth = parser.parse_file(file_path)
+        prose_granths.append((granth_name, granth, file_info["config"]))
+
+        # Basic validation
+        assert granth is not None, f"Failed to parse {file_path}"
+        assert len(granth._verses) == 2, f"Expected 2 verses in {file_path}"
+        assert len(granth._prose_sections) == 4, f"Expected 4 prose sections in {file_path}"
+
+        log_handle.info(f"✓ Parsed {file_path}: {len(granth._verses)} verses, {len(granth._prose_sections)} prose sections")
+
+    # Phase 3: Index prose granths
+    log_handle.info("=== Phase 3: Indexing prose granths ===")
+    for granth_name, granth, expected_config in prose_granths:
+        log_handle.info(f"Indexing: {granth_name}")
+        indexer.index_granth(granth, dry_run=False)
+        log_handle.info(f"✓ Indexed: {granth_name}")
+
+    # Refresh indices
+    opensearch_client.indices.refresh(index=config.OPENSEARCH_GRANTH_INDEX_NAME)
+    opensearch_client.indices.refresh(index=config.OPENSEARCH_INDEX_NAME)
+
+    # Phase 4: Validate granth_index - prose_sections structure
+    log_handle.info("=== Phase 4: Validating prose_sections in granth_index ===")
+
+    granth_search = opensearch_client.search(
+        index=config.OPENSEARCH_GRANTH_INDEX_NAME,
+        body={"query": {"term": {"metadata.anuyog.keyword": "Prose Anuyog"}}, "size": 100}
+    )
+
+    granth_docs = granth_search["hits"]["hits"]
+    assert len(granth_docs) == 2, f"Expected 2 prose granth documents (hi & gu), found {len(granth_docs)}"
+    log_handle.info(f"✓ Found {len(granth_docs)} prose granth documents")
+
+    for doc in granth_docs:
+        source = doc["_source"]
+
+        # Validate prose_sections field exists
+        assert "prose_sections" in source, "prose_sections field missing from granth_index"
+        prose_sections = source["prose_sections"]
+        assert len(prose_sections) == 4, f"Expected 4 prose sections, found {len(prose_sections)}"
+
+        # Validate seq_num continuity: Verse(1), Prose(2), Prose(5), Verse(8), Prose(9), Prose(12)
+        assert source["verses"][0]["seq_num"] == 1, "First verse should be seq_num 1"
+        assert prose_sections[0]["seq_num"] == 2, "First prose should be seq_num 2"
+        assert prose_sections[1]["seq_num"] == 5, "Second prose should be seq_num 5"
+        assert source["verses"][1]["seq_num"] == 8, "Second verse should be seq_num 8"
+        assert prose_sections[2]["seq_num"] == 9, "Third prose should be seq_num 9"
+        assert prose_sections[3]["seq_num"] == 12, "Fourth prose should be seq_num 12"
+
+        log_handle.info(f"✓ Validated seq_num continuity for {source['original_filename']}")
+
+        # Validate prose subsections
+        for prose in prose_sections:
+            assert "subsections" in prose, "subsections field missing from prose_section"
+            assert len(prose["subsections"]) == 2, f"Expected 2 subsections in prose {prose['seq_num']}"
+
+            # Validate subsection structure
+            for subsection in prose["subsections"]:
+                assert "seq_num" in subsection, "seq_num missing from subsection"
+                assert "heading" in subsection, "heading missing from subsection"
+                assert "content" in subsection, "content missing from subsection"
+                assert isinstance(subsection["content"], list), "subsection content should be a list"
+                assert len(subsection["content"]) == 2, "Each subsection should have 2 paragraphs"
+
+        log_handle.info(f"✓ Validated prose subsections for {source['original_filename']}")
+
+    # Phase 5: Validate search_index - prose paragraphs with embeddings
+    log_handle.info("=== Phase 5: Validating prose paragraphs in search_index ===")
+
+    # Query for prose content
+    prose_search = opensearch_client.search(
+        index=config.OPENSEARCH_INDEX_NAME,
+        body={
+            "query": {
+                "bool": {
+                    "must": [
+                        {"exists": {"field": "metadata.prose_seq_num"}},
+                        {"term": {"metadata.anuyog.keyword": "Prose Anuyog"}}
+                    ]
+                }
+            },
+            "size": 1000
+        }
+    )
+
+    prose_docs = prose_search["hits"]["hits"]
+    assert len(prose_docs) > 0, "No prose paragraphs found in search_index"
+    log_handle.info(f"✓ Found {len(prose_docs)} prose paragraph documents in search_index")
+
+    # Expected count: 2 languages × 4 prose sections × (1 main para + 2 subsections × 2 paras) = 2 × 4 × 5 = 40
+    expected_prose_docs = 2 * 4 * (1 + 2 * 2)  # 40 prose paragraph documents
+    assert len(prose_docs) == expected_prose_docs, f"Expected {expected_prose_docs} prose paragraphs, found {len(prose_docs)}"
+
+    # Validate prose document structure
+    prose_content_types = set()
+    chunk_ids_checked = set()
+
+    for doc in prose_docs:
+        source = doc["_source"]
+
+        # Validate required fields
+        assert "chunk_id" in source, "chunk_id missing from prose document"
+        assert "metadata" in source, "metadata missing from prose document"
+        assert "vector_embedding" in source, "vector_embedding missing from prose document (should have embeddings)"
+
+        metadata = source["metadata"]
+        assert "prose_seq_num" in metadata, "prose_seq_num missing from metadata"
+        assert "prose_heading" in metadata, "prose_heading missing from metadata"
+        assert "prose_content_type" in metadata, "prose_content_type missing from metadata"
+
+        prose_content_types.add(metadata["prose_content_type"])
+
+        # Validate embedding
+        embedding = source["vector_embedding"]
+        assert isinstance(embedding, list), "vector_embedding should be a list"
+        assert len(embedding) > 0, "vector_embedding should not be empty"
+
+        # Validate chunk_id format
+        chunk_id = source["chunk_id"]
+        chunk_ids_checked.add(chunk_id)
+
+        # Chunk IDs should be either:
+        # - Main prose: {granth_id}_p{seq_num}_content_{index}
+        # - Subsection: {granth_id}_p{parent_seq}_sub{seq_num}_content_{index}
+        if metadata["prose_content_type"] == "main":
+            assert "_p" in chunk_id and "_content_" in chunk_id, f"Invalid main prose chunk_id: {chunk_id}"
+            assert "_sub" not in chunk_id, f"Main prose chunk_id should not have _sub: {chunk_id}"
+        elif metadata["prose_content_type"] == "subsection":
+            assert "_p" in chunk_id and "_sub" in chunk_id and "_content_" in chunk_id, f"Invalid subsection chunk_id: {chunk_id}"
+
+        # Validate language-specific text content
+        language = metadata.get("language")
+        if language == "hi":
+            assert "text_content_hindi" in source, "text_content_hindi missing for Hindi prose"
+            assert source["text_content_hindi"], "text_content_hindi should not be empty"
+        elif language == "gu":
+            assert "text_content_gujarati" in source, "text_content_gujarati missing for Gujarati prose"
+            assert source["text_content_gujarati"], "text_content_gujarati should not be empty"
+
+    log_handle.info(f"✓ Validated {len(prose_docs)} prose paragraph documents with embeddings")
+    log_handle.info(f"✓ Prose content types found: {prose_content_types}")
+
+    # Verify both main and subsection types exist
+    assert "main" in prose_content_types, "Expected 'main' prose content type"
+    assert "subsection" in prose_content_types, "Expected 'subsection' prose content type"
+
+    log_handle.info("=== Phase 6: Cross-validation ===")
+
+    # Verify chunk_id uniqueness
+    assert len(chunk_ids_checked) == len(prose_docs), "Duplicate chunk_ids found in prose documents"
+    log_handle.info(f"✓ All {len(chunk_ids_checked)} prose chunk_ids are unique")
+
+    log_handle.info("✅ Prose indexing test completed successfully")

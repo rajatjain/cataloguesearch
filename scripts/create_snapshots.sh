@@ -133,6 +133,22 @@ curl -X PUT "localhost:9200/_snapshot/local_backup/${SNAPSHOT_NAME_META}?wait_fo
 
 echo "Snapshot created: $SNAPSHOT_NAME_META"
 
+# Step 6.5: Create snapshot for granth index
+echo "Step 5.5: Creating snapshot for cataloguesearch_prod_granth..."
+SNAPSHOT_NAME_GRANTH="cataloguesearch_prod_granth"
+
+curl -X PUT "localhost:9200/_snapshot/local_backup/${SNAPSHOT_NAME_GRANTH}?wait_for_completion=true" -H 'Content-Type: application/json' -d'{
+  "indices": "cataloguesearch_prod_granth",
+  "ignore_unavailable": true,
+  "include_global_state": false,
+  "metadata": {
+    "description": "Snapshot of granth_index",
+    "created_by": "create_snapshots.sh"
+  }
+}'
+
+echo "Snapshot created: $SNAPSHOT_NAME_GRANTH"
+
 # Step 7: Copy snapshots from container to local directory
 echo "Step 6: Copying snapshots to local directory..."
 # Since /tmp/snapshots is mounted from host, snapshots are already in the local directory
@@ -150,6 +166,7 @@ echo ""
 echo "Created snapshots:"
 echo "- $SNAPSHOT_NAME_PROD"
 echo "- $SNAPSHOT_NAME_META"
+echo "- $SNAPSHOT_NAME_GRANTH"
 echo ""
 echo "Local storage location: $LOCAL_SNAPSHOTS_DIR"
 echo ""
@@ -163,6 +180,7 @@ echo ""
 echo "2. Get specific snapshot info:"
 echo "curl -X GET \"localhost:9200/_snapshot/local_backup/${SNAPSHOT_NAME_PROD}?pretty\""
 echo "curl -X GET \"localhost:9200/_snapshot/local_backup/${SNAPSHOT_NAME_META}?pretty\""
+echo "curl -X GET \"localhost:9200/_snapshot/local_backup/${SNAPSHOT_NAME_GRANTH}?pretty\""
 echo ""
 echo "3. Check snapshot repository status:"
 echo "curl -X GET \"localhost:9200/_snapshot/local_backup?pretty\""
@@ -170,10 +188,12 @@ echo ""
 echo "4. Verify snapshot integrity:"
 echo "curl -X POST \"localhost:9200/_snapshot/local_backup/${SNAPSHOT_NAME_PROD}/_verify\""
 echo "curl -X POST \"localhost:9200/_snapshot/local_backup/${SNAPSHOT_NAME_META}/_verify\""
+echo "curl -X POST \"localhost:9200/_snapshot/local_backup/${SNAPSHOT_NAME_GRANTH}/_verify\""
 echo ""
 echo "5. Check index document counts:"
 echo "curl -X GET \"localhost:9200/cataloguesearch_prod/_count\""
 echo "curl -X GET \"localhost:9200/cataloguesearch_prod_metadata/_count\""
+echo "curl -X GET \"localhost:9200/cataloguesearch_prod_granth/_count\""
 
 echo ""
 echo "Script completed successfully!"

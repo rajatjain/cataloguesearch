@@ -1,4 +1,57 @@
+from typing import List, Optional
 from backend.utils import json_dumps
+
+
+class ProseSection:
+    """
+    Represents hierarchical prose content (headings, text, subsections).
+    Used for non-verse content like commentary, explanations, Q&A sections.
+
+    Attributes:
+        seq_num:        Global sequence number (continues across verses and prose)
+        heading:        Section heading (e.g., "Saar", "नरकगति के दुःख")
+        content:        List of paragraphs under this heading (each para indexed separately)
+        subsections:    Nested subsections (hierarchical structure)
+        page_num:       Page number in the original PDF
+        adhikar:        The Adhikar (chapter/section) this prose belongs to
+    """
+    def __init__(
+        self,
+        seq_num: int,
+        heading: str,
+        content: List[str],
+        subsections: Optional[List['ProseSection']] = None,
+        page_num: Optional[int] = None,
+        adhikar: Optional[str] = None
+    ):
+        self._seq_num = seq_num
+        self._heading = heading
+        self._content = content  # List of paragraphs
+        self._subsections = subsections or []
+        self._page_num = page_num
+        self._adhikar = adhikar
+
+    def __str__(self):
+        section_preview = f"""
+            ProseSection Seq: {self._seq_num}
+            Heading: {self._heading}
+            Content Paragraphs: {len(self._content)}
+            Subsections: {len(self._subsections)}
+            Page Num: {self._page_num}
+            Adhikar: {self._adhikar}
+        """
+        return section_preview
+
+    def get_http_response(self):
+        """Convert ProseSection to dictionary for HTTP response"""
+        return {
+            "seq_num": self._seq_num,
+            "heading": self._heading,
+            "content": self._content,
+            "subsections": [subsec.get_http_response() for subsec in self._subsections],
+            "page_num": self._page_num,
+            "adhikar": self._adhikar
+        }
 
 
 class Verse:
@@ -99,25 +152,35 @@ class GranthMetadata:
 
 class Granth:
     """Granth defines all the relevant content of a single Granth
-        - name:        Name of the Granth
-        - metadata:    Metadata associated with the Granth
+        - name:             Name of the Granth
+        - metadata:         Metadata associated with the Granth
+        - verses:           List of Verse objects (verse-based content)
+        - prose_sections:   List of ProseSection objects (prose/commentary content)
     """
     def __init__(
-        self, name, original_filename,
-        metadata, verses):
+        self,
+        name,
+        original_filename,
+        metadata,
+        verses,
+        prose_sections
+    ):
         self._name = name
         self._original_filename = original_filename
         self._metadata = metadata
         self._verses = verses
-    
+        self._prose_sections = prose_sections or []
+
     def __str__(self):
-        return f"Granth(name='{self._name}', verses={len(self._verses)}, metadata={self._metadata})"
-    
+        return (f"Granth(name='{self._name}', verses={len(self._verses)}, "
+                f"prose_sections={len(self._prose_sections)}, metadata={self._metadata})")
+
     def get_http_response(self):
         """Convert Granth to dictionary for HTTP response"""
         return {
             "name": self._name,
             "original_filename": self._original_filename,
             "metadata": self._metadata.get_http_response(),
-            "verses": [verse.get_http_response() for verse in self._verses]
+            "verses": [verse.get_http_response() for verse in self._verses],
+            "prose_sections": [section.get_http_response() for section in self._prose_sections]
         }

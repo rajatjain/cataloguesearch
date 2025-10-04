@@ -121,11 +121,15 @@ export const ResultCard = ({ result, onFindSimilar, onExpand, onExpandGranth, re
 
     const handleExpandClick = () => {
         if (resultType === 'granth') {
-            // For Granth results, extract original_filename and verse_seq_num from metadata
+            // For Granth results, extract original_filename and seq_num from metadata
             const originalFilename = result.original_filename;
             const verseSeqNum = result.metadata?.verse_seq_num;
+            const proseSeqNum = result.metadata?.prose_seq_num;
+
             if (originalFilename && verseSeqNum !== undefined && onExpandGranth) {
-                onExpandGranth(originalFilename, verseSeqNum);
+                onExpandGranth(originalFilename, verseSeqNum, 'verse');
+            } else if (originalFilename && proseSeqNum !== undefined && onExpandGranth) {
+                onExpandGranth(originalFilename, proseSeqNum, 'prose');
             }
         } else {
             // For Pravachan and other results, use document_id
@@ -171,9 +175,11 @@ export const ResultCard = ({ result, onFindSimilar, onExpand, onExpandGranth, re
                     <button onClick={handleExpandClick} className="text-sky-600 hover:text-sky-800 font-medium flex items-center">
                         <ExpandIcon />Expand
                     </button>
-                    <button onClick={() => onFindSimilar(result)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center">
-                        <SimilarIcon />More Like This
-                    </button>
+                    {resultType !== 'granth' && (
+                        <button onClick={() => onFindSimilar(result)} className="text-sky-600 hover:text-sky-800 font-medium flex items-center">
+                            <SimilarIcon />More Like This
+                        </button>
+                    )}
                 </div>
             </div>
             <div className={`${isFirst ? 'text-lg' : 'text-base'} text-slate-700 leading-relaxed font-sans`}>
