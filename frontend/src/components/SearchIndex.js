@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { searchableContent, getSearchableStats, getContentByStatus } from '../utils/searchableContent.js';
+import { searchableContent, searchableGranths, getAllStats, getContentByStatus } from '../utils/searchableContent.js';
 import './SearchIndex.css';
 
 const SearchIndex = () => {
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
-  const stats = getSearchableStats();
+  const allStats = getAllStats();
 
   // Extract year from series string for sorting
   const extractYear = (series) => {
@@ -100,11 +100,12 @@ const SearchIndex = () => {
     );
   };
 
-  const renderContentTable = () => {
+  const renderPravachanTable = () => {
     if (!content || content.length === 0) return null;
 
     return (
       <div className="content-section">
+        <h2 className="section-title">🎙️ Pravachan Content</h2>
         <div className="table-container">
           <table className="content-table">
             <thead>
@@ -161,22 +162,57 @@ const SearchIndex = () => {
     );
   };
 
+  const renderGranthTable = () => {
+    if (!searchableGranths || searchableGranths.length === 0) return null;
+
+    return (
+      <div className="content-section" style={{ marginTop: '3rem' }}>
+        <h2 className="section-title">📜 Mool Shastra / Granth Content</h2>
+        <div className="table-container">
+          <table className="content-table">
+            <thead>
+              <tr>
+                <th>Granth</th>
+                <th>Author</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {searchableGranths.map((item, index) => (
+                <tr key={`${item.name}-${index}`}>
+                  <td className="granth-cell">{item.name}</td>
+                  <td className="series-cell">{item.author}</td>
+                  <td className="status-cell">
+                    {renderStatusBadge(item.status)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="search-index-page">
 
       <div className="stats-overview">
+        {/* Pravachan Widgets */}
         <div className="overview-card">
+          <div className="overview-icon">🎙️</div>
           <div className="overview-number">{getContentByStatus('searchable').hindi.length + getContentByStatus('searchable').gujarati.length} Series</div>
-          <div className="overview-secondary">{stats.grandTotal.toLocaleString()} Pravachans</div>
+          <div className="overview-secondary">{allStats.pravachan.grandTotal.toLocaleString()} Pravachans</div>
         </div>
         <div className="overview-card language-split">
+          <div className="overview-icon">🎙️</div>
           <div className="language-stat">
-            <div className="overview-number">{stats.hindiTotal.toLocaleString()}</div>
+            <div className="overview-number">{allStats.pravachan.hindiTotal.toLocaleString()}</div>
             <div className="overview-label">Hindi</div>
           </div>
           <div className="language-divider"></div>
           <div className="language-stat">
-            <div className="overview-number">{stats.gujaratiTotal.toLocaleString()}</div>
+            <div className="overview-number">{allStats.pravachan.gujaratiTotal.toLocaleString()}</div>
             <div className="overview-label">Gujarati</div>
           </div>
         </div>
@@ -184,15 +220,24 @@ const SearchIndex = () => {
           const inProgressCount = getContentByStatus('in_progress').hindi.length + getContentByStatus('in_progress').gujarati.length;
           return inProgressCount > 0 ? (
             <div className="overview-card">
+              <div className="overview-icon">🎙️</div>
               <div className="overview-number">{inProgressCount}</div>
               <div className="overview-label">Series in Progress</div>
             </div>
           ) : null;
         })()}
+
+        {/* Granth Widget */}
+        <div className="overview-card">
+          <div className="overview-icon">📜</div>
+          <div className="overview-number">{allStats.granth.searchable} Granths</div>
+          <div className="overview-secondary">Searchable</div>
+        </div>
       </div>
 
       <div className="content-tables">
-        {renderContentTable()}
+        {renderPravachanTable()}
+        {renderGranthTable()}
       </div>
 
       <div className="page-footer">

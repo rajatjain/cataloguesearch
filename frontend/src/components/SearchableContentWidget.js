@@ -1,10 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { getSearchableStats } from '../utils/searchableContent.js';
+import { getAllStats } from '../utils/searchableContent.js';
 import './SearchableContentWidget.css';
 
 const SearchableContentWidget = () => {
-  const stats = getSearchableStats();
+  const stats = getAllStats();
 
   return (
     <div className="searchable-content-widget">
@@ -12,10 +12,10 @@ const SearchableContentWidget = () => {
         <div className="widget-info">
           <h4>📚 Content Available</h4>
           <div className="widget-stats">
-            {stats.grandTotal.toLocaleString()} Pravachans across {stats.hindiSeries + stats.gujaratiSeries} Series
+            🎙️ {stats.pravachan.grandTotal.toLocaleString()} Pravachans • 📜 {stats.granth.searchable} Granths
           </div>
         </div>
-        
+
         <div className="widget-actions">
           <Link to="/search-index" className="btn-link">
             Browse All

@@ -187,3 +187,52 @@ export const getAllGranths = () => {
   const granths = searchableContent.map(item => item.granth);
   return [...new Set(granths)];
 };
+
+/**
+ * Searchable Granth/Mool Shastra Index
+ */
+export const searchableGranths = [
+  {
+    name: "Chhah Dhala",
+    author: "Pandit Shri Daulat Ram ji",
+    status: "searchable"
+  },
+  {
+    name: "Purusharth Siddhi Upay",
+    author: "Shri Amritchandra Acharya",
+    status: "searchable"
+  },
+  {
+    name: "Ishtopadesh",
+    author: "Shri Pujyapad Swami",
+    status: "searchable"
+  }
+];
+
+/**
+ * Get granth statistics
+ */
+export const getGranthStats = () => {
+  const searchable = searchableGranths.filter(g => g.status === 'searchable').length;
+  const inProgress = searchableGranths.filter(g => g.status === 'in_progress').length;
+  const total = searchableGranths.length;
+
+  return {
+    searchable,
+    inProgress,
+    total
+  };
+};
+
+/**
+ * Get combined statistics for Pravachan and Granth
+ */
+export const getAllStats = () => {
+  const pravachanStats = getSearchableStats();
+  const granthStats = getGranthStats();
+
+  return {
+    pravachan: pravachanStats,
+    granth: granthStats
+  };
+};
