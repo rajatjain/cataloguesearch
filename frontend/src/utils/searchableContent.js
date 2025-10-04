@@ -115,14 +115,14 @@ export const searchableContent = [
     granth: "Bahinshree Nu Vachanamrut",
     series: 1978,
     count: 181,
-    hindi: "in_progress",
+    hindi: "searchable",
     gujarati: null
   },
   {
     granth: "Pravachan Navneet",
     series: 1977,
     count: 142,
-    hindi: "planned",
+    hindi: "in_progress",
     gujarati: null
   },
   {
@@ -137,14 +137,14 @@ export const searchableContent = [
     series: "1968-69",
     count: 280,
     hindi: null,
-    gujarati: "in_progress"
+    gujarati: "searchable"
   },
   {
     granth: "Samaysaar",
     series: "1975 (18th time)",
     count: 535,
     hindi: null,
-    gujarati: "planned"
+    gujarati: "in_progress"
   }
 ];
 

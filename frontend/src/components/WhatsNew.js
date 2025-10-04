@@ -30,7 +30,7 @@ const WhatsNew = () => {
             newContent: [
                 "Hindi Pravachans on Bahinshree Nu Vachanamrut",
                 "Gujarati Pravachans on Pravachansar 1968-69 Series",
-                "Total Indexed Pravachans: ~4000"
+                "Total Indexed Pravachans: ~3700"
             ],
             newFeatures: [
                 "NEW! Swalakshya now supports indexing of Mool Shastra as well!",
