@@ -85,13 +85,20 @@ async def initialize():
     try:
         log_handle.info("Populating metadata cache at startup...")
         metadata = get_metadata(config)
-        # Filter metadata for each language
+        # Filter metadata for each content_type
+        # metadata structure: {"Pravachan": {"Granth_hi": [...], ...}, "Granth": {...}}
         filtered_metadata = {}
-        for language, lang_metadata in metadata.items():
-            filtered_metadata[language] = {
-                key: values for key, values in lang_metadata.items()
-                if key in config.FILTERED_METADATA_FIELDS
-            }
+        for content_type, type_metadata in metadata.items():
+            filtered_metadata[content_type] = {}
+            for composite_key, values in type_metadata.items():
+                # composite_key is like "Granth_hi", "Year_gu", etc.
+                # Extract the field name (before the last underscore)
+                parts = composite_key.rsplit('_', 1)
+                if len(parts) == 2:
+                    field_name = parts[0]
+                    # Only include if field is in the filtered list
+                    if field_name in config.FILTERED_METADATA_FIELDS:
+                        filtered_metadata[content_type][composite_key] = values
         app.state.metadata_cache["data"] = filtered_metadata
         app.state.metadata_cache["timestamp"] = time.time()
         log_handle.info(f"Metadata cache populated with {json_dumps(metadata)}")
@@ -121,20 +128,32 @@ async def get_metadata_api(request: Request):
         # Cache is expired or empty, fetch from OpenSearch
         log_handle.info("Cache expired or empty, fetching metadata from OpenSearch")
         metadata = get_metadata(request.app.state.config)
+        log_handle.info(f"Raw metadata from get_metadata: {json_dumps(metadata)}")
 
-        # Filter to only return Granth, Anuyog, Year fields for each language
+        # Filter to only return Granth, Anuyog, Year, Author fields for each content_type
+        # metadata structure: {"Pravachan": {"Granth_hi": [...], ...}, "Granth": {...}}
         filtered_metadata = {}
-        for language, lang_metadata in metadata.items():
-            filtered_metadata[language] = {
-                key: values for key, values in lang_metadata.items()
-                if key in config.FILTERED_METADATA_FIELDS
-            }
+        for content_type, type_metadata in metadata.items():
+            filtered_metadata[content_type] = {}
+            for composite_key, values in type_metadata.items():
+                # composite_key is like "Granth_hi", "Year_gu", etc.
+                # Extract the field name (before the last underscore)
+                parts = composite_key.rsplit('_', 1)
+                if len(parts) == 2:
+                    field_name = parts[0]
+                    log_handle.info(f"Checking field {field_name} against filtered fields: {request.app.state.config.FILTERED_METADATA_FIELDS}")
+                    # Only include if field is in the filtered list
+                    if field_name in request.app.state.config.FILTERED_METADATA_FIELDS:
+                        filtered_metadata[content_type][composite_key] = values
+                        log_handle.info(f"Including {composite_key} with {len(values)} values")
+                    else:
+                        log_handle.info(f"Excluding {field_name} - not in filtered fields")
 
         # Update cache with filtered data
         cache["data"] = filtered_metadata
         cache["timestamp"] = current_time
 
-        log_handle.info(f"Filtered metadata retrieved and cached: {len(filtered_metadata)} keys found")
+        log_handle.info(f"Filtered metadata retrieved and cached: {len(filtered_metadata)} content types found")
         return JSONResponse(content=filtered_metadata, status_code=200)
     except Exception as e:
         log_handle.exception(f"Error retrieving metadata: {e}")

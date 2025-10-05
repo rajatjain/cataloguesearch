@@ -8,19 +8,36 @@ export const api = {
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
 
-            // Map language codes to full names
+            // data structure: {"Pravachan": {"Granth_hi": [...], "Granth_gu": [...]}, "Granth": {...}}
+            // Transform to: {"Pravachan": {"hindi": {"Granth": [...], ...}, "gujarati": {...}}, "Granth": {...}}
+
             const langKeyMap = {
                 'hi': 'hindi',
                 'gu': 'gujarati'
             };
 
-            const mappedData = {};
-            for (const [key, value] of Object.entries(data)) {
-                const mappedKey = langKeyMap[key] || key;
-                mappedData[mappedKey] = value;
+            const transformedData = {};
+
+            for (const [contentType, typeMetadata] of Object.entries(data)) {
+                transformedData[contentType] = { hindi: {}, gujarati: {} };
+
+                for (const [compositeKey, values] of Object.entries(typeMetadata)) {
+                    // compositeKey is like "Granth_hi", "Year_gu", etc.
+                    const lastUnderscoreIndex = compositeKey.lastIndexOf('_');
+                    if (lastUnderscoreIndex !== -1) {
+                        const fieldName = compositeKey.substring(0, lastUnderscoreIndex);
+                        const langCode = compositeKey.substring(lastUnderscoreIndex + 1);
+                        const langName = langKeyMap[langCode] || langCode;
+
+                        if (!transformedData[contentType][langName]) {
+                            transformedData[contentType][langName] = {};
+                        }
+                        transformedData[contentType][langName][fieldName] = values;
+                    }
+                }
             }
 
-            return mappedData;
+            return transformedData;
         } catch (error) {
             console.error("API Error: Could not fetch metadata", error);
             return {};

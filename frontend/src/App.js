@@ -210,6 +210,7 @@ const AppContent = () => {
     };
     const [query, setQuery] = useState('');
     const [activeFilters, setActiveFilters] = useState([]);
+    const [contentTypes, setContentTypes] = useState({ pravachans: true, granths: true });
     const [language, setLanguage] = useState('hindi');
     const [exactMatch, setExactMatch] = useState(false);
     const [excludeWords, setExcludeWords] = useState('');
@@ -235,22 +236,48 @@ const AppContent = () => {
     const [showTipsModal, setShowTipsModal] = useState(false);
     const PAGE_SIZE = 20;
 
-    useEffect(() => { 
+    useEffect(() => {
         api.getMetadata().then(data => {
             setAllMetadata(data);
-            // Set initial metadata based on default language
-            setMetadata(data[language] || {});
-        }); 
+            // Set initial metadata based on default content type (Pravachan) and language
+            setMetadata(data['Pravachan']?.[language] || {});
+        });
     }, []);
 
-    // Update metadata when language changes
+    // Update metadata when language or contentTypes selection changes
     useEffect(() => {
-        if (allMetadata && allMetadata[language]) {
-            setMetadata(allMetadata[language]);
-            // Clear existing filters when language changes as they may not be valid for the new language
+        if (allMetadata) {
+            let newMetadata = {};
+
+            // Determine which metadata to show based on contentTypes selection
+            if (contentTypes.pravachans && !contentTypes.granths) {
+                // Only Pravachan selected
+                newMetadata = allMetadata['Pravachan']?.[language] || {};
+            } else if (!contentTypes.pravachans && contentTypes.granths) {
+                // Only Granth selected
+                newMetadata = allMetadata['Granth']?.[language] || {};
+            } else if (contentTypes.pravachans && contentTypes.granths) {
+                // Both selected - merge metadata from both content types
+                const pravachanMetadata = allMetadata['Pravachan']?.[language] || {};
+                const granthMetadata = allMetadata['Granth']?.[language] || {};
+
+                // Merge by combining values for each field
+                newMetadata = { ...pravachanMetadata };
+                Object.keys(granthMetadata).forEach(key => {
+                    if (newMetadata[key]) {
+                        // Merge and deduplicate values
+                        newMetadata[key] = [...new Set([...newMetadata[key], ...granthMetadata[key]])].sort();
+                    } else {
+                        newMetadata[key] = granthMetadata[key];
+                    }
+                });
+            }
+
+            setMetadata(newMetadata);
+            // Clear existing filters when language or content type changes as they may not be valid
             setActiveFilters([]);
         }
-    }, [language, allMetadata]);
+    }, [language, contentTypes, allMetadata]);
 
     useEffect(() => {
         try {
@@ -264,14 +291,18 @@ const AppContent = () => {
         }
     }, []);
     
-    const addFilter = (filter) => { 
-        if (!activeFilters.some(f => f.key === filter.key && f.value === filter.value)) { 
-            setActiveFilters([...activeFilters, filter]); 
-        } 
+    const addFilter = (filter) => {
+        setActiveFilters(prevFilters => {
+            // Check if filter already exists
+            if (prevFilters.some(f => f.key === filter.key && f.value === filter.value)) {
+                return prevFilters;
+            }
+            return [...prevFilters, filter];
+        });
     };
-    
-    const removeFilter = (index) => { 
-        setActiveFilters(activeFilters.filter((_, i) => i !== index)); 
+
+    const removeFilter = (index) => {
+        setActiveFilters(prevFilters => prevFilters.filter((_, i) => i !== index));
     };
 
     const handleSearch = useCallback(async (page = 1) => {
@@ -290,8 +321,18 @@ const AppContent = () => {
             exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
             categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
             language: language,
-            page_number: page,
-            page_size: PAGE_SIZE,
+            search_types: {
+                "Pravachan": {
+                    "enabled": contentTypes.pravachans,
+                    "page_size": PAGE_SIZE,
+                    "page_number": 1
+                },
+                "Granth": {
+                    "enabled": contentTypes.granths,
+                    "page_size": PAGE_SIZE,
+                    "page_number": 1
+                }
+            },
             enable_reranking: searchType === 'relevance'
         };
 
@@ -304,7 +345,7 @@ const AppContent = () => {
             setActiveTab('granth');
         }
         setIsLoading(false);
-    }, [query, activeFilters, language, exactMatch, excludeWords, searchType]);
+    }, [query, activeFilters, contentTypes, language, exactMatch, excludeWords, searchType]);
 
     const handlePravachanSearch = useCallback(async (page = 1) => {
         if (!query.trim()) {
@@ -319,15 +360,25 @@ const AppContent = () => {
             exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
             categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
             language: language,
-            page_number: page,
-            page_size: PAGE_SIZE,
+            search_types: {
+                "Pravachan": {
+                    "enabled": contentTypes.pravachans,
+                    "page_size": PAGE_SIZE,
+                    "page_number": page
+                },
+                "Granth": {
+                    "enabled": contentTypes.granths,
+                    "page_size": PAGE_SIZE,
+                    "page_number": 1
+                }
+            },
             enable_reranking: searchType === 'relevance'
         };
 
         const data = await api.search(requestPayload);
         setSearchData(data);
         setIsLoading(false);
-    }, [query, activeFilters, language, exactMatch, excludeWords, searchType]);
+    }, [query, activeFilters, contentTypes, language, exactMatch, excludeWords, searchType]);
 
     const handleGranthSearch = useCallback(async (page = 1) => {
         if (!query.trim()) {
@@ -342,15 +393,25 @@ const AppContent = () => {
             exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
             categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
             language: language,
-            page_number: page,
-            page_size: PAGE_SIZE,
+            search_types: {
+                "Pravachan": {
+                    "enabled": contentTypes.pravachans,
+                    "page_size": PAGE_SIZE,
+                    "page_number": 1
+                },
+                "Granth": {
+                    "enabled": contentTypes.granths,
+                    "page_size": PAGE_SIZE,
+                    "page_number": page
+                }
+            },
             enable_reranking: searchType === 'relevance'
         };
 
         const data = await api.search(requestPayload);
         setSearchData(data);
         setIsLoading(false);
-    }, [query, activeFilters, language, exactMatch, excludeWords, searchType]);
+    }, [query, activeFilters, contentTypes, language, exactMatch, excludeWords, searchType]);
 
     const handleFindSimilar = async (sourceDoc) => {
         setIsLoading(true); 
@@ -426,8 +487,18 @@ const AppContent = () => {
             exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
             categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
             language: language,
-            page_number: 1,
-            page_size: PAGE_SIZE,
+            search_types: {
+                "Pravachan": {
+                    "enabled": contentTypes.pravachans,
+                    "page_size": PAGE_SIZE,
+                    "page_number": 1
+                },
+                "Granth": {
+                    "enabled": contentTypes.granths,
+                    "page_size": PAGE_SIZE,
+                    "page_number": 1
+                }
+            },
             enable_reranking: searchType === 'relevance'
         };
 
@@ -569,6 +640,8 @@ const AppContent = () => {
                                                 activeFilters={activeFilters}
                                                 onAddFilter={addFilter}
                                                 onRemoveFilter={removeFilter}
+                                                contentTypes={contentTypes}
+                                                setContentTypes={setContentTypes}
                                             />
                                             <SearchOptions
                                                 language={language}
