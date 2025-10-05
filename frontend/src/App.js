@@ -236,22 +236,48 @@ const AppContent = () => {
     const [showTipsModal, setShowTipsModal] = useState(false);
     const PAGE_SIZE = 20;
 
-    useEffect(() => { 
+    useEffect(() => {
         api.getMetadata().then(data => {
             setAllMetadata(data);
-            // Set initial metadata based on default language
-            setMetadata(data[language] || {});
-        }); 
+            // Set initial metadata based on default content type (Pravachan) and language
+            setMetadata(data['Pravachan']?.[language] || {});
+        });
     }, []);
 
-    // Update metadata when language changes
+    // Update metadata when language or contentTypes selection changes
     useEffect(() => {
-        if (allMetadata && allMetadata[language]) {
-            setMetadata(allMetadata[language]);
-            // Clear existing filters when language changes as they may not be valid for the new language
+        if (allMetadata) {
+            let newMetadata = {};
+
+            // Determine which metadata to show based on contentTypes selection
+            if (contentTypes.pravachans && !contentTypes.granths) {
+                // Only Pravachan selected
+                newMetadata = allMetadata['Pravachan']?.[language] || {};
+            } else if (!contentTypes.pravachans && contentTypes.granths) {
+                // Only Granth selected
+                newMetadata = allMetadata['Granth']?.[language] || {};
+            } else if (contentTypes.pravachans && contentTypes.granths) {
+                // Both selected - merge metadata from both content types
+                const pravachanMetadata = allMetadata['Pravachan']?.[language] || {};
+                const granthMetadata = allMetadata['Granth']?.[language] || {};
+
+                // Merge by combining values for each field
+                newMetadata = { ...pravachanMetadata };
+                Object.keys(granthMetadata).forEach(key => {
+                    if (newMetadata[key]) {
+                        // Merge and deduplicate values
+                        newMetadata[key] = [...new Set([...newMetadata[key], ...granthMetadata[key]])].sort();
+                    } else {
+                        newMetadata[key] = granthMetadata[key];
+                    }
+                });
+            }
+
+            setMetadata(newMetadata);
+            // Clear existing filters when language or content type changes as they may not be valid
             setActiveFilters([]);
         }
-    }, [language, allMetadata]);
+    }, [language, contentTypes, allMetadata]);
 
     useEffect(() => {
         try {

@@ -232,16 +232,16 @@ def get_opensearch_client(config: Config, force_clean=False) -> OpenSearch:
 
 def get_metadata(config: Config) -> dict[str, dict[str, list[str]]]:
     """
-    Retrieves all metadata from the dedicated metadata index grouped by language.
+    Retrieves all metadata from the dedicated metadata index grouped by content_type.
     This is much more efficient than scanning the main document index.
 
     Args:
         config: Config object containing OpenSearch settings
 
     Returns:
-        dict[str, dict[str, list[str]]]: Dictionary with language keys, each containing
-        metadata keys and their unique, sorted values.
-        Format: {"hindi": {"author": ["value1", "value2"]}, "gujarati": {"author": ["value3"]}}
+        dict[str, dict[str, list[str]]]: Dictionary with content_type as top-level keys,
+        each containing composite keys (key_language) and their unique, sorted values.
+        Format: {"Pravachan": {"Granth_hi": [...], "Granth_gu": [...]}, "Granth": {"Granth_hi": [...]}}
     """
     client = get_opensearch_client(config)
     metadata_index = config.OPENSEARCH_METADATA_INDEX_NAME
@@ -249,7 +249,7 @@ def get_metadata(config: Config) -> dict[str, dict[str, list[str]]]:
     if not client.indices.exists(metadata_index):
         log_handle.warning(
             f"Metadata index '{metadata_index}' does not exist. Returning empty metadata.")
-        return {"hindi": {}, "gujarati": {}}
+        return {"Pravachan": {}, "Granth": {}}
 
     # Query to get all documents from the metadata index.
     query_body = {
@@ -263,43 +263,57 @@ def get_metadata(config: Config) -> dict[str, dict[str, list[str]]]:
             body=query_body
         )
 
-        # Initialize language-specific dictionaries
-        result = {"hindi": {}, "gujarati": {}}
-        
+        # Initialize content_type-specific dictionaries
+        result = {"Pravachan": {}, "Granth": {}}
+
         for hit in response.get('hits', {}).get('hits', []):
             source = hit.get('_source', {})
-            
-            # Get key from source (new structure) or fall back to document ID (old structure)
-            key = source.get('key')
-            if not key:
-                # Backward compatibility: extract key from document ID
-                doc_id = hit.get('_id')
-                if '_' in doc_id:
-                    key = '_'.join(doc_id.split('_')[:-1])  # Remove language suffix
-                else:
-                    key = doc_id  # Old format without language
-            
-            # The values are stored in the 'values' field of the source
-            values = source.get('values', [])
-            # Get language, default to "hindi" for backward compatibility
-            language = source.get('language', 'hindi')
 
-            if key and values:
-                # Ensure language key exists in result
-                if language not in result:
-                    result[language] = {}
-                
+            # Get content_type, key, and language from source
+            content_type = source.get('content_type')
+            key = source.get('key')
+            language = source.get('language', 'hi')
+            values = source.get('values', [])
+
+            # Handle backward compatibility for documents without content_type
+            if not content_type:
+                # Try to extract from document ID: content_type_key_language
+                doc_id = hit.get('_id')
+                if doc_id:
+                    parts = doc_id.split('_')
+                    if len(parts) >= 3:
+                        content_type = parts[0]
+                        language = parts[-1]
+                        key = '_'.join(parts[1:-1])
+                    elif len(parts) == 2:
+                        # Old format: key_language (assume Pravachan)
+                        content_type = 'Pravachan'
+                        key = parts[0]
+                        language = parts[1]
+                    else:
+                        # Fallback
+                        content_type = 'Pravachan'
+                        key = doc_id
+
+            if key and values and content_type:
+                # Ensure content_type key exists in result
+                if content_type not in result:
+                    result[content_type] = {}
+
+                # Create composite key: key_language
+                composite_key = f"{key}_{language}"
+
                 # The values should already be sorted from the indexing process
-                result[language][key] = values
+                result[content_type][composite_key] = values
 
         log_handle.info(
             f"Metadata retrieved from '{metadata_index}': "
-            f"Hindi: {len(result['hindi'])} keys, Gujarati: {len(result['gujarati'])} keys")
+            f"Pravachan: {len(result.get('Pravachan', {}))} keys, Granth: {len(result.get('Granth', {}))} keys")
         return result
     except (ConnectionError, ValueError, OSError) as e:
         log_handle.error(
             f"Error retrieving metadata from index '{metadata_index}': {e}", exc_info=True)
-        return {"hindi": {}, "gujarati": {}}
+        return {"Pravachan": {}, "Granth": {}}
 
 def delete_documents_by_filename(config: Config, original_filename: str):
     """
@@ -342,12 +356,12 @@ def update_metadata_index(config: Config, opensearch_client: OpenSearch, metadat
     """
     Updates the dedicated metadata index with new values from a document.
     Uses a scripted upsert for efficiency and atomicity.
-    Includes language information for each metadata entry.
+    Includes language and content_type information for each metadata entry.
 
     Args:
         config: Config object containing OpenSearch settings
         opensearch_client: OpenSearch client instance
-        metadata: Dictionary containing metadata to index
+        metadata: Dictionary containing metadata to index (must include 'category' field)
     """
     if not metadata:
         return
@@ -357,7 +371,11 @@ def update_metadata_index(config: Config, opensearch_client: OpenSearch, metadat
     # Extract language, default to "hi" for backward compatibility
     language = metadata.get("language", "hi")
     lang_key = _LANG_KEYS_MAP[language]
-    log_handle.info(f"Updating metadata index for keys: {list(metadata.keys())} with language: {lang_key}")
+
+    # Extract content_type from category field
+    content_type = metadata.get("category", "Pravachan")
+
+    log_handle.info(f"Updating metadata index for keys: {list(metadata.keys())} with language: {lang_key}, content_type: {content_type}")
     log_handle.info(f"Metadata: {json_dumps(metadata)}")
 
     actions = []
@@ -365,15 +383,15 @@ def update_metadata_index(config: Config, opensearch_client: OpenSearch, metadat
         if not value:
             continue
 
-        # Skip file_url as it's not useful for metadata filtering
+        # Skip file_url and category as they're not useful for metadata filtering
         if key not in ["Anuyog", "Granth", "Year", "Author"]:
             continue
 
         # Ensure new_values is a list of strings
         new_values = [str(v) for v in value] if isinstance(value, list) else [str(value)]
 
-        # Create unique document ID per language: key_language
-        doc_id = f"{key}_{lang_key}"
+        # Create unique document ID per content_type and language: content_type_key_language
+        doc_id = f"{content_type}_{key}_{lang_key}"
 
         action = {
             "_op_type": "update",
@@ -393,18 +411,20 @@ def update_metadata_index(config: Config, opensearch_client: OpenSearch, metadat
                     }
                     ctx._source.language = params.language;
                     ctx._source.key = params.key;
+                    ctx._source.content_type = params.content_type;
                 """,
                 "lang": "painless",
-                "params": {"newValues": new_values, "language": lang_key, "key": key}
+                "params": {"newValues": new_values, "language": lang_key, "key": key, "content_type": content_type}
             },
             "upsert": {
                 "key": key,
                 "values": sorted(new_values),
-                "language": language
+                "language": language,
+                "content_type": content_type
             }
         }
         actions.append(action)
 
     if actions:
         helpers.bulk(opensearch_client, actions, stats_only=True, raise_on_error=True)
-        log_handle.info(f"Successfully sent {len(actions)} updates to the metadata index for language {language}.")
+        log_handle.info(f"Successfully sent {len(actions)} updates to the metadata index for content_type: {content_type}, language: {language}.")

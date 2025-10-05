@@ -116,7 +116,8 @@ class GranthIndexer:
             "Anuyog": granth._metadata._anuyog,
             "Author": granth._metadata._author or granth._metadata._teekakar,
             "language": language_code,
-            "file_url": granth._metadata._file_url
+            "file_url": granth._metadata._file_url,
+            "category": "Granth"
         }
         update_metadata_index(self._config, self._opensearch_client, metadata_dict)
 
