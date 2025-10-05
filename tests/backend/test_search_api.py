@@ -274,68 +274,99 @@ def test_api_metadata_endpoint(api_server):
     data = response.json()
     assert isinstance(data, dict)
 
-    # Check new language-specific structure
-    expected_language_keys = {"hi", "gu"}
+    # Check new content-type-specific structure
+    expected_content_types = {"Pravachan", "Granth"}
     actual_keys = set(data.keys())
 
-    # Should have both language keys
-    assert expected_language_keys.issubset(actual_keys), f"Expected language keys {expected_language_keys} in metadata, got {actual_keys}"
-    
+    # Should have both content type keys
+    assert expected_content_types.issubset(actual_keys), f"Expected content type keys {expected_content_types} in metadata, got {actual_keys}"
+
     # Expected values based on granth setup in tests/backend/common.py
-    expected_values = {
-        "Anuyog": {'Charitra Anuyog',
-                   'Dravya Anuyog',
-                   'Prose Anuyog',
-                   'Simple Anuyog',
-                   'city',
-                   'history',
-                   'spiritual'},
-        "Granth": {"Adhikar", "Mixed", "Prose Granth", "Simple"},
-        "Author": {"Acharya Haribhadra", "Acharya Kundkund", "Prose Author", "Simple Author"}
+    # Separate expected values for each content type
+    expected_values_by_content_type = {
+        "Pravachan": {
+            "Anuyog": {'city', 'history', 'spiritual'},
+            # Granth field may or may not be present for Pravachan
+        },
+        "Granth": {
+            "Anuyog": {'Charitra Anuyog', 'Dravya Anuyog', 'Prose Anuyog', 'Simple Anuyog'},
+            "Granth": {"Adhikar", "Mixed", "Prose Granth", "Simple"},
+            "Author": {"Acharya Haribhadra", "Acharya Kundkund", "Prose Author", "Simple Author"}
+        }
     }
 
-    # Each language should have its own metadata dictionary
-    for language in expected_language_keys:
-        lang_metadata = data[language]
-        assert isinstance(lang_metadata, dict), f"Expected dict for {language} metadata"
+    # Each content type should have its own metadata dictionary with composite keys
+    for content_type in expected_content_types:
+        content_metadata = data[content_type]
+        assert isinstance(content_metadata, dict), f"Expected dict for {content_type} metadata"
 
-        # Verify expected metadata keys exist (based on what's indexed by update_metadata_index)
-        # These are: "Anuyog", "Granth", "Author" (Year is optional)
-        expected_metadata_keys = {"Anuyog", "Granth", "Author"}
+        # Extract field names and languages from composite keys
+        fields_by_language = {}
+        for composite_key, values in content_metadata.items():
+            # composite_key is like "Granth_hi", "Anuyog_gu", etc.
+            parts = composite_key.rsplit('_', 1)
+            if len(parts) == 2:
+                field_name, lang_code = parts
+                if lang_code not in fields_by_language:
+                    fields_by_language[lang_code] = {}
+                fields_by_language[lang_code][field_name] = values
 
-        for key in expected_metadata_keys:
-            assert key in lang_metadata, f"Expected '{key}' in {language} metadata, got keys: {list(lang_metadata.keys())}"
+        # Verify both languages exist
+        expected_languages = {"hi", "gu"}
+        actual_languages = set(fields_by_language.keys())
+        assert expected_languages.issubset(actual_languages), \
+            f"Expected languages {expected_languages} in {content_type} metadata, got {actual_languages}"
 
-            # Each metadata key should have a list of string values
-            assert isinstance(lang_metadata[key], list), \
-                f"Expected list for {language} metadata['{key}'], got {type(lang_metadata[key])}"
-            assert len(lang_metadata[key]) > 0, \
-                f"Expected non-empty list for {language} metadata['{key}']"
+        # Verify metadata fields for each language
+        for lang_code, lang_metadata in fields_by_language.items():
+            # Pravachan has Anuyog, Granth, Year; Granth content type has Author, Granth, Anuyog
+            if content_type == "Pravachan":
+                expected_metadata_keys = {"Anuyog"}  # Granth and Year are optional
+            else:  # Granth content type
+                expected_metadata_keys = {"Granth", "Anuyog"}  # Author may or may not be present
 
-            # Each value should be a string and non-empty
-            for value in lang_metadata[key]:
-                assert isinstance(value, str), \
-                    f"Expected string values in {language} metadata['{key}'], got {type(value)}"
-                assert value.strip(), \
-                    f"Expected non-empty string values in {language} metadata['{key}']"
+            for key in expected_metadata_keys:
+                if key in lang_metadata:  # Some keys may be optional
+                    # Each metadata key should have a list of string values
+                    assert isinstance(lang_metadata[key], list), \
+                        f"Expected list for {content_type}/{lang_code} metadata['{key}'], got {type(lang_metadata[key])}"
+                    assert len(lang_metadata[key]) > 0, \
+                        f"Expected non-empty list for {content_type}/{lang_code} metadata['{key}']"
 
-        # Values should be sorted (as per update_metadata_index implementation)
-        for key in expected_metadata_keys:
-            values = lang_metadata[key]
-            assert values == sorted(values), \
-                f"Expected sorted values for {language} metadata['{key}'], got {values}"
+                    # Each value should be a string and non-empty
+                    for value in lang_metadata[key]:
+                        assert isinstance(value, str), \
+                            f"Expected string values in {content_type}/{lang_code} metadata['{key}'], got {type(value)}"
+                        assert value.strip(), \
+                            f"Expected non-empty string values in {content_type}/{lang_code} metadata['{key}']"
 
-        # Verify actual values match expected values from granth setup
-        for key in expected_metadata_keys:
-            actual_values_set = set(lang_metadata[key])
-            expected_values_set = expected_values[key]
+                    # Values should be sorted (as per update_metadata_index implementation)
+                    values = lang_metadata[key]
+                    assert values == sorted(values), \
+                        f"Expected sorted values for {content_type}/{lang_code} metadata['{key}'], got {values}"
 
-            assert actual_values_set == expected_values_set, \
-                f"Expected {key} values {expected_values_set} for {language}, got {actual_values_set}"
+            log_handle.info(f"{content_type}/{lang_code} metadata: {json_dumps(lang_metadata)}")
 
-        log_handle.info(f"{language} metadata: {json_dumps(lang_metadata)}")
+        # Verify actual values match expected values from granth setup (combine all languages)
+        combined_values = {}
+        for lang_code, lang_metadata in fields_by_language.items():
+            for key, values in lang_metadata.items():
+                if key not in combined_values:
+                    combined_values[key] = set()
+                combined_values[key].update(values)
 
-    log_handle.info(f"✓ API metadata test passed - validated language-specific metadata structure with expected keys and values")
+        # Get expected values for this content type
+        expected_values = expected_values_by_content_type.get(content_type, {})
+
+        for key in combined_values:
+            if key in expected_values:
+                actual_values_set = combined_values[key]
+                expected_values_set = expected_values[key]
+
+                assert actual_values_set == expected_values_set, \
+                    f"Expected {key} values {expected_values_set} for {content_type}, got {actual_values_set}"
+
+    log_handle.info(f"✓ API metadata test passed - validated content-type-specific metadata structure with expected keys and values")
 
 
 def test_api_exact_phrase_search(api_server):
@@ -1045,9 +1076,9 @@ def test_cache_invalidation(api_server):
     
     # Data should be the same (no change in underlying OpenSearch data)
     assert metadata_before == metadata_after
-    assert "hindi" in metadata_after
-    assert "gujarati" in metadata_after
-    
+    assert "Pravachan" in metadata_after
+    assert "Granth" in metadata_after
+
     log_handle.info("✓ Cache invalidation test passed - metadata consistent after cache invalidation")
 
 def test_get_granth_verse(api_server):

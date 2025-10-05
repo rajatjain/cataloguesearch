@@ -321,69 +321,93 @@ class TestMetadataOperations:
     def test_get_metadata_empty_index(self, clean_opensearch_client):
         """Test get_metadata when metadata index is empty."""
         client, config = clean_opensearch_client
-        
+
         metadata = get_metadata(config)
         assert isinstance(metadata, dict)
-        assert "hindi" in metadata
-        assert "gujarati" in metadata
-        assert len(metadata["hindi"]) == 0
-        assert len(metadata["gujarati"]) == 0
+        assert "Pravachan" in metadata
+        assert "Granth" in metadata
+        assert len(metadata["Pravachan"]) == 0
+        assert len(metadata["Granth"]) == 0
 
     def test_get_metadata_nonexistent_index(self):
         """Test get_metadata when metadata index doesn't exist."""
         config = Config()
         get_opensearch_client(config, force_clean=True)
-        
+
         # Don't create indices
         metadata = get_metadata(config)
         assert isinstance(metadata, dict)
-        assert "hindi" in metadata
-        assert "gujarati" in metadata
-        assert len(metadata["hindi"]) == 0
-        assert len(metadata["gujarati"]) == 0
+        assert "Pravachan" in metadata
+        assert "Granth" in metadata
+        assert len(metadata["Pravachan"]) == 0
+        assert len(metadata["Granth"]) == 0
 
     def test_get_metadata_with_data(self, clean_opensearch_client):
         """Test get_metadata with sample data including both Hindi and Gujarati."""
         client, config = clean_opensearch_client
-        
-        # Insert sample metadata for both languages using new format
+
+        # Insert sample metadata for both content types and languages using new format
         sample_metadata = [
-            # Hindi metadata
+            # Pravachan - Hindi metadata
             {
-                "id": "author_hindi",
+                "id": "Pravachan_Author_hi",
                 "body": {
-                    "key": "author",
-                    "language": "hindi",
+                    "content_type": "Pravachan",
+                    "key": "Author",
+                    "language": "hi",
                     "values": ["राजचन्द्र जी", "कुन्दकुन्द आचार्य"]
                 }
             },
             {
-                "id": "category_hindi", 
+                "id": "Pravachan_Anuyog_hi",
                 "body": {
-                    "key": "category",
-                    "language": "hindi",
+                    "content_type": "Pravachan",
+                    "key": "Anuyog",
+                    "language": "hi",
                     "values": ["प्रवचन", "व्याख्यान"]
                 }
             },
-            # Gujarati metadata
+            # Pravachan - Gujarati metadata
             {
-                "id": "author_gujarati",
+                "id": "Pravachan_Author_gu",
                 "body": {
-                    "key": "author", 
-                    "language": "gujarati",
+                    "content_type": "Pravachan",
+                    "key": "Author",
+                    "language": "gu",
                     "values": ["રાજચંદ્ર જી", "કુંદકુંદ આચાર્ય"]
                 }
             },
             {
-                "id": "category_gujarati",
+                "id": "Pravachan_Anuyog_gu",
                 "body": {
-                    "key": "category",
-                    "language": "gujarati", 
+                    "content_type": "Pravachan",
+                    "key": "Anuyog",
+                    "language": "gu",
                     "values": ["પ્રવચન"]
+                }
+            },
+            # Granth - Hindi metadata
+            {
+                "id": "Granth_Author_hi",
+                "body": {
+                    "content_type": "Granth",
+                    "key": "Author",
+                    "language": "hi",
+                    "values": ["कुन्दकुन्द आचार्य"]
+                }
+            },
+            # Granth - Gujarati metadata
+            {
+                "id": "Granth_Author_gu",
+                "body": {
+                    "content_type": "Granth",
+                    "key": "Author",
+                    "language": "gu",
+                    "values": ["કુંદકુંદ આચાર્ય"]
                 }
             }
         ]
-        
+
         metadata_index = config.OPENSEARCH_METADATA_INDEX_NAME
         for item in sample_metadata:
             client.index(
@@ -392,30 +416,34 @@ class TestMetadataOperations:
                 body=item["body"],
                 refresh=True
             )
-        
+
         # Retrieve metadata
         metadata = get_metadata(config)
-        
-        # Validate structure
+
+        # Validate structure - should have Pravachan and Granth keys
         assert isinstance(metadata, dict)
-        assert "hindi" in metadata
-        assert "gujarati" in metadata
-        
-        # Validate Hindi metadata
-        meta_hindi = metadata["hindi"]
-        assert len(meta_hindi) == 2
-        assert "author" in meta_hindi
-        assert "category" in meta_hindi
-        assert meta_hindi["author"] == ["राजचन्द्र जी", "कुन्दकुन्द आचार्य"]
-        assert meta_hindi["category"] == ["प्रवचन", "व्याख्यान"]
-        
-        # Validate Gujarati metadata
-        meta_gujarati = metadata["gujarati"]
-        assert len(meta_gujarati) == 2
-        assert "author" in meta_gujarati
-        assert "category" in meta_gujarati
-        assert meta_gujarati["author"] == ["રાજચંદ્ર જી", "કુંદકુંદ આચાર્ય"]
-        assert meta_gujarati["category"] == ["પ્રવચન"]
+        assert "Pravachan" in metadata
+        assert "Granth" in metadata
+
+        # Validate Pravachan metadata
+        meta_pravachan = metadata["Pravachan"]
+        assert len(meta_pravachan) == 4  # 2 Hindi keys + 2 Gujarati keys
+        assert "Author_hi" in meta_pravachan
+        assert "Anuyog_hi" in meta_pravachan
+        assert "Author_gu" in meta_pravachan
+        assert "Anuyog_gu" in meta_pravachan
+        assert meta_pravachan["Author_hi"] == ["राजचन्द्र जी", "कुन्दकुन्द आचार्य"]
+        assert meta_pravachan["Anuyog_hi"] == ["प्रवचन", "व्याख्यान"]
+        assert meta_pravachan["Author_gu"] == ["રાજચંદ્ર જી", "કુંદકુંદ આચાર્ય"]
+        assert meta_pravachan["Anuyog_gu"] == ["પ્રવચન"]
+
+        # Validate Granth metadata
+        meta_granth = metadata["Granth"]
+        assert len(meta_granth) == 2  # 1 Hindi key + 1 Gujarati key
+        assert "Author_hi" in meta_granth
+        assert "Author_gu" in meta_granth
+        assert meta_granth["Author_hi"] == ["कुन्दकुन्द आचार्य"]
+        assert meta_granth["Author_gu"] == ["કુંદકુંદ આચાર્ય"]
 
 
 class TestDocumentOperations:

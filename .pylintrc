@@ -1,11 +1,18 @@
+[FORMAT]
+# Maximum number of characters on a single line
+max-line-length=100
+
+# Expected format of line ending
+expected-line-ending-format=LF
+
 [MESSAGES CONTROL]
 
 # Disable specific pylint messages
 disable=
     W1203,  # logging-fstring-interpolation - Allow f-strings in logging
     C0114,  # missing-module-docstring - Allow modules without docstrings
-    C0115,  # missing-class-docstring - Allow classes without docstrings  
+    C0115,  # missing-class-docstring - Allow classes without docstrings
     C0116,  # missing-function-docstring - Allow functions without docstrings
     C0304,  # end-newline missing
     W0718,  # Catching too general exception Exception (broad-exception-caught)
-    E1123   # Unexpected keyword argumen
+    E1123   # Unexpected keyword argument
