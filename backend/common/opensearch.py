@@ -275,26 +275,6 @@ def get_metadata(config: Config) -> dict[str, dict[str, list[str]]]:
             language = source.get('language', 'hi')
             values = source.get('values', [])
 
-            # Handle backward compatibility for documents without content_type
-            if not content_type:
-                # Try to extract from document ID: content_type_key_language
-                doc_id = hit.get('_id')
-                if doc_id:
-                    parts = doc_id.split('_')
-                    if len(parts) >= 3:
-                        content_type = parts[0]
-                        language = parts[-1]
-                        key = '_'.join(parts[1:-1])
-                    elif len(parts) == 2:
-                        # Old format: key_language (assume Pravachan)
-                        content_type = 'Pravachan'
-                        key = parts[0]
-                        language = parts[1]
-                    else:
-                        # Fallback
-                        content_type = 'Pravachan'
-                        key = doc_id
-
             if key and values and content_type:
                 # Ensure content_type key exists in result
                 if content_type not in result:
