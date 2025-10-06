@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 
 // Import components
 import { Navigation, Header } from './components/Navigation';
@@ -751,7 +752,11 @@ const AppContent = () => {
 
                     {currentPage === 'feedback' && (
                         <main>
-                            <FeedbackForm onReturnToAagamKhoj={() => setCurrentPage('home')} />
+                            <GoogleReCaptchaProvider
+                                reCaptchaKey={process.env.REACT_APP_RECAPTCHA_SITE_KEY || "__REACT_APP_RECAPTCHA_SITE_KEY__"}
+                            >
+                                <FeedbackForm onReturnToAagamKhoj={() => setCurrentPage('home')} />
+                            </GoogleReCaptchaProvider>
                         </main>
                     )}
 

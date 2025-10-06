@@ -19,7 +19,7 @@ class FeedbackRequest(BaseModel):
     captchaToken: str
 
 def verify_recaptcha(token: str, remote_ip: str = None) -> bool:
-    """Verify reCAPTCHA token with Google's verification API"""
+    """Verify reCAPTCHA v3 token with Google's verification API"""
     secret_key = os.getenv('RECAPTCHA_SECRET_KEY')
     if not secret_key:
         log_handle.warning("RECAPTCHA_SECRET_KEY not configured")
@@ -36,7 +36,19 @@ def verify_recaptcha(token: str, remote_ip: str = None) -> bool:
             timeout=10
         )
         result = response.json()
-        return result.get('success', False)
+
+        # For reCAPTCHA v3, check both success and score
+        success = result.get('success', False)
+        score = result.get('score', 0.0)
+
+        # v3 returns a score between 0.0 and 1.0
+        # 1.0 is very likely a good interaction, 0.0 is very likely a bot
+        # Threshold of 0.5 is recommended by Google
+        threshold = float(os.getenv('RECAPTCHA_SCORE_THRESHOLD', '0.3'))
+
+        log_handle.info(f"reCAPTCHA verification - success: {success}, score: {score}, threshold: {threshold}")
+
+        return success and score >= threshold
     except Exception as e:
         log_handle.error(f"reCAPTCHA verification error: {str(e)}")
         return False
