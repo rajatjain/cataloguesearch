@@ -6,11 +6,8 @@ FROM node:18-alpine AS build
 # Set working directory
 WORKDIR /app
 
-# Accept build argument
-ARG REACT_APP_RECAPTCHA_SITE_KEY
-
-# Set as environment variable for build
-ENV REACT_APP_RECAPTCHA_SITE_KEY=${REACT_APP_RECAPTCHA_SITE_KEY}
+# Set placeholder for runtime injection
+ENV REACT_APP_RECAPTCHA_SITE_KEY=__REACT_APP_RECAPTCHA_SITE_KEY__
 
 # Copy package files first for better dependency caching
 COPY frontend/package*.json ./
