@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import ReCAPTCHA from 'react-google-recaptcha';
+import React, { useState } from 'react';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import { Spinner } from './SharedComponents';
 import { api } from '../services/api';
 
@@ -10,13 +10,12 @@ export const FeedbackForm = ({ onReturnToAagamKhoj }) => {
         email: '',
         phoneNumber: '',
         subject: '',
-        feedback: '',
-        captchaToken: null
+        feedback: ''
     });
     const [errors, setErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
-    const recaptchaRef = useRef();
+    const { executeRecaptcha } = useGoogleReCaptcha();
 
     const validateForm = () => {
         const newErrors = {};
@@ -33,10 +32,6 @@ export const FeedbackForm = ({ onReturnToAagamKhoj }) => {
             newErrors.feedback = 'Feedback is required';
         }
 
-        if (!formData.captchaToken) {
-            newErrors.captcha = 'Please complete the CAPTCHA';
-        }
-
         if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
             newErrors.email = 'Please enter a valid email address';
         }
@@ -51,13 +46,6 @@ export const FeedbackForm = ({ onReturnToAagamKhoj }) => {
         }
     };
 
-    const handleCaptchaChange = (token) => {
-        setFormData(prev => ({ ...prev, captchaToken: token }));
-        if (errors.captcha) {
-            setErrors(prev => ({ ...prev, captcha: '' }));
-        }
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -67,19 +55,30 @@ export const FeedbackForm = ({ onReturnToAagamKhoj }) => {
             return;
         }
 
+        if (!executeRecaptcha) {
+            setErrors({ submit: 'reCAPTCHA not ready. Please try again.' });
+            return;
+        }
+
         setIsSubmitting(true);
         try {
-            await api.submitFeedback(formData);
+            // Execute reCAPTCHA v3 and get token
+            const captchaToken = await executeRecaptcha('submit_feedback');
+
+            // Submit feedback with the token
+            await api.submitFeedback({
+                ...formData,
+                captchaToken
+            });
+
             setSubmitSuccess(true);
             setFormData({
                 name: '',
                 email: '',
                 phoneNumber: '',
                 subject: '',
-                feedback: '',
-                captchaToken: null
+                feedback: ''
             });
-            recaptchaRef.current?.reset();
         } catch (error) {
             setErrors({ submit: 'Failed to submit feedback. Please try again.' });
         }
@@ -193,15 +192,6 @@ export const FeedbackForm = ({ onReturnToAagamKhoj }) => {
                         placeholder="Please share your feedback, suggestions, or report any issues..."
                     />
                     {errors.feedback && <p className="text-red-500 text-sm mt-1">{errors.feedback}</p>}
-                </div>
-
-                <div>
-                    <ReCAPTCHA
-                        ref={recaptchaRef}
-                        sitekey={process.env.REACT_APP_RECAPTCHA_SITE_KEY || "__REACT_APP_RECAPTCHA_SITE_KEY__" || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}
-                        onChange={handleCaptchaChange}
-                    />
-                    {errors.captcha && <p className="text-red-500 text-sm mt-1">{errors.captcha}</p>}
                 </div>
 
                 {errors.submit && (
