@@ -1,6 +1,6 @@
 # config.yaml
 crawler:
-  base_pdf_path: "{HOME}/github/rajatjain/cataloguesearch-configs"
+  base_pdf_path: "{HOME}/github/swalakshya/cataloguesearch-configs"
   base_text_path: "{HOME}/cataloguesearch/text"
   base_ocr_path: "{HOME}/cataloguesearch/ocr"
   sqlite_db_path: "{HOME}/cataloguesearch/db/cataloguesearch.db"
