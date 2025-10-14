@@ -111,7 +111,7 @@ async def get_evaluation_paths():
     try:
         # Initialize config (assuming it's already loaded)
         config = Config("configs/config.yaml")
-        
+
         return PathsResponse(
             base_pdf_path=config.BASE_PDF_PATH,
             base_text_path=config.BASE_TEXT_PATH,
@@ -126,7 +126,8 @@ async def process_ocr(
     language: str = Form("hin", description="Language code for OCR (hin, guj, eng)"),
     crop_top: int = Form(0, description="Percentage to crop from top (0-50)"),
     crop_bottom: int = Form(0, description="Percentage to crop from bottom (0-50)"),
-    use_google_ocr: bool = Form(False, description="Use Google Vision OCR instead of Tesseract")
+    use_google_ocr: bool = Form(False, description="Use Google Vision OCR instead of Tesseract"),
+    psm: int = Form(6, description="PSM mode (3 or 6)")
 ):
     """
     Process OCR on an uploaded image file using PDFProcessor.
@@ -135,75 +136,80 @@ async def process_ocr(
         raise HTTPException(status_code=400, detail="No image file selected")
     if not (0 <= crop_top <= 50 and 0 <= crop_bottom <= 50):
         raise HTTPException(status_code=400, detail="Crop percentages must be between 0 and 50")
-    
+
+    # Validate PSM value
+    if psm not in [3, 6]:
+        raise HTTPException(status_code=400, detail="PSM must be 3 or 6")
+
     # TODO: Google OCR not yet supported in PDFProcessor integration
     if use_google_ocr:
         raise HTTPException(status_code=400, detail="Google OCR not yet implemented in PDFProcessor integration")
-    
+
     log_handle.info(f"Processing OCR for {image.filename} with language={language}, crop_top={crop_top}, crop_bottom={crop_bottom}")
-    
+
     # Initialize PDFProcessor
     try:
         config = Config("configs/config.yaml")
         pdf_processor = PDFProcessor(config)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to initialize PDFProcessor: {str(e)}")
-    
+
     # Build scan_config for cropping
     scan_config = {}
     if crop_top > 0 or crop_bottom > 0:
         scan_config["crop"] = {"top": crop_top, "bottom": crop_bottom}
-    
+
     # Map language to PDFProcessor format
     processor_language = get_pdf_processor_language(language)
-    
+
     # Save uploaded file temporarily
     temp_path = None
     try:
         # Determine file suffix based on content type
         suffix = '.pdf' if image.content_type == 'application/pdf' else '.png'
-        
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
             content = await image.read()
             temp_file.write(content)
             temp_path = temp_file.name
-        
+
         if image.content_type == 'application/pdf':
             # Use PDFProcessor._get_image to extract first page with cropping
             images, page_numbers = pdf_processor._get_image(temp_path, [1], scan_config)
             if not images:
                 raise HTTPException(status_code=400, detail="Failed to extract page from PDF")
-            
+
             pil_image = images[0]
             page_num = page_numbers[0]
         else:
             # Load image directly and apply cropping manually
             pil_image = Image.open(temp_path)
-            
+
             # Apply cropping if needed (for non-PDF images)
             if crop_top > 0 or crop_bottom > 0:
                 width, height = pil_image.size
                 top_crop_pixels = int(height * crop_top / 100)
                 bottom_crop_pixels = int(height * crop_bottom / 100)
                 pil_image = pil_image.crop((0, top_crop_pixels, width, height - bottom_crop_pixels))
-            
+
             page_num = 1
-        
+
         # Use PDFProcessor._process_single_page for OCR
         processor_lang_code = pdf_processor._pytesseract_language_map[processor_language]
-        page_num_result, text_paragraphs = PDFProcessor._process_single_page((page_num, pil_image, processor_lang_code))
-        
+        page_num_result, text_paragraphs = PDFProcessor._process_single_page(
+            (page_num, pil_image, processor_lang_code, psm))
+
         # Create paragraphs without text boxes (simplified approach)
         paragraphs = []
         for paragraph_text in text_paragraphs:
             paragraphs.append(Paragraph(text=paragraph_text, boxes=[]))
-        
+
         # Create final response
         extracted_text = '\n\n----\n\n'.join([p.text for p in paragraphs])
         log_handle.info(f"OCR processing completed using PDFProcessor: {len(paragraphs)} paragraphs")
-        
+
         return OCRResponse(text=extracted_text, boxes=[], paragraphs=paragraphs, language=language)
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -221,7 +227,8 @@ async def process_ocr(
 async def start_batch_ocr(
     file: UploadFile = File(..., description="PDF file to process"),
     language: str = Form("hin", description="Language code for OCR (hin, guj, eng)"),
-    use_google_ocr: bool = Form(False, description="Use Google Vision OCR instead of Tesseract")
+    use_google_ocr: bool = Form(False, description="Use Google Vision OCR instead of Tesseract"),
+    psm: int = Form(6, description="PSM mode (3 or 6)")
 ):
     """
     Start batch OCR processing of a PDF file.
@@ -229,18 +236,22 @@ async def start_batch_ocr(
     """
     if not file.filename or not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Please upload a PDF file")
-    
+
+    # Validate PSM value
+    if psm not in [3, 6]:
+        raise HTTPException(status_code=400, detail="PSM must be 3 or 6")
+
     log_handle.info(f"Starting batch OCR for {file.filename} with language={language}")
-    
+
     try:
         # Read file content upfront to avoid "read of closed file" error
         file_content = await file.read()
-        
+
         ocr_service = get_ocr_service()
-        job_id = ocr_service.start_batch_processing(file_content, language, use_google_ocr)
-        
+        job_id = ocr_service.start_batch_processing(file_content, language, use_google_ocr, psm)
+
         return BatchJobResponse(job_id=job_id)
-        
+
     except Exception as e:
         log_handle.error(f"Failed to start batch OCR: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to start batch processing: {str(e)}")
@@ -253,10 +264,10 @@ async def get_batch_status(job_id: str):
     try:
         ocr_service = get_ocr_service()
         job_status = ocr_service.get_job_status(job_id)
-        
+
         if not job_status:
             raise HTTPException(status_code=404, detail="Job not found")
-        
+
         return BatchStatusResponse(
             status=job_status["status"],
             progress=job_status["progress"],
@@ -266,7 +277,7 @@ async def get_batch_status(job_id: str):
             elapsed_time=job_status.get("elapsed_time"),
             elapsed_time_formatted=job_status.get("elapsed_time_formatted")
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -281,12 +292,12 @@ async def cancel_batch_job(job_id: str):
     try:
         ocr_service = get_ocr_service()
         success = ocr_service.cancel_job(job_id)
-        
+
         if not success:
             raise HTTPException(status_code=404, detail="Job not found or cannot be cancelled")
-        
+
         return {"message": "Job cancellation requested"}
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -301,19 +312,19 @@ async def download_batch_results(job_id: str):
     try:
         ocr_service = get_ocr_service()
         zip_path = ocr_service.get_download_path(job_id)
-        
+
         if not zip_path:
             raise HTTPException(status_code=404, detail="Download not available. Job may not be completed or file may have been cleaned up.")
-        
+
         job_status = ocr_service.get_job_status(job_id)
         filename = job_status.get("zip_filename", f"extracted_text_{job_id}.zip")
-        
+
         return FileResponse(
             path=zip_path,
             filename=filename,
             media_type="application/zip"
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -328,9 +339,9 @@ async def calculate_ocr_cost(request: CostCalculationRequest):
     try:
         ocr_service = get_ocr_service()
         cost_info = ocr_service.calculate_cost(request.total_pages, request.use_google_ocr)
-        
+
         return CostCalculationResponse(**cost_info)
-        
+
     except Exception as e:
         log_handle.error(f"Error calculating cost: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error calculating cost: {str(e)}")
@@ -359,31 +370,31 @@ async def process_scripture(request: ScriptureEvalRequest):
     try:
         # Initialize config to get base paths
         config = Config("configs/config.yaml")
-        
+
         # Construct the full path to the markdown file
         # Assuming the relative path is relative to the base markdown directory
         base_path = getattr(config, 'BASE_MARKDOWN_PATH', config.BASE_PDF_PATH)  # fallback to PDF path if markdown path not defined
         full_file_path = os.path.join(base_path, request.relative_path)
-        
+
         # Validate file exists and is a markdown file
         if not os.path.exists(full_file_path):
             raise HTTPException(status_code=404, detail=f"Markdown file not found: {request.relative_path}")
-        
+
         if not full_file_path.lower().endswith('.md'):
             raise HTTPException(status_code=400, detail="File must be a markdown (.md) file")
-        
+
         log_handle.info(f"Processing scripture file: {full_file_path}")
-        
+
         # Parse the markdown file using MarkdownParser
         # Pass the base directory so it can find config files
         parser = MarkdownParser(base_folder=base_path)
         granth = parser.parse_file(full_file_path)
-        
+
         log_handle.info(f"Successfully parsed Granth: {granth._name} with {len(granth._verses)} verses")
-        
+
         # Return the Granth object as HTTP response
         return granth.get_http_response()
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -399,25 +410,25 @@ async def proxy_pdf(url: str):
         # Validate that this is a PDF URL
         if not url or not (url.startswith('http://') or url.startswith('https://')):
             raise HTTPException(status_code=400, detail="Invalid URL provided")
-        
+
         # Add some basic security - only allow certain domains if needed
         # For now, we'll be permissive but you can add domain whitelist here
-        
+
         log_handle.info(f"Proxying PDF request for: {url}")
-        
+
         # Make request to external PDF
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-        
+
         response = requests.get(url, headers=headers, timeout=30, stream=True)
         response.raise_for_status()
-        
+
         # Check if it's actually a PDF
         content_type = response.headers.get('content-type', '').lower()
         if 'pdf' not in content_type and not url.lower().endswith('.pdf'):
             raise HTTPException(status_code=400, detail="URL does not appear to be a PDF file")
-        
+
         # Return the PDF content with proper headers
         return Response(
             content=response.content,
@@ -429,7 +440,7 @@ async def proxy_pdf(url: str):
                 "Cache-Control": "public, max-age=3600"  # Cache for 1 hour
             }
         )
-        
+
     except requests.RequestException as e:
         log_handle.error(f"Error fetching PDF from {url}: {str(e)}")
         raise HTTPException(status_code=502, detail=f"Failed to fetch PDF: {str(e)}")

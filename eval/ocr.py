@@ -129,8 +129,8 @@ class EvalOCRService:
         self.job_manager = EvalJobManager()
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         
-    def process_single_page(self, image_file, language: str = "hin", 
-                          crop_top: int = 0, crop_bottom: int = 0) -> List[str]:
+    def process_single_page(self, image_file, language: str = "hin",
+                          crop_top: int = 0, crop_bottom: int = 0, psm: int = 6) -> List[str]:
         """
         Process a single image using PDFProcessor
         Returns list of paragraphs
@@ -155,34 +155,34 @@ class EvalOCRService:
             
             # Use PDFProcessor's language mapping
             processor_lang_code = self.pdf_processor._pytesseract_language_map[processor_lang]
-            
+
             # Process using PDFProcessor
-            page_num, paragraphs = PDFProcessor._process_single_page((1, pil_image, processor_lang_code))
-            
+            page_num, paragraphs = PDFProcessor._process_single_page((1, pil_image, processor_lang_code, psm))
+
             return paragraphs
             
         except Exception as e:
             logger.error(f"Error processing single page: {e}")
             return [""]
     
-    def start_batch_processing(self, pdf_content, language: str = "hin", 
-                             use_google_ocr: bool = False) -> str:
+    def start_batch_processing(self, pdf_content, language: str = "hin",
+                             use_google_ocr: bool = False, psm: int = 6) -> str:
         """
         Start batch processing of a PDF file
         pdf_content can be bytes or a file path
         Returns job ID
         """
         job_id = self.job_manager.create_job("batch_ocr")
-        
+
         # Start processing in background
         future = self.executor.submit(
-            self._process_pdf_batch, 
-            job_id, pdf_content, language, use_google_ocr
+            self._process_pdf_batch,
+            job_id, pdf_content, language, use_google_ocr, psm
         )
         
         return job_id
     
-    def _process_pdf_batch(self, job_id: str, pdf_file, language: str, use_google_ocr: bool):
+    def _process_pdf_batch(self, job_id: str, pdf_file, language: str, use_google_ocr: bool, psm: int):
         """Background batch processing of PDF"""
         output_dir = None
         
@@ -263,12 +263,12 @@ class EvalOCRService:
                         page_num, image = args
                         if self.job_manager.is_job_cancelled(job_id):
                             return None
-                        
+
                         # Process page using PDFProcessor
                         page_result_num, paragraphs = PDFProcessor._process_single_page(
-                            (page_num, image, processor_lang_code)
+                            (page_num, image, processor_lang_code, psm)
                         )
-                        
+
                         # Return results for file writing
                         page_text = "\n\n----\n\n".join(paragraphs)
                         return page_num, page_text

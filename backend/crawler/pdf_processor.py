@@ -124,8 +124,16 @@ class PDFProcessor:
         pyt_lang = self._pytesseract_language_map.get(language)
         log_handle.info(f"Scanning total pages: {len(page_list)}")
 
-        tasks = [(page_num, image, pyt_lang)
-                 for page_num, image in zip(page_numbers_for_images, images)]
+        # Extract PSM from scan_config if present
+        psm = scan_config.get("psm")
+
+        # Build tasks tuple - include PSM only if specified
+        if psm is not None:
+            tasks = [(page_num, image, pyt_lang, psm)
+                     for page_num, image in zip(page_numbers_for_images, images)]
+        else:
+            tasks = [(page_num, image, pyt_lang)
+                     for page_num, image in zip(page_numbers_for_images, images)]
 
         if not tasks:
             return []
@@ -233,7 +241,12 @@ class PDFProcessor:
         Worker function to process a single image with preprocessing for better OCR.
         This function must be at the top level of the module for pickling.
         """
-        page_num, image, language_code = args
+        # Backward compatible: support both 3-element and 4-element tuples
+        if len(args) == 3:
+            page_num, image, language_code = args
+            psm = 6  # Default PSM (current behavior)
+        else:
+            page_num, image, language_code, psm = args
         try:
             # 1. --- Image Preprocessing ---
             # Convert the image to RGB for better processing
@@ -244,7 +257,7 @@ class PDFProcessor:
 
             # 2. --- Perform OCR ---
             # Use the preprocessed image and your existing configuration.
-            config = f'--psm 6 -l {language_code}'
+            config = f'--psm {psm} -l {language_code}'
             text = pytesseract.image_to_string(processed_image, config=config)
 
             # 3. --- Clean Up Text ---
