@@ -101,6 +101,10 @@ class SingleFileProcessor:
                     if "crop" in default_config:
                         scan_meta["crop"].update(default_config["crop"])
 
+                    # Update PSM setting from default config (if present)
+                    if "psm" in default_config:
+                        scan_meta["psm"] = default_config["psm"]
+
                 except (json.JSONDecodeError, IOError) as e:
                     log_handle.warning(f"Could not read or parse {scan_config_path}: {e}")
 
@@ -121,6 +125,10 @@ class SingleFileProcessor:
             # Update crop settings from file-specific config (overrides defaults)
             if "crop" in file_config:
                 scan_meta["crop"].update(file_config["crop"])
+
+            # Update PSM setting from file-specific config (overrides default)
+            if "psm" in file_config:
+                scan_meta["psm"] = file_config["psm"]
 
         return scan_meta
 

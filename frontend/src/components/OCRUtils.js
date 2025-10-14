@@ -22,6 +22,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
     const [showBookmarks, setShowBookmarks] = useState(false);
     const [showBookmarkModal, setShowBookmarkModal] = useState(false);
     const [useGoogleOCR, setUseGoogleOCR] = useState(false);
+    const [psmMode, setPsmMode] = useState(6);
 
     // New state for batch processing
     const [batchJobId, setBatchJobId] = useState(null);
@@ -337,6 +338,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
             formData.append('crop_top', cropTop);
             formData.append('crop_bottom', cropBottom);
             formData.append('use_google_ocr', useGoogleOCR);
+            formData.append('psm', psmMode);
 
             const response = await fetch(`${API_BASE_URL}/eval/ocr`, {
                 method: 'POST',
@@ -403,6 +405,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
             formData.append('file', selectedFile);
             formData.append('language', language);
             formData.append('use_google_ocr', useGoogleOCR);
+            formData.append('psm', psmMode);
 
             const response = await fetch(`${API_BASE_URL}/eval/ocr/batch`, {
                 method: 'POST',
@@ -830,6 +833,22 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                                 <option value="hin">Hindi</option>
                                 <option value="guj">Gujarati</option>
                                 <option value="eng">English</option>
+                            </select>
+                        </div>
+
+                        {/* PSM Mode Selection */}
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                                PSM Mode
+                            </label>
+                            <select
+                                value={psmMode}
+                                onChange={(e) => setPsmMode(parseInt(e.target.value))}
+                                className="block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500"
+                                title="Page Segmentation Mode: How Tesseract interprets the page layout"
+                            >
+                                <option value="3">PSM 3 - Auto (multi-column)</option>
+                                <option value="6">PSM 6 - Single block</option>
                             </select>
                         </div>
 
