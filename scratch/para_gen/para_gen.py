@@ -8,8 +8,13 @@ from typing import List, Set, Optional, Tuple
 import logging
 
 from backend.utils import json_dumps
+from backend.crawler.paragraph_generator.hindi import HindiParagraphGenerator
+from backend.config import Config
 
 log_handle = logging.getLogger(__name__)
+
+# Create a text normalizer instance
+_text_normalizer = HindiParagraphGenerator(Config("configs/config.yaml"))
 
 # --- Configuration Constants ---
 
@@ -82,14 +87,17 @@ class LineClassifier:
     """
 
     def __init__(self, avg_left_margin, avg_right_margin, indent_threshold=15,
-                 center_threshold=20, header_regexes=None):
+                 center_threshold=20, header_regexes=None,
+                 question_prefix=None, answer_prefix=None):
         self.avg_left_margin = avg_left_margin
         self.avg_right_margin = avg_right_margin
         self.indent_threshold = indent_threshold
         self.center_threshold = center_threshold
-        self.qa_pattern = re.compile(r'^\s*([^:]+?)\s*:\s*(.*)')
         # Use provided header_regexes or fall back to default HEADER_REGEX
         self.header_regexes = header_regexes if header_regexes is not None else HEADER_REGEX
+        # Use provided QA prefixes or empty lists
+        self.question_prefix = question_prefix if question_prefix is not None else []
+        self.answer_prefix = answer_prefix if answer_prefix is not None else []
 
     def classify(self, text: str, x_start: int, x_end: int, page_num: int,
                  line_num: int) -> Line:
@@ -140,12 +148,12 @@ class LineClassifier:
                 tags.add('IS_HEADER_REGEX')
                 break
 
-        qa_match = self.qa_pattern.match(stripped_text)
-        if qa_match:
-            tags.add('IS_QA')
-            speaker = qa_match.group(1).strip()
-            # Keep the original text including the speaker prefix
-            # text = qa_match.group(2).strip()  # This was removing the speaker prefix
+        # Check if line starts with any QA prefix
+        for prefix in self.question_prefix + self.answer_prefix:
+            if stripped_text.startswith(prefix):
+                tags.add('IS_QA')
+                speaker = prefix
+                break
 
         if stripped_text.startswith(HEADING_MARKERS):
             tags.add('IS_HEADING')
@@ -228,10 +236,19 @@ class ParagraphGenerator:
         return self.paragraphs
 
     def _handle_standard_prose_state(self, line: Line) -> bool:
-        if ('IS_HEADING' in line.tags or
-                'IS_ABSOLUTE_TERMINATOR' in line.tags):
+        # IS_HEADING should be its own standalone paragraph
+        if 'IS_HEADING' in line.tags:
             self._finalize_paragraph()
             self._reset_current_paragraph(line)
+            self.current_paragraph_lines.append(line)
+            self._finalize_paragraph()
+            self._reset_current_paragraph()
+            return False
+
+        # IS_ABSOLUTE_TERMINATOR should end the current paragraph (be the last line)
+        if 'IS_ABSOLUTE_TERMINATOR' in line.tags:
+            if not self.current_paragraph_lines:
+                self._reset_current_paragraph(line)
             self.current_paragraph_lines.append(line)
             self._finalize_paragraph()
             self._reset_current_paragraph()
@@ -267,11 +284,27 @@ class ParagraphGenerator:
             return True
 
     def _handle_qa_block_state(self, line: Line) -> bool:
-        is_structural_break = ('IS_HEADING' in line.tags or
-                               'IS_ABSOLUTE_TERMINATOR' in line.tags)
+        # IS_HEADING should end QA block and switch to prose state
+        if 'IS_HEADING' in line.tags:
+            self._finalize_paragraph()
+            self._reset_current_paragraph(line)
+            self.state = State.STANDARD_PROSE
+            return True
+
+        # IS_ABSOLUTE_TERMINATOR should end the current QA paragraph
+        if 'IS_ABSOLUTE_TERMINATOR' in line.tags:
+            if not self.current_paragraph_lines:
+                self._reset_current_paragraph(line)
+            self.current_paragraph_lines.append(line)
+            self._finalize_paragraph()
+            self._reset_current_paragraph()
+            self.state = State.STANDARD_PROSE
+            return False
+
+        # Indented non-QA lines should end QA block and switch to prose
         is_new_prose = ('IS_INDENTED' in line.tags and
                         'IS_QA' not in line.tags)
-        if is_structural_break or is_new_prose:
+        if is_new_prose:
             self._finalize_paragraph()
             self._reset_current_paragraph(line)
             self.state = State.STANDARD_PROSE
@@ -335,10 +368,15 @@ def process_image_to_paragraphs(
     if ocr_data.empty:
         return [], start_line_num
 
+    # Get typo_list from scan_config
+    typo_list = scan_config.get("typo_list", [])
+
     # Reconstruct lines from word data
     lines_on_page = []
     for _, line_df in ocr_data.groupby(['block_num', 'par_num', 'line_num']):
         text = ' '.join(line_df['text'].astype(str))
+        # Normalize text using HindiParagraphGenerator
+        text = _text_normalizer._normalize_text(text, typo_list)
         x_start = line_df['left'].min()
         x_end = (line_df['left'] + line_df['width']).max()
         lines_on_page.append({'text': text, 'x_start': x_start, 'x_end': x_end})
@@ -364,9 +402,16 @@ def process_image_to_paragraphs(
         # Average the 2 largest right margins
         prose_right_margin = (sorted_right_margins[-1] + sorted_right_margins[-2]) / 2
 
-    # Extract header_regex from scan_config if available
+    # Extract configuration from scan_config if available
     header_regexes = scan_config.get("header_regex", None)
-    classifier = LineClassifier(prose_left_margin, prose_right_margin, header_regexes=header_regexes)
+    question_prefix = scan_config.get("question_prefix", None)
+    answer_prefix = scan_config.get("answer_prefix", None)
+    classifier = LineClassifier(
+        prose_left_margin, prose_right_margin,
+        header_regexes=header_regexes,
+        question_prefix=question_prefix,
+        answer_prefix=answer_prefix
+    )
 
     generator = ParagraphGenerator()
     line_counter = start_line_num

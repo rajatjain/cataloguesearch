@@ -31,6 +31,8 @@ def get_scan_config(file_path: str, base_pdf_folder: str) -> dict:
         dict: Merged scan configuration with keys:
             - header_prefix: List of header prefixes to identify headers/footers
             - header_regex: List of regex patterns to identify headers/footers
+            - question_prefix: List of prefixes that mark question lines
+            - answer_prefix: List of prefixes that mark answer lines
             - page_list: List of page ranges to process
             - typo_list: List of typos to correct
             - crop: Dictionary of cropping settings
@@ -63,7 +65,9 @@ def get_scan_config(file_path: str, base_pdf_folder: str) -> dict:
         "header_regex": [],
         "page_list": [],
         "typo_list": [],
-        "crop": {}
+        "crop": {},
+        "question_prefix": [],
+        "answer_prefix": []
     }
 
     # Merge scan_config.json from each folder, starting from base directory
@@ -82,6 +86,8 @@ def get_scan_config(file_path: str, base_pdf_folder: str) -> dict:
                 scan_meta["header_regex"].extend(default_config.get("header_regex", []))
                 scan_meta["page_list"].extend(default_config.get("page_list", []))
                 scan_meta["typo_list"].extend(default_config.get("typo_list", []))
+                scan_meta["question_prefix"].extend(default_config.get("question_prefix", []))
+                scan_meta["answer_prefix"].extend(default_config.get("answer_prefix", []))
 
                 # Update crop settings from default config
                 if "crop" in default_config:
@@ -100,6 +106,8 @@ def get_scan_config(file_path: str, base_pdf_folder: str) -> dict:
     if file_config:
         scan_meta["header_prefix"].extend(file_config.get("header_prefix", []))
         scan_meta["header_regex"].extend(file_config.get("header_regex", []))
+        scan_meta["question_prefix"].extend(file_config.get("question_prefix", []))
+        scan_meta["answer_prefix"].extend(file_config.get("answer_prefix", []))
         scan_meta["file_url"] = file_config.get("file_url", "")
         if file_config.get("start_page") and file_config.get("end_page"):
             # Page numbers are typically file-specific.
