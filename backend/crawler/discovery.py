@@ -27,6 +27,7 @@ class SingleFileProcessor:
                  index_state: IndexState,
                  pdf_processor: PDFProcessor,
                  scan_time: str):
+        self._config = config
         self._file_path = os.path.abspath(file_path)
         self._base_pdf_folder = config.BASE_PDF_PATH
         self._indexing_module = indexing_mod
@@ -35,6 +36,15 @@ class SingleFileProcessor:
         self._output_ocr_base_dir = config.BASE_OCR_PATH
         self._pdf_processor = pdf_processor
         self._scan_time = scan_time
+
+    def _get_ocr_file_extension(self) -> str:
+        """
+        Returns the file extension for OCR files based on CHUNK_STRATEGY.
+
+        Returns:
+            '.json' for advanced strategy, '.txt' otherwise
+        """
+        return '.json' if self._config.CHUNK_STRATEGY == 'advanced' else '.txt'
 
     def _get_metadata(self, scan_config: dict = None) -> dict:
         """
@@ -152,9 +162,10 @@ class SingleFileProcessor:
         pages_list = self._get_page_list(scan_config)
 
         # Check if all required OCR pages exist
+        ocr_extension = self._get_ocr_file_extension()
         missing_pages = []
         for page_num in pages_list:
-            ocr_file = f"{output_ocr_dir}/page_{page_num:04d}.txt"
+            ocr_file = f"{output_ocr_dir}/page_{page_num:04d}{ocr_extension}"
             if not os.path.exists(ocr_file):
                 missing_pages.append(page_num)
 

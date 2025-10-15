@@ -25,5 +25,5 @@ def test_config_instance():
     assert config.OPENSEARCH_INDEX_NAME == index_name
     assert config.EMBEDDING_MODEL_NAME == "BAAI/bge-m3"
     assert config.RERANKING_MODEL_NAME == "BAAI/bge-reranker-base"
-    assert config.CHUNK_STRATEGY == "paragraph"
+    assert config.CHUNK_STRATEGY == "advanced"
     log_handle.info(f"END TEST_CONFIG_INSTANCE")

@@ -12,7 +12,7 @@ from backend.common.opensearch import get_opensearch_client
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
 from backend.crawler.index_generator import IndexGenerator
-from backend.crawler.pdf_processor import PDFProcessor
+from backend.crawler.pdf_factory import create_pdf_processor
 from backend.crawler.granth_index import GranthIndexer
 from backend.crawler.markdown_parser import MarkdownParser
 from backend.search.index_searcher import IndexSearcher
@@ -78,15 +78,15 @@ def run_api_server_in_thread(host, port, stop_event):
 def build_index(initialise):
     """
     Setup test data and build search index.
-    Copy OCR data to base_ocr_path and call discovery with process=False, index=True.
+    Process PDFs and index them to support both 'paragraph' and 'advanced' CHUNK_STRATEGY.
     """
-    # Setup test environment with scan_config files
+    # Setup test environment with scan_config files (don't copy OCR files, we'll process PDFs)
     setup(copy_ocr_files=True, add_scan_config=True)
     config = Config()
-    
+
     # Initialize OpenSearch client and ensure clean index state
     opensearch_client = get_opensearch_client(config)
-    
+
     # Explicitly delete indices to ensure clean state and proper mapping creation
     log_handle.info("Deleting existing indices to ensure clean state for vector search")
     indices_to_delete = [config.OPENSEARCH_INDEX_NAME, config.OPENSEARCH_METADATA_INDEX_NAME, config.OPENSEARCH_GRANTH_INDEX_NAME]
@@ -94,22 +94,22 @@ def build_index(initialise):
         if index_name and opensearch_client.indices.exists(index=index_name):
             opensearch_client.indices.delete(index=index_name)
             log_handle.info(f"Deleted existing index: {index_name}")
-    
+
     # Create indices with proper mapping (including knn_vector for embeddings)
     from backend.common.opensearch import create_indices_if_not_exists
     create_indices_if_not_exists(config, opensearch_client)
     log_handle.info("Created indices with proper mapping for vector search")
-    
-    pdf_processor = PDFProcessor(config)  # We won't actually use this since process=False
+
+    pdf_processor = create_pdf_processor(config)
     discovery = Discovery(
-        config, 
+        config,
         IndexGenerator(config, opensearch_client),
-        pdf_processor, 
+        pdf_processor,
         IndexState(config.SQLITE_DB_PATH)
     )
 
-    # Call discovery with process=False, index=True
-    log_handle.info("Starting discovery with process=False, index=True")
+    # Call discovery with process=True, index=True to generate OCR files based on CHUNK_STRATEGY
+    log_handle.info(f"Starting discovery with process=True, index=True (CHUNK_STRATEGY={config.CHUNK_STRATEGY})")
     discovery.crawl(process=False, index=True)
 
     # Verify indexes are present

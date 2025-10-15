@@ -5,7 +5,7 @@ import pytest
 
 from backend.crawler.index_generator import IndexGenerator
 from backend.crawler.index_state import IndexState
-from backend.crawler.pdf_processor import PDFProcessor
+from backend.crawler.pdf_factory import create_pdf_processor
 from tests.backend.base import *
 from tests.backend.common import setup
 from backend.config import Config
@@ -71,7 +71,7 @@ def test_integration(init_integration_test):
     log_handle.info("Running crawl with index=True, process=True")
     discovery = Discovery(
         config, IndexGenerator(config, opensearch_client),
-        PDFProcessor(config), IndexState(config.SQLITE_DB_PATH))
+        create_pdf_processor(config), IndexState(config.SQLITE_DB_PATH))
     discovery.crawl(index=True, process=True)
     
     # Check base_ocr_dir - should not contain ignored files
