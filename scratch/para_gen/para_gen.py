@@ -9,12 +9,10 @@ import logging
 
 from backend.utils import json_dumps
 from backend.crawler.paragraph_generator.hindi import HindiParagraphGenerator
+from backend.crawler.paragraph_generator.gujarati import GujaratiParagraphGenerator
 from backend.config import Config
 
 log_handle = logging.getLogger(__name__)
-
-# Create a text normalizer instance
-_text_normalizer = HindiParagraphGenerator(Config("configs/config.yaml"))
 
 # --- Configuration Constants ---
 
@@ -359,6 +357,16 @@ def process_image_to_paragraphs(
     """
     scan_config = scan_config or {}
     log_handle.info(f"scan_config: {json_dumps(scan_config, truncate_fields=['typo_list'])}")
+
+    # Create appropriate text normalizer based on language
+    config = Config("configs/config.yaml")
+    if 'guj' in lang.lower():
+        text_normalizer = GujaratiParagraphGenerator(config)
+        log_handle.info("Using GujaratiParagraphGenerator for text normalization")
+    else:
+        text_normalizer = HindiParagraphGenerator(config)
+        log_handle.info("Using HindiParagraphGenerator for text normalization")
+
     try:
         # Use PSM 6 as it's best for uniform blocks of text, which our
         # line-by-line analysis prefers.
@@ -385,8 +393,8 @@ def process_image_to_paragraphs(
     lines_on_page = []
     for _, line_df in ocr_data.groupby(['block_num', 'par_num', 'line_num']):
         text = ' '.join(line_df['text'].astype(str))
-        # Normalize text using HindiParagraphGenerator
-        text = _text_normalizer._normalize_text(text, typo_list)
+        # Normalize text using the appropriate paragraph generator
+        text = text_normalizer._normalize_text(text, typo_list)
         x_start = line_df['left'].min()
         x_end = (line_df['left'] + line_df['width']).max()
         lines_on_page.append({'text': text, 'x_start': x_start, 'x_end': x_end})
