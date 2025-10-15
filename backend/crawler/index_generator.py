@@ -9,8 +9,8 @@ from opensearchpy import OpenSearch, helpers
 from backend.common.embedding_models import get_embedding_model_factory
 from backend.common.opensearch import delete_documents_by_filename, update_metadata_index
 from backend.config import Config
-from backend.crawler.paragraph_generator.gujarati import GujaratiParagraphGenerator
-from backend.crawler.paragraph_generator.hindi import HindiParagraphGenerator
+from backend.crawler.paragraph_generator.base import BaseParagraphGenerator
+from backend.crawler.paragraph_generator.language_meta import get_language_meta
 
 # Setup logging for this module
 log_handle = logging.getLogger(__name__)
@@ -35,11 +35,6 @@ class IndexGenerator:
             "gu": "text_content_gujarati"
         }
 
-        self._paragraph_generators = {
-            "hi": HindiParagraphGenerator(self._config),
-            "gu": GujaratiParagraphGenerator(self._config)
-        }
-
 
     def index_document(
         self, document_id: str, original_filename: str,
@@ -58,7 +53,9 @@ class IndexGenerator:
                 paragraphs.append((page_num, page_paragraphs))
 
         language = metadata.get("language", "hi")
-        paragraph_gen = self._paragraph_generators[language]
+        # Create paragraph generator with language-specific meta
+        language_meta = get_language_meta(language, scan_config)
+        paragraph_gen = BaseParagraphGenerator(self._config, language_meta)
         processed_paras = paragraph_gen.generate_paragraphs(
             paragraphs, scan_config
         )

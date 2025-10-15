@@ -1,34 +1,32 @@
 import logging
 import re
-from abc import ABC, abstractmethod
 from typing import List, Tuple
 
 from backend.config import Config
+from backend.crawler.paragraph_generator.language_meta import LanguageMeta
 
 log_handle = logging.getLogger(__name__)
 
-class BaseParagraphGenerator(ABC):
-    def __init__(self, config: Config):
+class BaseParagraphGenerator:
+    def __init__(self, config: Config, language_meta: LanguageMeta):
         self._config = config
+        self._language_meta = language_meta
 
     @property
-    @abstractmethod
     def punctuation_suffixes(self):
-        pass
+        return self._language_meta.punctuation_suffixes
 
     @property
-    @abstractmethod
     def stop_prefixes(self):
-        pass
+        return self._language_meta.stop_prefixes
 
     @property
-    @abstractmethod
     def answer_prefixes(self):
-        pass
+        return self._language_meta.answer_prefixes
 
     @property
     def dialogue_prefixes(self):
-        return self.stop_prefixes + self.answer_prefixes
+        return self._language_meta.dialogue_prefixes
 
     def generate_paragraphs(self, paragraphs: List[Tuple[int, List[str]]],
                             file_metadata : dict) -> List[Tuple[int, List[str]]]:
@@ -200,9 +198,9 @@ class BaseParagraphGenerator(ABC):
             text = text.replace(typo[0], typo[1])
         return text
 
-    @abstractmethod
     def _normalize_dialogue_patterns(self, text: str) -> str:
-        pass
+        """Delegate to language_meta for language-specific normalization."""
+        return self._language_meta.normalize_dialogue_patterns(text)
 
     def _is_header_footer(self, para_num, para, header_prefix, header_regex):
         for prefix in header_prefix:

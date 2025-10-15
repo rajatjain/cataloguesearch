@@ -8,8 +8,8 @@ from typing import List, Set, Optional, Tuple
 import logging
 
 from backend.utils import json_dumps
-from backend.crawler.paragraph_generator.hindi import HindiParagraphGenerator
-from backend.crawler.paragraph_generator.gujarati import GujaratiParagraphGenerator
+from backend.crawler.paragraph_generator.base import BaseParagraphGenerator
+from backend.crawler.paragraph_generator.language_meta import get_language_meta
 from backend.config import Config
 
 log_handle = logging.getLogger(__name__)
@@ -360,12 +360,10 @@ def process_image_to_paragraphs(
 
     # Create appropriate text normalizer based on language
     config = Config("configs/config.yaml")
-    if 'guj' in lang.lower():
-        text_normalizer = GujaratiParagraphGenerator(config)
-        log_handle.info("Using GujaratiParagraphGenerator for text normalization")
-    else:
-        text_normalizer = HindiParagraphGenerator(config)
-        log_handle.info("Using HindiParagraphGenerator for text normalization")
+    language_code = 'gu' if 'guj' in lang.lower() else 'hi'
+    language_meta = get_language_meta(language_code, scan_config)
+    text_normalizer = BaseParagraphGenerator(config, language_meta)
+    log_handle.info(f"Using {language_code} language for text normalization")
 
     try:
         # Use PSM 6 as it's best for uniform blocks of text, which our
