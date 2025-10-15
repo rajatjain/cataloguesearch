@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form, BackgroundTasks
 from fastapi.responses import FileResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
 import os
 import sys
@@ -14,7 +14,7 @@ import shutil
 import concurrent.futures
 import threading
 import requests
-from starlette.background import BackgroundTask
+from enum import Enum
 
 # OCR-specific imports
 from PIL import Image
@@ -24,10 +24,17 @@ backend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
+# Add the scratch directory to import para_gen
+scratch_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'scratch', 'para_gen')
+if scratch_path not in sys.path:
+    sys.path.insert(0, scratch_path)
+
 from config import Config
 from backend.crawler.pdf_processor import PDFProcessor
 from backend.crawler.markdown_parser import MarkdownParser
+from backend.common.scan_config import get_scan_config
 from .ocr import get_ocr_service
+from para_gen import process_image_to_paragraphs
 
 log_handle = logging.getLogger(__name__)
 
@@ -36,6 +43,12 @@ def get_pdf_processor_language(api_language: str) -> str:
     """Convert API language codes to PDFProcessor language codes"""
     language_map = {"hin": "hi", "guj": "gu", "eng": "en"}
     return language_map.get(api_language, "hi")
+
+class OCRMode(str, Enum):
+    """Defines the available OCR processing modes."""
+    PSM6 = "psm6"
+    PSM3 = "psm3"
+    ADVANCED = "advanced"
 
 # --- Removed old job tracking - now handled by EvalOCRService ---
 
@@ -120,95 +133,210 @@ async def get_evaluation_paths():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error loading configuration: {str(e)}")
 
+@router.get("/ocr/scan-config")
+async def get_file_scan_config(relative_path: str):
+    """
+    Get the scan_config for a PDF file from the base PDF folder.
+    This returns merged configuration from scan_config.json files in the directory hierarchy.
+
+    Args:
+        relative_path: Relative path to the PDF file from the base PDF folder
+
+    Returns:
+        dict: Scan configuration with header_prefix, header_regex, page_list, crop, psm, etc.
+    """
+    try:
+        config = Config("configs/config.yaml")
+        base_pdf_folder = config.BASE_PDF_PATH
+        file_path = os.path.join(base_pdf_folder, relative_path)
+
+        # Validate file exists
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail=f"File not found: {relative_path}")
+
+        # Get scan config using the utility function
+        scan_config = get_scan_config(file_path, base_pdf_folder)
+
+        return scan_config
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_handle.error(f"Error getting scan config: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting scan config: {str(e)}")
+
 @router.post("/ocr", response_model=OCRResponse)
 async def process_ocr(
-    image: UploadFile = File(..., description="Image file to process"),
+    image: UploadFile = File(None, description="Image file to process (not needed if relative_path and page_number are provided)"),
     language: str = Form("hin", description="Language code for OCR (hin, guj, eng)"),
     crop_top: int = Form(0, description="Percentage to crop from top (0-50)"),
     crop_bottom: int = Form(0, description="Percentage to crop from bottom (0-50)"),
-    use_google_ocr: bool = Form(False, description="Use Google Vision OCR instead of Tesseract"),
-    psm: int = Form(6, description="PSM mode (3 or 6)")
+    mode: OCRMode = Form(
+        OCRMode.PSM6,
+        description='OCR processing mode. "psm6" and "psm3" use the legacy processor. '
+                    '"advanced" uses the new para_gen logic (beta).'
+    ),
+    relative_path: Optional[str] = Form(None, description="Relative path to PDF file from base folder"),
+    page_number: Optional[int] = Form(None, description="Page number to extract from PDF (1-indexed, requires relative_path)")
 ):
     """
-    Process OCR on an uploaded image file using PDFProcessor.
+    Process OCR on an image.
+
+    Two modes of operation:
+    1. Upload mode: Provide 'image' file
+    2. PDF extraction mode: Provide 'relative_path' and 'page_number' to extract page from PDF directly
+
+    If relative_path is provided, the scan_config will be loaded from scan_config.json files
+    in the directory hierarchy, providing header_prefix, header_regex, and other settings.
     """
-    if not image.filename:
-        raise HTTPException(status_code=400, detail="No image file selected")
+    # Validate input: either image OR (relative_path + page_number)
+    if not image and not (relative_path and page_number):
+        raise HTTPException(status_code=400, detail="Either provide 'image' file OR both 'relative_path' and 'page_number'")
+
+    if image and (relative_path and page_number):
+        raise HTTPException(status_code=400, detail="Provide either 'image' file OR 'relative_path'+'page_number', not both")
     if not (0 <= crop_top <= 50 and 0 <= crop_bottom <= 50):
         raise HTTPException(status_code=400, detail="Crop percentages must be between 0 and 50")
 
-    # Validate PSM value
-    if psm not in [3, 6]:
-        raise HTTPException(status_code=400, detail="PSM must be 3 or 6")
+    # Determine settings based on the selected mode
+    use_para_gen = (mode == OCRMode.ADVANCED)
+    psm = 3 if mode == OCRMode.PSM3 else 6
+
+    # For now, Google OCR is not supported with this endpoint.
+    use_google_ocr = False
 
     # TODO: Google OCR not yet supported in PDFProcessor integration
     if use_google_ocr:
-        raise HTTPException(status_code=400, detail="Google OCR not yet implemented in PDFProcessor integration")
+        raise HTTPException(status_code=400, detail="Google OCR is not supported for single-page evaluation.")
 
-    log_handle.info(f"Processing OCR for {image.filename} with language={language}, crop_top={crop_top}, crop_bottom={crop_bottom}")
-
-    # Initialize PDFProcessor
-    try:
-        config = Config("configs/config.yaml")
-        pdf_processor = PDFProcessor(config)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initialize PDFProcessor: {str(e)}")
-
-    # Build scan_config for cropping
+    # Build scan_config
     scan_config = {}
+
+    # If relative_path is provided, load scan_config from hierarchy
+    if relative_path:
+        try:
+            config = Config("configs/config.yaml")
+            base_pdf_folder = config.BASE_PDF_PATH
+            file_path = os.path.join(base_pdf_folder, relative_path)
+            if not file_path.endswith(".pdf"):
+                file_path = f"{file_path}.pdf"
+
+            if os.path.exists(file_path):
+                log_handle.info(f"getting scan_config for {file_path} and base_folder {base_pdf_folder}")
+                scan_config = get_scan_config(file_path, base_pdf_folder)
+                log_handle.info(f"Loaded scan_config for {relative_path}: {scan_config.keys()}")
+        except Exception as e:
+            log_handle.warning(f"Failed to load scan_config for {relative_path}: {e}")
+
+    # Merge crop settings (these override scan_config crop if both present)
     if crop_top > 0 or crop_bottom > 0:
-        scan_config["crop"] = {"top": crop_top, "bottom": crop_bottom}
+        if "crop" not in scan_config:
+            scan_config["crop"] = {}
+        scan_config["crop"]["top"] = crop_top
+        scan_config["crop"]["bottom"] = crop_bottom
 
     # Map language to PDFProcessor format
     processor_language = get_pdf_processor_language(language)
 
-    # Save uploaded file temporarily
+    # Initialize PDF processor
+    config = Config("configs/config.yaml")
+    pdf_processor = PDFProcessor(config)
+
+    # --- Determine Image Source ---
     temp_path = None
+    pil_image = None
+    page_num = 1
+    source_description = ""
+
     try:
-        # Determine file suffix based on content type
-        suffix = '.pdf' if image.content_type == 'application/pdf' else '.png'
+        if relative_path and page_number:
+            # Mode 1: Extract page directly from PDF in base folder
+            base_pdf_folder = config.BASE_PDF_PATH
+            pdf_file_path = os.path.join(base_pdf_folder, relative_path)
+            if not pdf_file_path.endswith(".pdf"):
+                pdf_file_path = f"{pdf_file_path}.pdf"
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
-            content = await image.read()
-            temp_file.write(content)
-            temp_path = temp_file.name
+            if not os.path.exists(pdf_file_path):
+                raise HTTPException(status_code=404, detail=f"PDF file not found: {relative_path}")
 
-        if image.content_type == 'application/pdf':
-            # Use PDFProcessor._get_image to extract first page with cropping
-            images, page_numbers = pdf_processor._get_image(temp_path, [1], scan_config)
+            log_handle.info(f"Extracting page {page_number} from {pdf_file_path}")
+
+            # Use PDFProcessor._get_image to extract the specified page with cropping
+            images, page_numbers = pdf_processor._get_image(pdf_file_path, [page_number], scan_config)
             if not images:
-                raise HTTPException(status_code=400, detail="Failed to extract page from PDF")
+                raise HTTPException(status_code=400, detail=f"Failed to extract page {page_number} from PDF")
 
             pil_image = images[0]
             page_num = page_numbers[0]
+            source_description = f"page {page_num} from {relative_path}"
+
         else:
-            # Load image directly and apply cropping manually
-            pil_image = Image.open(temp_path)
+            # Mode 2: Use uploaded image file
+            suffix = '.pdf' if image.content_type == 'application/pdf' else '.png'
 
-            # Apply cropping if needed (for non-PDF images)
-            if crop_top > 0 or crop_bottom > 0:
-                width, height = pil_image.size
-                top_crop_pixels = int(height * crop_top / 100)
-                bottom_crop_pixels = int(height * crop_bottom / 100)
-                pil_image = pil_image.crop((0, top_crop_pixels, width, height - bottom_crop_pixels))
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+                content = await image.read()
+                temp_file.write(content)
+                temp_path = temp_file.name
 
-            page_num = 1
+            if image.content_type == 'application/pdf':
+                # Use PDFProcessor._get_image to extract first page with cropping
+                images, page_numbers = pdf_processor._get_image(temp_path, [1], scan_config)
+                if not images:
+                    raise HTTPException(status_code=400, detail="Failed to extract page from PDF")
 
-        # Use PDFProcessor._process_single_page for OCR
-        processor_lang_code = pdf_processor._pytesseract_language_map[processor_language]
-        page_num_result, text_paragraphs = PDFProcessor._process_single_page(
-            (page_num, pil_image, processor_lang_code, psm))
+                pil_image = images[0]
+                page_num = page_numbers[0]
+            else:
+                # Load image directly and apply cropping manually
+                pil_image = Image.open(temp_path)
 
-        # Create paragraphs without text boxes (simplified approach)
-        paragraphs = []
-        for paragraph_text in text_paragraphs:
-            paragraphs.append(Paragraph(text=paragraph_text, boxes=[]))
+                # Apply cropping if needed (for non-PDF images)
+                if crop_top > 0 or crop_bottom > 0:
+                    width, height = pil_image.size
+                    top_crop_pixels = int(height * crop_top / 100)
+                    bottom_crop_pixels = int(height * crop_bottom / 100)
+                    pil_image = pil_image.crop((0, top_crop_pixels, width, height - bottom_crop_pixels))
 
-        # Create final response
-        extracted_text = '\n\n----\n\n'.join([p.text for p in paragraphs])
-        log_handle.info(f"OCR processing completed using PDFProcessor: {len(paragraphs)} paragraphs")
+                page_num = 1
 
-        return OCRResponse(text=extracted_text, boxes=[], paragraphs=paragraphs, language=language)
+            source_description = f"uploaded file {image.filename}"
+
+        # --- OCR and Paragraph Logic ---
+        if use_para_gen:
+            log_handle.info(f"Processing OCR for {source_description} using para_gen logic...")
+            # Map language to pytesseract format ('hin+guj')
+            tesseract_lang = language.replace(' ', '+')
+
+            # Call the new refactored function with scan_config
+            generated_paragraphs, _ = process_image_to_paragraphs(
+                pil_image, lang=tesseract_lang, page_num=page_num, scan_config=scan_config
+            )
+
+            # Adapt the output to the API's Paragraph model
+            api_paragraphs = [Paragraph(text=p.text, boxes=[]) for p in generated_paragraphs]
+            extracted_text = '\n\n----\n\n'.join([p.text for p in api_paragraphs])
+            log_handle.info(f"OCR processing completed using para_gen: {len(api_paragraphs)} paragraphs")
+
+            return OCRResponse(text=extracted_text, boxes=[], paragraphs=api_paragraphs, language=language)
+
+        else: # Keep the original logic
+            log_handle.info(f"Processing OCR for {source_description} using legacy PDFProcessor logic...")
+            config = Config("configs/config.yaml")
+            pdf_processor = PDFProcessor(config)
+            processor_language = get_pdf_processor_language(language)
+
+            # Use PDFProcessor._process_single_page for OCR
+            processor_lang_code = pdf_processor._pytesseract_language_map[processor_language]
+            _, text_paragraphs = PDFProcessor._process_single_page(
+                (page_num, pil_image, processor_lang_code, psm))
+
+            # Create paragraphs without text boxes (simplified approach)
+            paragraphs = [Paragraph(text=p_text, boxes=[]) for p_text in text_paragraphs]
+            extracted_text = '\n\n----\n\n'.join([p.text for p in paragraphs])
+            log_handle.info(f"OCR processing completed using PDFProcessor: {len(paragraphs)} paragraphs")
+
+            return OCRResponse(text=extracted_text, boxes=[], paragraphs=paragraphs, language=language)
 
     except HTTPException:
         raise

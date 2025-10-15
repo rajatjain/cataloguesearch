@@ -19,10 +19,9 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
     const [pdfDoc, setPdfDoc] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
     const [bookmarks, setBookmarks] = useState([]);
-    const [showBookmarks, setShowBookmarks] = useState(false);
     const [showBookmarkModal, setShowBookmarkModal] = useState(false);
     const [useGoogleOCR, setUseGoogleOCR] = useState(false);
-    const [psmMode, setPsmMode] = useState(6);
+    const [ocrMode, setOcrMode] = useState('psm6');
 
     // New state for batch processing
     const [batchJobId, setBatchJobId] = useState(null);
@@ -39,7 +38,6 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
     const imageContainerRef = useRef(null);
     const croppedImageContainerRef = useRef(null);
     const pollingIntervalRef = useRef(null);
-    const manualUploadRef = useRef(false);
 
     // PDF.js dynamic loading
     useEffect(() => {
@@ -141,6 +139,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
 
             handleBrowserFileSelection();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [propSelectedFile, baseDirectoryHandles]);
 
     const resetBatchState = () => {
@@ -164,7 +163,6 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
         setCurrentPage(1);
         setTotalPages(1);
         setBookmarks([]);
-        setShowBookmarks(false);
         setShowBookmarkModal(false);
         
         // Reset OCR state
@@ -228,15 +226,12 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                 const outline = await pdf.getOutline();
                 if (outline && outline.length > 0) {
                     setBookmarks(outline);
-                    setShowBookmarks(true);
                 } else {
                     setBookmarks([]);
-                    setShowBookmarks(false);
                 }
             } catch (outlineErr) {
                 console.warn('Could not load PDF outline:', outlineErr);
                 setBookmarks([]);
-                setShowBookmarks(false);
             }
             
             await renderPDFPage(pdf, 1);
@@ -323,22 +318,37 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
         resetBatchState();
 
         try {
-            let fileToProcess = selectedFile;
-            
-            if (isPDF) {
-                fileToProcess = await convertCurrentPageToImage();
-                if (!fileToProcess) {
-                    throw new Error('Failed to convert PDF page to image');
-                }
-            }
-
             const formData = new FormData();
-            formData.append('image', fileToProcess);
             formData.append('language', language);
             formData.append('crop_top', cropTop);
             formData.append('crop_bottom', cropBottom);
-            formData.append('use_google_ocr', useGoogleOCR);
-            formData.append('psm', psmMode);
+            formData.append('mode', ocrMode);
+
+            // Check if file was selected from browser (PDF file system)
+            const isFromBrowser = propSelectedFile && propSelectedFile.relativePath &&
+                                  selectedFile.name === propSelectedFile.selectedPDFFile;
+
+            if (isFromBrowser && isPDF) {
+                // Mode 1: PDF extraction mode - send relative_path and page_number
+                // Backend will extract the page directly from the PDF file
+                formData.append('relative_path', propSelectedFile.relativePath);
+                formData.append('page_number', currentPage);
+                console.log(`Using PDF extraction mode: ${propSelectedFile.relativePath}, page ${currentPage}`);
+            } else {
+                // Mode 2: Upload mode - send image file
+                let fileToProcess = selectedFile;
+
+                if (isPDF) {
+                    // Convert current PDF page to image
+                    fileToProcess = await convertCurrentPageToImage();
+                    if (!fileToProcess) {
+                        throw new Error('Failed to convert PDF page to image');
+                    }
+                }
+
+                formData.append('image', fileToProcess);
+                console.log(`Using upload mode with ${isPDF ? 'converted PDF page' : 'image file'}`);
+            }
 
             const response = await fetch(`${API_BASE_URL}/eval/ocr`, {
                 method: 'POST',
@@ -346,7 +356,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
             });
 
             const data = await response.json();
-            
+
             if (!response.ok) {
                 throw new Error(data.detail || `HTTP error! status: ${response.status}`);
             }
@@ -401,11 +411,14 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
         resetBatchState();
 
         try {
+            // Convert OCR mode to PSM number for batch API
+            const psmValue = ocrMode === 'psm3' ? 3 : 6;
+
             const formData = new FormData();
             formData.append('file', selectedFile);
             formData.append('language', language);
             formData.append('use_google_ocr', useGoogleOCR);
-            formData.append('psm', psmMode);
+            formData.append('psm', psmValue);
 
             const response = await fetch(`${API_BASE_URL}/eval/ocr/batch`, {
                 method: 'POST',
@@ -490,7 +503,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
     }, [batchJobId, batchJobStatus]);
 
     const handlePreviewCroppedImage = async () => {
-        if (!selectedFile || cropTop === 0 && cropBottom === 0) return;
+        if (!selectedFile || (cropTop === 0 && cropBottom === 0)) return;
 
         setError(null);
 
@@ -609,6 +622,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
 
     useEffect(() => {
         updateHighlights();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showOutlines, ocrResults]);
 
     const handleBookmarkClick = async (bookmark) => {
@@ -836,19 +850,20 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                             </select>
                         </div>
 
-                        {/* PSM Mode Selection */}
+                        {/* OCR Mode Selection */}
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-2">
-                                PSM Mode
+                                OCR Mode
                             </label>
                             <select
-                                value={psmMode}
-                                onChange={(e) => setPsmMode(parseInt(e.target.value))}
-                                className="block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500"
-                                title="Page Segmentation Mode: How Tesseract interprets the page layout"
+                                value={ocrMode}
+                                onChange={(e) => setOcrMode(e.target.value)}
+                                className="block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 text-sm"
+                                title="OCR processing mode"
                             >
-                                <option value="3">PSM 3 - Auto (multi-column)</option>
-                                <option value="6">PSM 6 - Single block</option>
+                                <option value="psm6">PSM 6 - Single Block</option>
+                                <option value="psm3">PSM 3 - Auto Layout</option>
+                                <option value="advanced">Advanced - Smart Paragraphs (beta)</option>
                             </select>
                         </div>
 

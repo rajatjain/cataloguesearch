@@ -5,6 +5,11 @@ from pdf2image import convert_from_path
 from enum import Enum, auto
 from dataclasses import dataclass, field
 from typing import List, Set, Optional, Tuple
+import logging
+
+from backend.utils import json_dumps
+
+log_handle = logging.getLogger(__name__)
 
 # --- Configuration Constants ---
 
@@ -28,6 +33,7 @@ HEADER_REGEX = [
 # Sentence terminators in Devanagari script
 SENTENCE_TERMINATORS = ('।', '?', '!', '।।')
 
+
 # --- Data Structures and State Enum ---
 
 class State(Enum):
@@ -35,6 +41,7 @@ class State(Enum):
     STANDARD_PROSE = auto()
     VERSE_BLOCK = auto()
     QA_BLOCK = auto()
+
 
 @dataclass
 class Line:
@@ -47,6 +54,7 @@ class Line:
     tags: Set[str] = field(default_factory=set)
     speaker: Optional[str] = None
 
+
 @dataclass
 class Paragraph:
     """Represents a finalized paragraph."""
@@ -58,10 +66,12 @@ class Paragraph:
 
     def __repr__(self):
         return (
-            f"--- PARAGRAPH (Page: {self.page_num}, Type: {self.paragraph_type.name}, Lines: {self.start_line}-{self.end_line}) ---\n"
+            f"--- PARAGRAPH (Page: {self.page_num}, Type: {self.paragraph_type.name}, "
+            f"Lines: {self.start_line}-{self.end_line}) ---\n"
             f"{self.text.strip()}\n"
             f"---------------------------------------------------\n"
         )
+
 
 # --- Classification Logic (Unchanged) ---
 
@@ -70,36 +80,62 @@ class LineClassifier:
     Analyzes raw line data and assigns classification tags.
     This class determines the "what" for each line.
     """
-    def __init__(self, avg_left_margin, avg_right_margin, indent_threshold=15, center_threshold=20):
+
+    def __init__(self, avg_left_margin, avg_right_margin, indent_threshold=15,
+                 center_threshold=20, header_regexes=None):
         self.avg_left_margin = avg_left_margin
         self.avg_right_margin = avg_right_margin
         self.indent_threshold = indent_threshold
         self.center_threshold = center_threshold
         self.qa_pattern = re.compile(r'^\s*([^:]+?)\s*:\s*(.*)')
+        # Use provided header_regexes or fall back to default HEADER_REGEX
+        self.header_regexes = header_regexes if header_regexes is not None else HEADER_REGEX
 
-    def classify(self, text: str, x_start: int, x_end: int, page_num: int, line_num: int) -> Line:
+    def classify(self, text: str, x_start: int, x_end: int, page_num: int,
+                 line_num: int) -> Line:
         """Assigns a set of tags to a line based on its properties."""
         tags = set()
         speaker = None
 
         is_indented = (x_start - self.avg_left_margin) > self.indent_threshold
-        is_centered = is_indented and (self.avg_right_margin - x_end) > self.center_threshold
-        is_not_right_justified = (self.avg_right_margin - x_end) > self.indent_threshold
+        left_indent_amount = x_start - self.avg_left_margin
+        right_indent_amount = self.avg_right_margin - x_end
+        is_centered = (
+                is_indented and
+                right_indent_amount > self.center_threshold
+        )
+        is_not_right_justified = (
+                right_indent_amount > self.indent_threshold
+        )
 
         if is_centered:
             tags.add('IS_CENTERED')
         elif is_indented:
             tags.add('IS_INDENTED')
 
+        # Debug logging for centered/indented lines
+        stripped_text = text.strip()
+        if is_indented and not is_centered:
+            log_handle.verbose(
+                f"Line {line_num}: INDENTED but NOT CENTERED - "
+                f"left_indent={left_indent_amount:.1f}, right_indent={right_indent_amount:.1f}, "
+                f"center_threshold={self.center_threshold}, text='{stripped_text}'"
+            )
+        elif is_centered:
+            log_handle.verbose(
+                f"Line {line_num}: CENTERED - "
+                f"left_indent={left_indent_amount:.1f}, right_indent={right_indent_amount:.1f}, "
+                f"text='{stripped_text}'"
+            )
+
         if is_not_right_justified:
             tags.add('IS_NOT_RIGHT_JUSTIFIED')
 
-        stripped_text = text.strip()
         if not stripped_text:
             tags.add('IS_EMPTY')
 
         # Check for header regex matches
-        for pattern in HEADER_REGEX:
+        for pattern in self.header_regexes:
             if re.search(pattern, stripped_text):
                 tags.add('IS_HEADER_REGEX')
                 break
@@ -108,7 +144,8 @@ class LineClassifier:
         if qa_match:
             tags.add('IS_QA')
             speaker = qa_match.group(1).strip()
-            text = qa_match.group(2).strip()
+            # Keep the original text including the speaker prefix
+            # text = qa_match.group(2).strip()  # This was removing the speaker prefix
 
         if stripped_text.startswith(HEADING_MARKERS):
             tags.add('IS_HEADING')
@@ -119,7 +156,9 @@ class LineClassifier:
         if re.search(r'।।\d+।।$', stripped_text):
             tags.add('IS_ABSOLUTE_TERMINATOR')
 
-        return Line(text, int(x_start), int(x_end), page_num, line_num, tags, speaker)
+        return Line(text, int(x_start), int(x_end), page_num, line_num, tags,
+                    speaker)
+
 
 # --- State Machine Logic (Unchanged) ---
 
@@ -127,6 +166,7 @@ class ParagraphGenerator:
     """
     A state-based engine that processes classified lines to generate paragraphs.
     """
+
     def __init__(self):
         self.state = State.STANDARD_PROSE
         self.paragraphs: List[Paragraph] = []
@@ -145,7 +185,8 @@ class ParagraphGenerator:
     def _finalize_paragraph(self):
         if not self.current_paragraph_lines:
             return
-        full_text = ' '.join(line.text.strip() for line in self.current_paragraph_lines).strip()
+        full_text = ' '.join(
+            line.text.strip() for line in self.current_paragraph_lines).strip()
         if full_text:
             end_line = self.current_paragraph_lines[-1].line_num
             para = Paragraph(
@@ -156,19 +197,30 @@ class ParagraphGenerator:
                 end_line=end_line
             )
             self.paragraphs.append(para)
+            log_handle.verbose(
+                f"FINALIZED paragraph (lines {self.paragraph_start_line}-{end_line}, "
+                f"type={self.state.name}): '{full_text[:60]}'"
+            )
 
     def process_line(self, line: Line):
         if 'IS_EMPTY' in line.tags:
+            log_handle.verbose(f"Line {line.line_num}: SKIPPED (empty)")
             return
         # Handle header regex matches: end paragraph and skip the line
         if 'IS_HEADER_REGEX' in line.tags:
+            log_handle.verbose(f"Line {line.line_num}: {line} SKIPPED (header regex match)")
             self._finalize_paragraph()
             self._reset_current_paragraph()
             return
         initial_state = self.state
+        log_handle.verbose(
+            f"Line {line.line_num}: Processing in {initial_state.name} state, "
+            f"tags={line.tags}, text='{line.text.strip()}'"
+        )
         handler = getattr(self, f'_handle_{initial_state.name.lower()}_state')
         reprocess = handler(line)
         if reprocess:
+            log_handle.verbose(f"Line {line.line_num}: REPROCESSING after state change to {self.state.name}")
             self.process_line(line)
 
     def flush(self):
@@ -176,7 +228,8 @@ class ParagraphGenerator:
         return self.paragraphs
 
     def _handle_standard_prose_state(self, line: Line) -> bool:
-        if 'IS_HEADING' in line.tags or 'IS_ABSOLUTE_TERMINATOR' in line.tags:
+        if ('IS_HEADING' in line.tags or
+                'IS_ABSOLUTE_TERMINATOR' in line.tags):
             self._finalize_paragraph()
             self._reset_current_paragraph(line)
             self.current_paragraph_lines.append(line)
@@ -196,7 +249,8 @@ class ParagraphGenerator:
         if not self.current_paragraph_lines:
             self._reset_current_paragraph(line)
         self.current_paragraph_lines.append(line)
-        is_last_line = 'HAS_SENTENCE_TERMINATOR' in line.tags and 'IS_NOT_RIGHT_JUSTIFIED' in line.tags
+        is_last_line = ('HAS_SENTENCE_TERMINATOR' in line.tags and
+                        'IS_NOT_RIGHT_JUSTIFIED' in line.tags)
         if is_last_line:
             self._finalize_paragraph()
             self._reset_current_paragraph()
@@ -213,8 +267,10 @@ class ParagraphGenerator:
             return True
 
     def _handle_qa_block_state(self, line: Line) -> bool:
-        is_structural_break = 'IS_HEADING' in line.tags or 'IS_ABSOLUTE_TERMINATOR' in line.tags
-        is_new_prose = 'IS_INDENTED' in line.tags and 'IS_QA' not in line.tags
+        is_structural_break = ('IS_HEADING' in line.tags or
+                               'IS_ABSOLUTE_TERMINATOR' in line.tags)
+        is_new_prose = ('IS_INDENTED' in line.tags and
+                        'IS_QA' not in line.tags)
         if is_structural_break or is_new_prose:
             self._finalize_paragraph()
             self._reset_current_paragraph(line)
@@ -232,10 +288,101 @@ class ParagraphGenerator:
         self.current_paragraph_lines.append(line)
         return False
 
+
+# --- Reusable Image Processing Function ---
+
+def process_image_to_paragraphs(
+    image: 'Image',
+    lang: str,
+    page_num: int = 1,
+    start_line_num: int = 0,
+    scan_config: dict = None
+) -> Tuple[List[Paragraph], int]:
+    """
+    Runs OCR on a single image, classifies lines, and generates paragraphs.
+
+    This is the core reusable function for processing a single image.
+
+    Args:
+        image: A PIL.Image object to process.
+        lang: Tesseract language string (e.g., 'hin+guj').
+        page_num: The page number for context.
+        start_line_num: The global line number to start counting from.
+        scan_config: Optional scan configuration dictionary with header_regex and other settings.
+
+    Returns:
+        A tuple containing a list of generated Paragraph objects and the updated
+        global line counter.
+    """
+    scan_config = scan_config or {}
+    log_handle.info(f"scan_config: {json_dumps(scan_config, truncate_fields=['typo_list'])}")
+    try:
+        # Use PSM 6 as it's best for uniform blocks of text, which our
+        # line-by-line analysis prefers.
+        ocr_data = pytesseract.image_to_data(
+            image, lang=lang, output_type=pytesseract.Output.DATAFRAME,
+            config='--psm 6'
+        )
+    except pytesseract.TesseractNotFoundError:
+        log_handle.error("Tesseract Error: The Tesseract executable was not found.")
+        log_handle.error("Please make sure Tesseract is installed and its location is "
+                         "in your system's PATH.")
+        raise
+
+    ocr_data = ocr_data.dropna(subset=['text'])
+    ocr_data = ocr_data[ocr_data.conf > 10]
+
+    if ocr_data.empty:
+        return [], start_line_num
+
+    # Reconstruct lines from word data
+    lines_on_page = []
+    for _, line_df in ocr_data.groupby(['block_num', 'par_num', 'line_num']):
+        text = ' '.join(line_df['text'].astype(str))
+        x_start = line_df['left'].min()
+        x_end = (line_df['left'] + line_df['width']).max()
+        lines_on_page.append({'text': text, 'x_start': x_start, 'x_end': x_end})
+
+    if not lines_on_page:
+        return [], start_line_num
+
+    # --- Robust Margin Calculation by Averaging the Two Extremes ---
+    # This is robust against a single outlier, which is common with OCR noise.
+    if len(lines_on_page) < 4:
+        # With too few lines, a simple median is the safest option.
+        sorted_left = sorted([l['x_start'] for l in lines_on_page])
+        sorted_right = sorted([l['x_end'] for l in lines_on_page])
+        prose_left_margin = sorted_left[len(sorted_left) // 2]
+        prose_right_margin = sorted_right[len(sorted_right) // 2]
+    else:
+        # Sort all margins once
+        sorted_left_margins = sorted([line['x_start'] for line in lines_on_page])
+        sorted_right_margins = sorted([line['x_end'] for line in lines_on_page])
+
+        # Average the 2 smallest left margins
+        prose_left_margin = (sorted_left_margins[0] + sorted_left_margins[1]) / 2
+        # Average the 2 largest right margins
+        prose_right_margin = (sorted_right_margins[-1] + sorted_right_margins[-2]) / 2
+
+    # Extract header_regex from scan_config if available
+    header_regexes = scan_config.get("header_regex", None)
+    classifier = LineClassifier(prose_left_margin, prose_right_margin, header_regexes=header_regexes)
+
+    generator = ParagraphGenerator()
+    line_counter = start_line_num
+    for line_info in lines_on_page:
+        classified_line = classifier.classify(text=line_info['text'], x_start=line_info['x_start'],
+                                              x_end=line_info['x_end'], page_num=page_num, line_num=line_counter)
+        generator.process_line(classified_line)
+        line_counter += 1
+
+    return generator.flush(), line_counter
+
 # --- Main PDF Processing Function (MODIFIED FOR PYTESSERACT) ---
 
-def process_pdf_with_tesseract(pdf_path: str, lang: str = 'hin+guj',
-                               top_crop: int = 0, bottom_crop: int = 0) -> List[Tuple[int, str]]:
+def process_pdf_with_tesseract(
+        pdf_path: str, lang: str = 'hin+guj',
+        top_crop: int = 0, bottom_crop: int = 0) -> List[Tuple[int, str]]:
     """
     Converts PDF pages to images, runs Tesseract OCR, and generates paragraphs.
 
@@ -246,10 +393,12 @@ def process_pdf_with_tesseract(pdf_path: str, lang: str = 'hin+guj',
         bottom_crop: Percentage to crop from bottom (0-50)
     """
     try:
+        log_handle.info(f"Converting PDF to images: {pdf_path}")
         images = convert_from_path(pdf_path)
     except Exception as e:
-        print(f"Error converting PDF to images. Is Poppler installed and in your PATH?")
-        print(f"Original error: {e}")
+        log_handle.error("Error converting PDF to images. "
+              "Is Poppler installed and in your PATH?")
+        log_handle.error(f"Original error: {e}")
         return []
 
     generator = ParagraphGenerator()
@@ -257,77 +406,49 @@ def process_pdf_with_tesseract(pdf_path: str, lang: str = 'hin+guj',
 
     # Validate crop percentages
     if not (0 <= top_crop <= 50):
-        print(f"Warning: top_crop must be between 0 and 50. Using 0.")
+        log_handle.warning(f"top_crop must be between 0 and 50. Using 0.")
         top_crop = 0
     if not (0 <= bottom_crop <= 50):
-        print(f"Warning: bottom_crop must be between 0 and 50. Using 0.")
+        log_handle.warning(f"bottom_crop must be between 0 and 50. Using 0.")
         bottom_crop = 0
 
     if top_crop > 0 or bottom_crop > 0:
-        print(f"Cropping enabled: {top_crop}% from top, {bottom_crop}% from bottom")
+        log_handle.info(f"Cropping enabled: {top_crop}% from top, "
+              f"{bottom_crop}% from bottom")
 
     for page_num, image in enumerate(images, 1):
+        log_handle.verbose(f"Processing page {page_num}/{len(images)} from {pdf_path}")
         # Apply cropping if specified
         if top_crop > 0 or bottom_crop > 0:
             width, height = image.size
             top_pixels = int(height * top_crop / 100)
             bottom_pixels = int(height * bottom_crop / 100)
             # Crop: (left, top, right, bottom)
-            image = image.crop((0, top_pixels, width, height - bottom_pixels))
-        # Use Tesseract to get detailed information about words and their positions
-        # Using a DataFrame makes it easier to process this data
+            cropped_image = image.crop((0, top_pixels, width, height - bottom_pixels))
+        else:
+            cropped_image = image
+
         try:
-            ocr_data = pytesseract.image_to_data(image, lang=lang, output_type=pytesseract.Output.DATAFRAME)
+            # Use the new reusable function
+            page_paragraphs, global_line_counter = process_image_to_paragraphs(
+                cropped_image, lang, page_num, global_line_counter
+            )
+            generator.paragraphs.extend(page_paragraphs)
         except pytesseract.TesseractNotFoundError:
-            print("Tesseract Error: The Tesseract executable was not found.")
-            print("Please make sure Tesseract is installed and its location is in your system's PATH.")
             return []
 
-        ocr_data = ocr_data.dropna(subset=['text'])
-        ocr_data = ocr_data[ocr_data.conf > 30] # Filter out low-confidence words
-
-        if ocr_data.empty:
-            continue
-
-        # Reconstruct lines from word data
-        lines_on_page = []
-        for (block_num, par_num, line_num), line_df in ocr_data.groupby(['block_num', 'par_num', 'line_num']):
-            text = ' '.join(line_df['text'].astype(str))
-            x_start = line_df['left'].min()
-            x_end = (line_df['left'] + line_df['width']).max()
-            lines_on_page.append({'text': text, 'x_start': x_start, 'x_end': x_end})
-
-        if not lines_on_page:
-            continue
-
-        # Calculate page margins from reconstructed lines
-        left_margins = [line['x_start'] for line in lines_on_page]
-        right_margins = [line['x_end'] for line in lines_on_page]
-        avg_left = sorted(left_margins)[len(left_margins) // 2]
-        avg_right = sorted(right_margins)[len(right_margins) // 2]
-
-        classifier = LineClassifier(avg_left, avg_right)
-
-        for line_info in lines_on_page:
-            classified_line = classifier.classify(
-                text=line_info['text'],
-                x_start=line_info['x_start'],
-                x_end=line_info['x_end'],
-                page_num=page_num,
-                line_num=global_line_counter
-            )
-            generator.process_line(classified_line)
-            global_line_counter += 1
-
     final_paragraphs = generator.flush()
+    log_handle.info(f"Successfully generated {len(final_paragraphs)} paragraphs from {pdf_path}")
 
     output = [(p.page_num, p.text) for p in final_paragraphs]
     return output
 
+
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description='Extract paragraphs from PDF using OCR')
+    parser = argparse.ArgumentParser(
+        description='Extract paragraphs from PDF using OCR')
     parser.add_argument('pdf_file', help='Path to the PDF file')
     parser.add_argument('--top-crop', type=int, default=0,
                         help='Percentage to crop from top (0-50, default: 0)')
@@ -348,13 +469,14 @@ if __name__ == "__main__":
         )
 
         if paragraphs_output:
-            print(f"Successfully processed {len(paragraphs_output)} paragraphs using Tesseract.\n")
+            print(f"Successfully processed {len(paragraphs_output)} "
+                  f"paragraphs using Tesseract.\n")
             for i, (page, content) in enumerate(paragraphs_output):
-                print(f"--- Paragraph {i+1} (from Page {page}) ---")
+                print(f"--- Paragraph {i + 1} (from Page {page}) ---")
                 print(content)
-                print("-" * (20 + len(str(i+1)) + len(str(page))))
+                print("-" * (20 + len(str(i + 1)) + len(str(page))))
 
     except FileNotFoundError:
-        print(f"Error: The file '{args.pdf_file}' was not found.")
+        log_handle.error(f"Error: The file '{args.pdf_file}' was not found.")
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        log_handle.error(f"An unexpected error occurred: {e}")
