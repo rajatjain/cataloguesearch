@@ -193,7 +193,9 @@ class ParagraphGenerator:
     def _finalize_paragraph(self):
         if not self.current_paragraph_lines:
             return
-        full_text = ' '.join(
+        # Use newlines for verses to preserve line structure, spaces for prose
+        separator = '\n' if self.state == State.VERSE_BLOCK else ' '
+        full_text = separator.join(
             line.text.strip() for line in self.current_paragraph_lines).strip()
         if full_text:
             end_line = self.current_paragraph_lines[-1].line_num
