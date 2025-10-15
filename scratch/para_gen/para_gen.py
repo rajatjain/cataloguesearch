@@ -36,7 +36,7 @@ HEADER_REGEX = [
 ]
 
 # Sentence terminators in Devanagari script
-SENTENCE_TERMINATORS = ('।', '?', '!', '।।')
+SENTENCE_TERMINATORS = ('।', '?', '!', '।।', ')', ']', '}')
 
 
 # --- Data Structures and State Enum ---
@@ -265,6 +265,14 @@ class ParagraphGenerator:
             self._reset_current_paragraph(line)
             self.state = State.QA_BLOCK
             return True
+
+        # IS_INDENTED should start a new paragraph
+        if 'IS_INDENTED' in line.tags:
+            self._finalize_paragraph()
+            self._reset_current_paragraph(line)
+            self.current_paragraph_lines.append(line)
+            return False
+
         if not self.current_paragraph_lines:
             self._reset_current_paragraph(line)
         self.current_paragraph_lines.append(line)
