@@ -39,6 +39,39 @@ class AdvancedPDFProcessor(PDFProcessor):
                 traceback.print_exc()
                 log_handle.error(f"Failed to write OCR file {fname}: {e}")
 
+    def read_paragraphs(self, ocr_dir: str, pages_list: list[int]) -> list[dict]:
+        """
+        Overridden to read JSON files with raw OCR line data.
+
+        Args:
+            ocr_dir: Directory containing OCR JSON files
+            pages_list: List of page numbers to read
+
+        Returns:
+            List of dictionaries containing page data with metadata and lines
+        """
+        pages_data = []
+        for page_num in pages_list:
+            json_file = f"{ocr_dir}/page_{page_num:04d}.json"
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    page_data = json.load(f)
+                    pages_data.append(page_data)
+            except (IOError, json.JSONDecodeError) as e:
+                log_handle.error(f"Failed to read JSON file {json_file}: {e}")
+                # Return empty page data on error
+                pages_data.append({
+                    "page_num": page_num,
+                    "metadata": {
+                        "avg_left_margin": 0,
+                        "avg_right_margin": 0,
+                        "prose_left_margin": 0,
+                        "prose_right_margin": 0
+                    },
+                    "lines": []
+                })
+        return pages_data
+
     @staticmethod
     def _process_single_page(args):
         """

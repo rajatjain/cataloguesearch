@@ -6,7 +6,7 @@ import traceback
 import pytest
 
 from backend.crawler.index_generator import IndexGenerator
-from backend.crawler.paragraph_generator.base import BaseParagraphGenerator
+from backend.crawler.paragraph_generator.factory import create_paragraph_generator
 from backend.crawler.paragraph_generator.language_meta import get_language_meta
 from backend.common.embedding_models import get_embedding_model_factory
 from backend.common.opensearch import get_opensearch_client
@@ -83,7 +83,7 @@ def get_expected_paragraph_count(ocr_dir, pages_list, language, indexing_module)
     
     # Create paragraph generator with language-specific meta
     language_meta = get_language_meta(language, scan_config)
-    paragraph_gen = BaseParagraphGenerator(indexing_module._config, language_meta)
+    paragraph_gen = create_paragraph_generator(indexing_module._config, language_meta)
     processed_paras = paragraph_gen.generate_paragraphs(paragraphs, scan_config)
     
     return len(processed_paras)

@@ -299,22 +299,21 @@ class AdvancedParagraphGenerator(BaseParagraphGenerator):
     def __init__(self, config, language_meta: LanguageMeta):
         super().__init__(config, language_meta)
 
-    def generate_paragraphs(self, ocr_dir: str, pages_list: list[int],
+    def generate_paragraphs(self, pages_data: list[dict],
                             scan_config: dict) -> List[Tuple[int, str]]:
         """
-        Generate paragraphs from raw OCR JSON files.
+        Generate paragraphs from raw OCR data.
 
         Args:
-            ocr_dir: Directory containing page_NNNN.json files
-            pages_list: List of page numbers to process
+            pages_data: List of dictionaries with page_num, metadata, and lines
             scan_config: Configuration with typo_list, header_regex, question_prefix, etc.
 
         Returns:
             List of (page_num, paragraph_text) tuples
         """
-        # Phase 1: Read JSON and convert lines to typed paragraphs
+        # Phase 1: Convert lines to typed paragraphs
         typed_paragraphs = self._phase1_lines_to_typed_paragraphs(
-            ocr_dir, pages_list, scan_config
+            pages_data, scan_config
         )
 
         # Phase 2: Combine consecutive blocks by type
@@ -326,10 +325,14 @@ class AdvancedParagraphGenerator(BaseParagraphGenerator):
         return final_paragraphs
 
     def _phase1_lines_to_typed_paragraphs(
-            self, ocr_dir: str, pages_list: list[int],
+            self, pages_data: list[dict],
             scan_config: dict) -> List[Tuple[int, str, State]]:
         """
-        Phase 1: Read JSON files, normalize lines, apply state machine.
+        Phase 1: Normalize lines and apply state machine.
+
+        Args:
+            pages_data: List of page dictionaries with metadata and lines
+            scan_config: Configuration dictionary
 
         Returns:
             List of (page_num, paragraph_text, paragraph_type) tuples
@@ -341,63 +344,52 @@ class AdvancedParagraphGenerator(BaseParagraphGenerator):
 
         all_typed_paragraphs = []
 
-        for page_num in pages_list:
-            json_file = f"{ocr_dir}/page_{page_num:04d}.json"
-            if not os.path.exists(json_file):
-                log_handle.warning(f"JSON file not found: {json_file}")
+        for page_data in pages_data:
+            page_num = page_data.get("page_num", 0)
+            lines_data = page_data.get("lines", [])
+            metadata = page_data.get("metadata", {})
+
+            if not lines_data:
                 continue
 
-            try:
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    page_data = json.load(f)
+            # Get margin metadata
+            prose_left_margin = metadata.get("prose_left_margin", 0)
+            prose_right_margin = metadata.get("prose_right_margin", 0)
 
-                lines_data = page_data.get("lines", [])
-                metadata = page_data.get("metadata", {})
+            # Get language-specific sentence terminators from language_meta
+            sentence_terminators = self._language_meta.sentence_terminators
 
-                if not lines_data:
-                    continue
+            # Create classifier with margins and QA prefixes
+            classifier = LineClassifier(
+                prose_left_margin, prose_right_margin,
+                header_regexes=header_regexes,
+                question_prefix=question_prefix,
+                answer_prefix=answer_prefix,
+                sentence_terminators=sentence_terminators
+            )
 
-                # Get margin metadata
-                prose_left_margin = metadata.get("prose_left_margin", 0)
-                prose_right_margin = metadata.get("prose_right_margin", 0)
+            # Normalize lines and classify
+            generator = ParagraphGenerator()
+            for line_data in lines_data:
+                # Normalize text using base class method (which delegates to language_meta)
+                raw_text = line_data.get("text", "")
+                normalized_text = self._normalize_text(raw_text, typo_list)
 
-                # Get language-specific sentence terminators from language_meta
-                sentence_terminators = self._language_meta.sentence_terminators
-
-                # Create classifier with margins and QA prefixes
-                classifier = LineClassifier(
-                    prose_left_margin, prose_right_margin,
-                    header_regexes=header_regexes,
-                    question_prefix=question_prefix,
-                    answer_prefix=answer_prefix,
-                    sentence_terminators=sentence_terminators
+                # Create classified line
+                classified_line = classifier.classify(
+                    text=normalized_text,
+                    x_start=line_data.get("x_start", 0),
+                    x_end=line_data.get("x_end", 0),
+                    page_num=page_num,
+                    line_num=line_data.get("line_num", 0)
                 )
 
-                # Normalize lines and classify
-                generator = ParagraphGenerator()
-                for line_data in lines_data:
-                    # Normalize text using base class method (which delegates to language_meta)
-                    raw_text = line_data.get("text", "")
-                    normalized_text = self._normalize_text(raw_text, typo_list)
+                generator.process_line(classified_line)
 
-                    # Create classified line
-                    classified_line = classifier.classify(
-                        text=normalized_text,
-                        x_start=line_data.get("x_start", 0),
-                        x_end=line_data.get("x_end", 0),
-                        page_num=page_num,
-                        line_num=line_data.get("line_num", 0)
-                    )
-
-                    generator.process_line(classified_line)
-
-                # Get paragraphs with types
-                page_paragraphs = generator.flush()
-                for para in page_paragraphs:
-                    all_typed_paragraphs.append((para.page_num, para.text, para.paragraph_type))
-
-            except (json.JSONDecodeError, IOError) as e:
-                log_handle.error(f"Error reading JSON file {json_file}: {e}")
+            # Get paragraphs with types
+            page_paragraphs = generator.flush()
+            for para in page_paragraphs:
+                all_typed_paragraphs.append((para.page_num, para.text, para.paragraph_type))
 
         return all_typed_paragraphs
 

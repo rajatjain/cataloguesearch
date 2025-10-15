@@ -212,6 +212,26 @@ class PDFProcessor:
             traceback.print_exc()
             return [], []
 
+    def read_paragraphs(self, ocr_dir: str, pages_list: list[int]) -> list[tuple[int, list[str]]]:
+        """
+        Reads OCR output files and returns paragraphs.
+
+        Args:
+            ocr_dir: Directory containing OCR output files
+            pages_list: List of page numbers to read
+
+        Returns:
+            List of tuples (page_num, list of paragraph strings)
+        """
+        paragraphs = []
+        for page_num in pages_list:
+            ocr_file = f"{ocr_dir}/page_{page_num:04d}.txt"
+            with open(ocr_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                page_paragraphs = content.split("\n----\n") if content.strip() else []
+                paragraphs.append((page_num, page_paragraphs))
+        return paragraphs
+
     def fetch_bookmarks(self, pdf_file: str) -> dict[int, str]:
         doc = fitz.open(pdf_file)
         toc = doc.get_toc(simple=True)  # Format: [level, title, page_number]
