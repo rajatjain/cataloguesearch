@@ -192,7 +192,11 @@ def setup(copy_ocr_files=False, add_scan_config=False):
                             "^નિબંધ.{0,15}$",
                             "^.{0,15}ઉપર.{0,15}નિબંધ$",
                             "^.{0,20}ઇતિહાસ.{0,8}લેખ$"
-                        ]
+                        ],
+                        "crop": {
+                            "top": 8,
+                            "bottom": 8
+                        }
                     }
                     log_handle.info(f"Added {filename_without_ext} to scan_config: pages 1-{total_pages}")
 

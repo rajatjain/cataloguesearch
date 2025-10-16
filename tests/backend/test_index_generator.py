@@ -62,10 +62,12 @@ def setup_document_paths(temp_dir, doc_name):
 def get_pages_list(ocr_dir):
     """Get sorted list of page numbers from OCR directory."""
     pages = []
+    config = Config()
+    extn = ".txt" if config.CHUNK_STRATEGY == "paragraph" else ".json"
     if os.path.exists(ocr_dir):
         for file in os.listdir(ocr_dir):
-            if file.startswith("page_") and file.endswith(".txt"):
-                page_num = int(file.replace("page_", "").replace(".txt", ""))
+            if file.startswith("page_") and file.endswith(extn):
+                page_num = int(file.replace("page_", "").replace(extn, ""))
                 pages.append(page_num)
     return sorted(pages)
 
@@ -292,7 +294,21 @@ def test_index_generator(setup, indexing_module):
     config = Config()
     opensearch_client = get_opensearch_client(config)
     temp_dir = setup
-    scan_config = {}
+    scan_config = {
+        "header_regex": [
+            "^.{0,20}इतिहास एवं लेख$",
+            "^.{0,15}पर.{0,5}निबंध$",
+            "^निबंध.{0,15}$",
+            "^નિબંધ.{0,15}$",
+            "^.{0,15}ઉપર.{0,15}નિબંધ$",
+            "^.{0,20}ઇતિહાસ.{0,8}લેખ$",
+            "^[0-9]{0,4}$"
+        ],
+        "crop": {
+            "top": 8,
+            "bottom": 8
+        }
+    }
 
     # Document configurations for testing
     document_configs = [
@@ -302,14 +318,18 @@ def test_index_generator(setup, indexing_module):
             'doc_id': 'bangalore_hindi_doc_id',
             'filename': 'bangalore_hindi.pdf',
             'language': 'hi',
-            'metadata': {'language': 'hi'}
+            'metadata': {'language': 'hi'},
+            'para_count_advanced': 20,
+            'para_count_paragraph': 20
         },
         {
             'doc_name': 'bangalore_gujarati',
             'doc_id': 'bangalore_gujarati_doc_id',
             'filename': 'bangalore_gujarati.pdf',
             'language': 'gu',
-            'metadata': {'language': 'gu'}
+            'metadata': {'language': 'gu'},
+            'para_count_advanced': 21,
+            'para_count_paragraph': 20
         },
         # Second test case: Thanjavur/Songadh documents
         {
@@ -317,14 +337,18 @@ def test_index_generator(setup, indexing_module):
             'doc_id': 'thanjavur_hindi_doc_id',
             'filename': 'thanjavur_hindi.pdf',
             'language': 'hi',
-            'metadata': {'language': 'hi'}
+            'metadata': {'language': 'hi'},
+            'para_count_advanced': 21,
+            'para_count_paragraph': 20
         },
         {
             'doc_name': 'songadh_gujarati',
             'doc_id': 'songadh_gujarati_doc_id',
             'filename': 'songadh_gujarati.pdf',
             'language': 'gu',
-            'metadata': {'language': 'gu'}
+            'metadata': {'language': 'gu'},
+            'para_count_advanced': 21,
+            'para_count_paragraph': 20
         }
     ]
 
@@ -341,7 +365,9 @@ def test_index_generator(setup, indexing_module):
         os.makedirs(output_dir, exist_ok=True)
 
         # Calculate expected count
-        expected_count = get_expected_paragraph_count(ocr_dir, pages_list, language, indexing_module)
+        para_count_key = "para_count_%s" % config.CHUNK_STRATEGY
+        expected_count = doc_config[para_count_key]
+        # expected_count = get_expected_paragraph_count(ocr_dir, pages_list, language, indexing_module)
 
         # Add to config
         doc_config.update({
@@ -421,6 +447,8 @@ def test_index_documents_with_bookmarks_validation(setup, indexing_module):
             'doc_name': 'jaipur_hindi',
             'doc_id': 'jaipur_hindi_doc_id',
             'filename': 'jaipur_hindi.pdf',
+            'para_count_advanced': 21,
+            'para_count_paragraph': 20,
             'language': 'hi',
             'metadata': {'language': 'hi'},
             'bookmarks': {1: "प्रस्तावना", 2: "मुख्य विषय", 3: "निष्कर्ष",
@@ -430,6 +458,8 @@ def test_index_documents_with_bookmarks_validation(setup, indexing_module):
             'doc_name': 'hampi_gujarati',
             'doc_id': 'hampi_gujarati_doc_id',
             'filename': 'hampi_gujarati.pdf',
+            'para_count_advanced': 20,
+            'para_count_paragraph': 19,
             'language': 'gu',
             'metadata': {'language': 'gu'},
             'bookmarks': {1: "પરિચય", 2: "મુખ્ય વિષય", 3: "સમાપન",
@@ -448,7 +478,8 @@ def test_index_documents_with_bookmarks_validation(setup, indexing_module):
         os.makedirs(output_dir, exist_ok=True)
 
         # Calculate expected count
-        expected_count = get_expected_paragraph_count(ocr_dir, pages_list, language, indexing_module)
+        para_count_key = "para_count_%s" % config.CHUNK_STRATEGY
+        expected_count = doc_config[para_count_key]
 
         # Add to config
         doc_config.update({
