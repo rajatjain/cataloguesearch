@@ -60,12 +60,12 @@ class PDFProcessor:
                         existing_files.add(page_num)
                     except ValueError:
                         continue
-            
+
             # If all required pages exist, return early
             if set(pages_list).issubset(existing_files):
                 log_handle.info(f"All required pages already processed in {output_ocr_dir}")
                 return True
-            
+
             # Otherwise, remove existing directory to reprocess
             shutil.rmtree(output_ocr_dir)
 
@@ -271,7 +271,7 @@ class PDFProcessor:
         # Backward compatible: support both 3-element and 4-element tuples
         if len(args) == 3:
             page_num, image, language_code = args
-            psm = 6  # Default PSM (current behavior)
+            psm = 3  # Default PSM (current behavior)
         else:
             page_num, image, language_code, psm = args
         try:

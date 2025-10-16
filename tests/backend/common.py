@@ -147,7 +147,7 @@ def setup(copy_ocr_files=False, add_scan_config=False):
             log_handle.info(f"Relative path: {relpath}")
 
             src_folder = os.path.join(
-                TEST_BASE_DIR, "data", "ocr",
+                TEST_BASE_DIR, "data", "ocr", config.CHUNK_STRATEGY,
                 os.path.basename(relpath))
             dest_folder = os.path.join(
                 config.BASE_OCR_PATH,
@@ -184,7 +184,15 @@ def setup(copy_ocr_files=False, add_scan_config=False):
                     # Add to scan_config
                     scan_config[filename_without_ext] = {
                         "start_page": 1,
-                        "end_page": total_pages
+                        "end_page": total_pages,
+                        "header_regex": [
+                            "^.{0,20}इतिहास एवं लेख$",
+                            "^.{0,15}पर.{0,5}निबंध$",
+                            "^निबंध.{0,15}$",
+                            "^નિબંધ.{0,15}$",
+                            "^.{0,15}ઉપર.{0,15}નિબંધ$",
+                            "^.{0,20}ઇતિહાસ.{0,8}લેખ$"
+                        ]
                     }
                     log_handle.info(f"Added {filename_without_ext} to scan_config: pages 1-{total_pages}")
 

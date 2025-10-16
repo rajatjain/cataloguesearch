@@ -12,7 +12,7 @@ index:
       chunk_overlap: 50
     dynamic:
       similarity_threshold: 0.5
-  chunk_strategy: "paragraph"
+  chunk_strategy: "advanced"
 
 search:
   filtered_metadata_fields: ["type", "category", "language", "Author", "Anuyog", "Granth"]

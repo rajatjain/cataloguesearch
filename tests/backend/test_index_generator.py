@@ -17,15 +17,15 @@ log_handle = logging.getLogger(__name__)
 
 @pytest.fixture(scope="module")
 def setup():
+    config = Config()
     temp_dir = tempfile.mkdtemp("indexing_module_test")
     # copy ocr files to this directory
     base_test_dir = get_test_base_dir()
-    ocr_source_dir = os.path.join(base_test_dir, "data", "ocr")
+    ocr_source_dir = os.path.join(base_test_dir, "data", "ocr", config.CHUNK_STRATEGY)
     ocr_dest_dir = os.path.join(temp_dir, "ocr")
 
     shutil.copytree(ocr_source_dir, ocr_dest_dir)
 
-    config = Config()
     config.settings()["crawler"]["base_ocr_path"] = ocr_dest_dir
     return temp_dir
 
@@ -80,12 +80,12 @@ def get_expected_paragraph_count(ocr_dir, pages_list, language, indexing_module)
                 content = f.read()
             page_paragraphs = content.split("\n----\n") if content.strip() else []
             paragraphs.append((page_num, page_paragraphs))
-    
+
     # Create paragraph generator with language-specific meta
     language_meta = get_language_meta(language, scan_config)
     paragraph_gen = create_paragraph_generator(indexing_module._config, language_meta)
     processed_paras = paragraph_gen.generate_paragraphs(paragraphs, scan_config)
-    
+
     return len(processed_paras)
 
 def count_paragraphs_in_output_dir(output_dir):
@@ -104,38 +104,38 @@ def count_paragraphs_in_output_dir(output_dir):
 def validate_dry_run_phase(config, temp_dir, doc_configs, indexing_module, opensearch_client):
     """Validate dry run phase: no documents indexed, but paragraphs generated."""
     log_handle.info("=== DRY RUN VALIDATION ===")
-    
+
     # Refresh and verify no documents indexed
     opensearch_client.indices.refresh(index=indexing_module._index_name)
     all_docs_after_dry_run = get_documents(config, "match_all")
     log_handle.info(f"Documents after dry run: {len(all_docs_after_dry_run)}")
     assert len(all_docs_after_dry_run) == 0, "No documents should be indexed to OpenSearch during dry run"
-    
+
     # Validate paragraph generation for each document
     for doc_config in doc_configs:
         output_dir = doc_config['output_dir']
         expected_count = doc_config['expected_count']
         doc_name = doc_config['doc_name']
-        
+
         assert os.path.exists(output_dir), f"{doc_name} output directory should exist"
-        
+
         text_files = [f for f in os.listdir(output_dir) if f.endswith('.txt')]
         log_handle.info(f"{doc_name} text files generated: {len(text_files)}")
-        
+
         actual_paragraphs = count_paragraphs_in_output_dir(output_dir)
         log_handle.info(f"{doc_name} paragraphs in output files: {actual_paragraphs}")
-        
+
         assert actual_paragraphs == expected_count, \
             f"{doc_name} paragraphs in files should match expected count: expected {expected_count}, got {actual_paragraphs}"
 
 def validate_document_counts(config, doc_configs):
     """Validate that document counts match expected paragraph counts."""
     log_handle.info("=== DOCUMENT COUNT VALIDATION ===")
-    
+
     # Get language-specific documents
     hindi_docs = get_documents(config, "field_exists", "text_content_hindi")
     gujarati_docs = get_documents(config, "field_exists", "text_content_gujarati")
-    
+
     # Filter and validate each document set
     for doc_config in doc_configs:
         doc_id = doc_config['doc_id']
@@ -143,22 +143,22 @@ def validate_document_counts(config, doc_configs):
         filename = doc_config['filename']
         language = doc_config['language']
         doc_name = doc_config['doc_name']
-        
+
         if language == 'hi':
             docs = [doc for doc in hindi_docs if doc['_source']['document_id'] == doc_id]
         else:  # gujarati
             docs = [doc for doc in gujarati_docs if doc['_source']['document_id'] == doc_id]
-        
+
         actual_count = len(docs)
         log_handle.info(f"Actual {doc_name} document count: {actual_count}")
-        
+
         # Validate document properties
         for doc in docs:
             source = doc['_source']
             assert source['document_id'] == doc_id
             assert source['original_filename'] == filename
             assert source['metadata']['language'] == language
-            
+
             if language == 'hi':
                 assert 'text_content_hindi' in source
                 assert source['text_content_hindi'].strip() != ""
@@ -167,27 +167,27 @@ def validate_document_counts(config, doc_configs):
                 assert 'text_content_gujarati' in source
                 assert source['text_content_gujarati'].strip() != ""
                 assert 'text_content_hindi' not in source or source['text_content_hindi'] == ''
-        
+
         # Validate counts match
         assert actual_count == expected_count, \
             f"{doc_name} document count mismatch: expected {expected_count}, got {actual_count}"
-    
+
     return hindi_docs, gujarati_docs
 
 def validate_vector_embeddings(config):
     """Validate that all documents have properly sized vector embeddings."""
     log_handle.info("=== VECTOR EMBEDDING VALIDATION ===")
-    
+
     expected_embedding_dim = get_embedding_model_factory(config).get_embedding_dimension()
     all_indexed_docs = get_documents(config, "match_all")
-    
+
     log_handle.info(f"Expected embedding dimension: {expected_embedding_dim}")
     log_handle.info(f"Validating vector embeddings for all {len(all_indexed_docs)} documents")
-    
+
     for doc in all_indexed_docs:
         source = doc['_source']
         doc_id_for_logging = source.get('document_id', 'unknown')
-        
+
         # Validate vector embedding exists and has correct properties
         assert 'vector_embedding' in source, f"Missing vector_embedding in document {doc['_id']} (doc_id: {doc_id_for_logging})"
         assert isinstance(source['vector_embedding'], list), f"vector_embedding should be a list in document {doc['_id']} (doc_id: {doc_id_for_logging})"
@@ -195,7 +195,7 @@ def validate_vector_embeddings(config):
             f"vector_embedding dimension mismatch in document {doc['_id']} (doc_id: {doc_id_for_logging}): expected {expected_embedding_dim}, got {len(source['vector_embedding'])}"
         assert all(isinstance(x, (int, float)) for x in source['vector_embedding']), \
             f"vector_embedding should contain only numbers in document {doc['_id']} (doc_id: {doc_id_for_logging})"
-    
+
     log_handle.info(f"✅ Vector embedding validation passed for all {len(all_indexed_docs)} documents!")
 
 def get_documents(config, query_type="match_all", field=None, max_results: int = 1000) -> list:
@@ -293,113 +293,113 @@ def test_index_generator(setup, indexing_module):
     opensearch_client = get_opensearch_client(config)
     temp_dir = setup
     scan_config = {}
-    
+
     # Document configurations for testing
     document_configs = [
         # First test case: Bangalore documents
         {
             'doc_name': 'bangalore_hindi',
-            'doc_id': 'bangalore_hindi_doc_id', 
+            'doc_id': 'bangalore_hindi_doc_id',
             'filename': 'bangalore_hindi.pdf',
             'language': 'hi',
             'metadata': {'language': 'hi'}
         },
         {
-            'doc_name': 'bangalore_gujarati', 
+            'doc_name': 'bangalore_gujarati',
             'doc_id': 'bangalore_gujarati_doc_id',
-            'filename': 'bangalore_gujarati.pdf', 
+            'filename': 'bangalore_gujarati.pdf',
             'language': 'gu',
             'metadata': {'language': 'gu'}
         },
-        # Second test case: Thanjavur/Songadh documents  
+        # Second test case: Thanjavur/Songadh documents
         {
             'doc_name': 'thanjavur_hindi',
             'doc_id': 'thanjavur_hindi_doc_id',
             'filename': 'thanjavur_hindi.pdf',
-            'language': 'hi', 
+            'language': 'hi',
             'metadata': {'language': 'hi'}
         },
         {
             'doc_name': 'songadh_gujarati',
-            'doc_id': 'songadh_gujarati_doc_id', 
+            'doc_id': 'songadh_gujarati_doc_id',
             'filename': 'songadh_gujarati.pdf',
             'language': 'gu',
             'metadata': {'language': 'gu'}
         }
     ]
-    
+
     log_handle.info("=== SETUP PHASE ===")
-    
+
     # Setup document paths and expected counts
     for doc_config in document_configs:
         doc_name = doc_config['doc_name']
         language = doc_config['language']
-        
+
         # Setup paths
         ocr_dir, pages_list = setup_document_paths(temp_dir, doc_name)
         output_dir = os.path.join(temp_dir, "text", doc_name)
         os.makedirs(output_dir, exist_ok=True)
-        
+
         # Calculate expected count
         expected_count = get_expected_paragraph_count(ocr_dir, pages_list, language, indexing_module)
-        
+
         # Add to config
         doc_config.update({
             'ocr_dir': ocr_dir,
-            'pages_list': pages_list, 
+            'pages_list': pages_list,
             'output_dir': output_dir,
             'expected_count': expected_count
         })
-        
+
         log_handle.info(f"{doc_name}: {len(pages_list)} pages, expected {expected_count} paragraphs")
-    
+
     # Phase 1: Dry run indexing
     log_handle.info("=== PHASE 1: DRY RUN INDEXING ===")
     for doc_config in document_configs:
         indexing_module.index_document(
-            doc_config['doc_id'], doc_config['filename'], doc_config['ocr_dir'], 
-            doc_config['output_dir'], doc_config['pages_list'], doc_config['metadata'], 
+            doc_config['doc_id'], doc_config['filename'], doc_config['ocr_dir'],
+            doc_config['output_dir'], doc_config['pages_list'], doc_config['metadata'],
             scan_config, {}, reindex_metadata_only=False, dry_run=True)
-    
+
     # Validate dry run phase
     validate_dry_run_phase(config, temp_dir, document_configs, indexing_module, opensearch_client)
-    
+
     # Phase 2: Live indexing (incremental)
     log_handle.info("=== PHASE 2: LIVE INDEXING ===")
     for i, doc_config in enumerate(document_configs):
         log_handle.info(f"Indexing document {i+1}/{len(document_configs)}: {doc_config['doc_name']}")
-        
+
         indexing_module.index_document(
             doc_config['doc_id'], doc_config['filename'], doc_config['ocr_dir'],
             doc_config['output_dir'], doc_config['pages_list'], doc_config['metadata'],
             scan_config, {}, reindex_metadata_only=False, dry_run=False)
-        
+
         opensearch_client.indices.refresh(index=indexing_module._index_name)
-        
+
         # Log incremental progress
         total_docs = len(get_documents(config, "match_all"))
         log_handle.info(f"Total documents after indexing {doc_config['doc_name']}: {total_docs}")
-    
+
     # Phase 3: Final validation
     log_handle.info("=== PHASE 3: FINAL VALIDATION ===")
-    
+
     # Validate document counts and properties
     hindi_docs, gujarati_docs = validate_document_counts(config, document_configs)
-    
+
     # Validate total counts match expectations
     total_expected_hindi = sum(d['expected_count'] for d in document_configs if d['language'] == 'hi')
     total_expected_gujarati = sum(d['expected_count'] for d in document_configs if d['language'] == 'gu')
-    
+
     assert len(hindi_docs) == total_expected_hindi, \
         f"Total Hindi count mismatch: expected {total_expected_hindi}, got {len(hindi_docs)}"
     assert len(gujarati_docs) == total_expected_gujarati, \
         f"Total Gujarati count mismatch: expected {total_expected_gujarati}, got {len(gujarati_docs)}"
-    
+
     log_handle.info(f"✅ Total validation passed - Hindi: {len(hindi_docs)}, Gujarati: {len(gujarati_docs)}")
-    
+
     # Validate vector embeddings for all documents
     validate_vector_embeddings(config)
-    
+
     log_handle.info("🎉 All phases completed successfully!")
 
 
@@ -412,9 +412,9 @@ def test_index_documents_with_bookmarks_validation(setup, indexing_module):
     opensearch_client = get_opensearch_client(config)
     temp_dir = setup
     scan_config = {}
-    
+
     log_handle.info("=== BOOKMARK INDEXING TEST ===")
-    
+
     # Document configurations with bookmarks
     document_configs = [
         {
@@ -423,57 +423,59 @@ def test_index_documents_with_bookmarks_validation(setup, indexing_module):
             'filename': 'jaipur_hindi.pdf',
             'language': 'hi',
             'metadata': {'language': 'hi'},
-            'bookmarks': {1: "प्रस्तावना", 2: "मुख्य विषय", 3: "निष्कर्ष", 4: "अध्याय एक", 5: "अध्याय दो"}
+            'bookmarks': {1: "प्रस्तावना", 2: "मुख्य विषय", 3: "निष्कर्ष",
+                          4: "अध्याय एक", 5: "अध्याय दो", 6: "अध्याय तीन"}
         },
         {
             'doc_name': 'hampi_gujarati',
-            'doc_id': 'hampi_gujarati_doc_id', 
+            'doc_id': 'hampi_gujarati_doc_id',
             'filename': 'hampi_gujarati.pdf',
             'language': 'gu',
             'metadata': {'language': 'gu'},
-            'bookmarks': {1: "પરિચય", 2: "મુખ્ય વિષય", 3: "સમાપન", 4: "પ્રકરણ એક", 5: "પ્રકરણ બે"}
+            'bookmarks': {1: "પરિચય", 2: "મુખ્ય વિષય", 3: "સમાપન",
+                          4: "પ્રકરણ એક", 5: "પ્રકરણ બે", 6: "પ્રકરણ ત્રણ"}
         }
     ]
-    
+
     # Setup document paths and expected counts
     for doc_config in document_configs:
         doc_name = doc_config['doc_name']
         language = doc_config['language']
-        
+
         # Setup paths
         ocr_dir, pages_list = setup_document_paths(temp_dir, doc_name)
         output_dir = os.path.join(temp_dir, "text", doc_name)
         os.makedirs(output_dir, exist_ok=True)
-        
+
         # Calculate expected count
         expected_count = get_expected_paragraph_count(ocr_dir, pages_list, language, indexing_module)
-        
+
         # Add to config
         doc_config.update({
             'ocr_dir': ocr_dir,
             'pages_list': pages_list,
-            'output_dir': output_dir, 
+            'output_dir': output_dir,
             'expected_count': expected_count
         })
-        
+
         log_handle.info(f"{doc_name}: {len(pages_list)} pages, expected {expected_count} paragraphs")
         log_handle.info(f"{doc_name} bookmarks: {doc_config['bookmarks']}")
-    
+
     # Index documents with bookmarks
     log_handle.info("=== INDEXING WITH BOOKMARKS ===")
     for doc_config in document_configs:
         log_handle.info(f"Indexing {doc_config['doc_name']} with bookmarks")
-        
+
         indexing_module.index_document(
             doc_config['doc_id'], doc_config['filename'], doc_config['ocr_dir'],
             doc_config['output_dir'], doc_config['pages_list'], doc_config['metadata'],
             scan_config, doc_config['bookmarks'], reindex_metadata_only=False, dry_run=False)
-    
+
     # Refresh index to make documents searchable
     opensearch_client.indices.refresh(index=indexing_module._index_name)
-    
+
     log_handle.info("=== BOOKMARK VALIDATION ===")
-    
+
     # Validate bookmark indexing for each document
     for doc_config in document_configs:
         doc_id = doc_config['doc_id']
@@ -481,7 +483,7 @@ def test_index_documents_with_bookmarks_validation(setup, indexing_module):
         bookmarks = doc_config['bookmarks']
         expected_count = doc_config['expected_count']
         language = doc_config['language']
-        
+
         # Get all documents for this document ID
         search_body = {
             "size": 1000,
@@ -489,29 +491,29 @@ def test_index_documents_with_bookmarks_validation(setup, indexing_module):
                 "term": {"document_id": doc_id}
             }
         }
-        
+
         response = opensearch_client.search(index=indexing_module._index_name, body=search_body)
         docs = response['hits']['hits']
-        
+
         log_handle.info(f"{doc_name}: Found {len(docs)} indexed documents")
         assert len(docs) == expected_count, f"{doc_name} document count mismatch: expected {expected_count}, got {len(docs)}"
-        
+
         # Validate each document has correct bookmark
         bookmark_counts = {}
         for doc in docs:
             source = doc['_source']
             page_number = source['page_number']
-            bookmark = source.get('bookmarks', '')
-            
+            bookmark = source.get('bookmarks', None)
+
             # Verify bookmark matches expected for this page
-            expected_bookmark = bookmarks.get(page_number, '')
+            expected_bookmark = bookmarks.get(page_number, None)
             assert bookmark == expected_bookmark, \
                 f"{doc_name} page {page_number}: expected bookmark '{expected_bookmark}', got '{bookmark}'"
-            
+
             # Count bookmarks
             if bookmark:
                 bookmark_counts[bookmark] = bookmark_counts.get(bookmark, 0) + 1
-            
+
             # Verify language-specific content exists
             if language == 'hi':
                 assert 'text_content_hindi' in source, f"{doc_name} missing Hindi content"
@@ -519,12 +521,12 @@ def test_index_documents_with_bookmarks_validation(setup, indexing_module):
             else:
                 assert 'text_content_gujarati' in source, f"{doc_name} missing Gujarati content"
                 assert source['text_content_gujarati'].strip() != "", f"{doc_name} empty Gujarati content"
-        
+
         log_handle.info(f"{doc_name} bookmark distribution: {bookmark_counts}")
-    
+
     # Test bookmark searchability
     log_handle.info("=== BOOKMARK SEARCH VALIDATION ===")
-    
+
     # Test specific bookmark searches
     test_searches = [
         ("प्रस्तावना", "jaipur_hindi", "Hindi"),
@@ -532,7 +534,7 @@ def test_index_documents_with_bookmarks_validation(setup, indexing_module):
         ("निष्कर्ष", "jaipur_hindi", "Hindi"),
         ("સમાપન", "hampi_gujarati", "Gujarati")
     ]
-    
+
     for bookmark_text, expected_doc, language in test_searches:
         # Search for documents with this bookmark
         search_body = {
@@ -541,12 +543,12 @@ def test_index_documents_with_bookmarks_validation(setup, indexing_module):
                 "match": {"bookmarks": bookmark_text}
             }
         }
-        
+
         response = opensearch_client.search(index=indexing_module._index_name, body=search_body)
         matching_docs = response['hits']['hits']
-        
+
         log_handle.info(f"Bookmark search '{bookmark_text}': {len(matching_docs)} documents found")
-        
+
         # Verify all matching documents belong to expected document
         for doc in matching_docs:
             source = doc['_source']
@@ -555,7 +557,7 @@ def test_index_documents_with_bookmarks_validation(setup, indexing_module):
                 f"Bookmark '{bookmark_text}' found in unexpected document: {doc_filename}"
             assert source['bookmarks'] == bookmark_text, \
                 f"Document bookmark mismatch: expected '{bookmark_text}', got '{source['bookmarks']}'"
-        
+
         # Verify no documents found for opposite language
         opposite_language_docs = []
         for doc in matching_docs:
@@ -564,18 +566,18 @@ def test_index_documents_with_bookmarks_validation(setup, indexing_module):
                 opposite_language_docs.append(doc)
             elif language == "Gujarati" and 'text_content_hindi' in source and source['text_content_hindi'].strip():
                 opposite_language_docs.append(doc)
-        
+
         assert len(opposite_language_docs) == 0, \
             f"Bookmark '{bookmark_text}' incorrectly found in {len(opposite_language_docs)} opposite language documents"
-    
+
     # Test wildcard bookmark searches
     log_handle.info("=== WILDCARD BOOKMARK SEARCH ===")
-    
+
     wildcard_searches = [
         ("अध्याय*", "jaipur_hindi", 2),  # Should match "अध्याय एक" and "अध्याय दो"
         ("પ્રકરણ*", "hampi_gujarati", 2)   # Should match "પ્રકરણ એક" and "પ્રકરણ બે"
     ]
-    
+
     for wildcard_pattern, expected_doc, expected_min_count in wildcard_searches:
         search_body = {
             "size": 1000,
@@ -583,39 +585,39 @@ def test_index_documents_with_bookmarks_validation(setup, indexing_module):
                 "wildcard": {"bookmarks": wildcard_pattern}
             }
         }
-        
+
         response = opensearch_client.search(index=indexing_module._index_name, body=search_body)
         matching_docs = response['hits']['hits']
-        
+
         log_handle.info(f"Wildcard search '{wildcard_pattern}': {len(matching_docs)} documents found")
         assert len(matching_docs) >= expected_min_count, \
             f"Wildcard search '{wildcard_pattern}' expected at least {expected_min_count} docs, got {len(matching_docs)}"
-        
+
         # Verify all results belong to expected document
         for doc in matching_docs:
             source = doc['_source']
-            doc_filename = source['original_filename'] 
+            doc_filename = source['original_filename']
             assert expected_doc in doc_filename, \
                 f"Wildcard '{wildcard_pattern}' found in unexpected document: {doc_filename}"
-    
+
     # Final comprehensive validation
     log_handle.info("=== FINAL BOOKMARK VALIDATION ===")
-    
+
     all_docs = get_documents(config, "match_all")
     total_docs_with_bookmarks = 0
     bookmark_distribution = {}
-    
+
     for doc in all_docs:
         source = doc['_source']
-        bookmark = source.get('bookmarks', '')
+        bookmark = source.get('bookmarks', None)
         if bookmark:
             total_docs_with_bookmarks += 1
             bookmark_distribution[bookmark] = bookmark_distribution.get(bookmark, 0) + 1
-    
+
     expected_total = sum(d['expected_count'] for d in document_configs)
     assert total_docs_with_bookmarks == expected_total, \
         f"Total documents with bookmarks mismatch: expected {expected_total}, got {total_docs_with_bookmarks}"
-    
+
     log_handle.info(f"✅ Bookmark validation passed!")
     log_handle.info(f"Total documents with bookmarks: {total_docs_with_bookmarks}")
     log_handle.info(f"Bookmark distribution: {bookmark_distribution}")

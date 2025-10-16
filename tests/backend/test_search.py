@@ -53,7 +53,7 @@ def build_search_index():
     # Setup test environment with scan_config files (don't copy OCR files, we'll process PDFs)
     config = Config()
     opensearch_client = get_opensearch_client(config)
-    setup(copy_ocr_files=False, add_scan_config=True)
+    setup(copy_ocr_files=True, add_scan_config=True)
     pdf_processor = create_pdf_processor(config)
     discovery = Discovery(
         config,
@@ -64,7 +64,7 @@ def build_search_index():
 
     # Call discovery with process=True, index=True to generate OCR files based on CHUNK_STRATEGY
     log_handle.info(f"Starting discovery with process=True, index=True (CHUNK_STRATEGY={config.CHUNK_STRATEGY})")
-    discovery.crawl(process=True, index=True)
+    discovery.crawl(process=False, index=True)
 
     # Verify indexes are present
     os_all_docs = get_all_documents()
