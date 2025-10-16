@@ -9,8 +9,9 @@ from opensearchpy import OpenSearch, helpers
 from backend.common.embedding_models import get_embedding_model_factory
 from backend.common.opensearch import delete_documents_by_filename, update_metadata_index
 from backend.config import Config
-from backend.crawler.paragraph_generator.gujarati import GujaratiParagraphGenerator
-from backend.crawler.paragraph_generator.hindi import HindiParagraphGenerator
+from backend.crawler.pdf_factory import create_pdf_processor
+from backend.crawler.paragraph_generator.factory import create_paragraph_generator
+from backend.crawler.paragraph_generator.language_meta import get_language_meta
 
 # Setup logging for this module
 log_handle = logging.getLogger(__name__)
@@ -35,10 +36,8 @@ class IndexGenerator:
             "gu": "text_content_gujarati"
         }
 
-        self._paragraph_generators = {
-            "hi": HindiParagraphGenerator(self._config),
-            "gu": GujaratiParagraphGenerator(self._config)
-        }
+        # Create PDF processor based on CHUNK_STRATEGY
+        self._pdf_processor = create_pdf_processor(config)
 
 
     def index_document(
@@ -49,19 +48,18 @@ class IndexGenerator:
         log_handle.info(
             f"Indexing document: {document_id}, reindex_metadata_only: {reindex_metadata_only}, "
             f"Dry Run: {dry_run}")
-        paragraphs = []
-        for page_num in pages_list:
-            ocr_file = f"{ocr_dir}/page_{page_num:04d}.txt"
-            with open(ocr_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-                page_paragraphs = content.split("\n----\n") if content.strip() else []
-                paragraphs.append((page_num, page_paragraphs))
+
+        # Read OCR data using appropriate processor (text files or JSON files)
+        raw_data = self._pdf_processor.read_paragraphs(ocr_dir, pages_list)
 
         language = metadata.get("language", "hi")
-        paragraph_gen = self._paragraph_generators[language]
-        processed_paras = paragraph_gen.generate_paragraphs(
-            paragraphs, scan_config
-        )
+        language_meta = get_language_meta(language, scan_config)
+
+        # Create appropriate paragraph generator based on CHUNK_STRATEGY
+        paragraph_gen = create_paragraph_generator(self._config, language_meta)
+
+        # Generate paragraphs from raw data
+        processed_paras = paragraph_gen.generate_paragraphs(raw_data, scan_config)
 
         if os.path.exists(output_text_dir):
             shutil.rmtree(output_text_dir)

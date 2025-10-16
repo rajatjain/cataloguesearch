@@ -11,6 +11,7 @@ import fitz
 
 from backend.crawler.pdf_processor import PDFProcessor
 from backend.utils import json_dumps
+from backend.common.scan_config import get_scan_config
 from backend.config import Config
 from backend.crawler.index_generator import IndexGenerator
 from backend.crawler.index_state import IndexState
@@ -26,6 +27,7 @@ class SingleFileProcessor:
                  index_state: IndexState,
                  pdf_processor: PDFProcessor,
                  scan_time: str):
+        self._config = config
         self._file_path = os.path.abspath(file_path)
         self._base_pdf_folder = config.BASE_PDF_PATH
         self._indexing_module = indexing_mod
@@ -34,6 +36,15 @@ class SingleFileProcessor:
         self._output_ocr_base_dir = config.BASE_OCR_PATH
         self._pdf_processor = pdf_processor
         self._scan_time = scan_time
+
+    def _get_ocr_file_extension(self) -> str:
+        """
+        Returns the file extension for OCR files based on CHUNK_STRATEGY.
+
+        Returns:
+            '.json' for advanced strategy, '.txt' otherwise
+        """
+        return '.json' if self._config.CHUNK_STRATEGY == 'advanced' else '.txt'
 
     def _get_metadata(self, scan_config: dict = None) -> dict:
         """
@@ -53,84 +64,7 @@ class SingleFileProcessor:
         Loads all the scan_config for this file. This config will be passed on to
         PDFProcessor to extract relevant text, ignore headers/footers etc.
         """
-        try:
-            with fitz.open(self._file_path) as doc:
-                num_pages = doc.page_count
-        except Exception as e:
-            log_handle.error(f"Could not open PDF {self._file_path} to get page count: {e}")
-            num_pages = 0
-
-        # Collect all folders from base to PDF's folder
-        folders = []
-        current = os.path.dirname(self._file_path)
-        while True:
-            folders = [current] + folders
-            log_handle.debug(f"Current folder: {current}, Base folder: {self._base_pdf_folder}")
-            if os.path.samefile(current, self._base_pdf_folder):
-                break
-            parent = os.path.dirname(current)
-            current = parent
-
-        # Start with baseline configuration.
-        scan_meta = {
-            "header_prefix": [],
-            "header_regex": [],
-            "page_list": [],
-            "typo_list": [],
-            "crop": {}
-        }
-
-        # Merge scan_config.json from each folder, starting from base directory
-        scan_config_data = {}
-        for folder in folders:
-            scan_config_path = os.path.join(folder, "scan_config.json")
-            if os.path.exists(scan_config_path):
-                log_handle.info(f"found scan_config_path: {scan_config_path}")
-                try:
-                    with open(scan_config_path, "r", encoding="utf-8") as f:
-                        scan_config_data = json.load(f)
-
-                    # Apply default settings from this config file
-                    default_config = scan_config_data.get("default", {})
-                    scan_meta["header_prefix"].extend(default_config.get("header_prefix", []))
-                    scan_meta["header_regex"].extend(default_config.get("header_regex", []))
-                    scan_meta["page_list"].extend(default_config.get("page_list", []))
-                    scan_meta["typo_list"].extend(default_config.get("typo_list", []))
-
-                    # Update crop settings from default config
-                    if "crop" in default_config:
-                        scan_meta["crop"].update(default_config["crop"])
-
-                    # Update PSM setting from default config (if present)
-                    if "psm" in default_config:
-                        scan_meta["psm"] = default_config["psm"]
-
-                except (json.JSONDecodeError, IOError) as e:
-                    log_handle.warning(f"Could not read or parse {scan_config_path}: {e}")
-
-        # Layer 2: Apply file-specific settings, which override defaults.
-        filename = os.path.splitext(os.path.basename(self._file_path))[0]
-        file_config = scan_config_data.get(filename, {})
-        if file_config:
-            scan_meta["header_prefix"].extend(file_config.get("header_prefix", []))
-            scan_meta["header_regex"].extend(file_config.get("header_regex", []))
-            scan_meta["file_url"] = file_config.get("file_url", "")
-            if file_config.get("start_page") and file_config.get("end_page"):
-                # Page numbers are typically file-specific.
-                scan_meta["start_page"] = file_config.get("start_page", 1)
-                scan_meta["end_page"] = file_config.get("end_page", num_pages)
-            if file_config.get("page_list"):
-                scan_meta["page_list"].extend(file_config.get("page_list"))
-
-            # Update crop settings from file-specific config (overrides defaults)
-            if "crop" in file_config:
-                scan_meta["crop"].update(file_config["crop"])
-
-            # Update PSM setting from file-specific config (overrides default)
-            if "psm" in file_config:
-                scan_meta["psm"] = file_config["psm"]
-
-        return scan_meta
+        return get_scan_config(self._file_path, self._base_pdf_folder)
 
     def _get_config_hash(self, config_data: dict) -> str:
         """Generates a SHA256 hash for a config dictionary."""
@@ -228,9 +162,10 @@ class SingleFileProcessor:
         pages_list = self._get_page_list(scan_config)
 
         # Check if all required OCR pages exist
+        ocr_extension = self._get_ocr_file_extension()
         missing_pages = []
         for page_num in pages_list:
-            ocr_file = f"{output_ocr_dir}/page_{page_num:04d}.txt"
+            ocr_file = f"{output_ocr_dir}/page_{page_num:04d}{ocr_extension}"
             if not os.path.exists(ocr_file):
                 missing_pages.append(page_num)
 

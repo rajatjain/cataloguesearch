@@ -24,7 +24,7 @@ from backend.config import Config
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
 from backend.crawler.index_generator import IndexGenerator
-from backend.crawler.pdf_processor import PDFProcessor
+from backend.crawler.pdf_factory import create_pdf_processor
 from utils.logger import setup_logging, VERBOSE_LEVEL_NUM
 
 PIDFILE = '/tmp/discovery-daemon.pid'
@@ -126,7 +126,7 @@ class DiscoveryDaemon:
 
         # Initialize discovery components
         self.index_state = IndexState(config.SQLITE_DB_PATH)
-        self.pdf_processor = PDFProcessor(config)
+        self.pdf_processor = create_pdf_processor(config)
         self.indexing_module = IndexGenerator(config)
         self.discovery = Discovery(
             config, self.indexing_module, self.pdf_processor, self.index_state)
@@ -187,7 +187,7 @@ def run_discovery_once(config: Config, crawl=False, index=False, dry_run=False):
 
         # Initialize components
         index_state = IndexState(config.SQLITE_DB_PATH)
-        pdf_processor = PDFProcessor(config)
+        pdf_processor = create_pdf_processor(config)
         indexing_module = IndexGenerator(config, get_opensearch_client(config))
         discovery = Discovery(config, indexing_module, pdf_processor, index_state)
 
@@ -234,7 +234,7 @@ def process_folder(config: Config, folder_path: str, dry_run=False):
 
     # Initialize components
     index_state = IndexState(config.SQLITE_DB_PATH)
-    pdf_processor = PDFProcessor(config)
+    pdf_processor = create_pdf_processor(config)
     indexing_module = IndexGenerator(config, get_opensearch_client(config))
     discovery = Discovery(config, indexing_module, pdf_processor, index_state)
 

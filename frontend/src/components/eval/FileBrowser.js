@@ -39,6 +39,11 @@ const FileBrowser = ({ isOpen, onClose, onFolderSelect, basePaths, baseDirectory
             const items = [];
             
             for await (const [name, handle] of dirHandle.entries()) {
+                // Skip hidden files/directories (starting with '.')
+                if (name.startsWith('.')) {
+                    continue;
+                }
+
                 if (handle.kind === 'directory') {
                     items.push({
                         name,

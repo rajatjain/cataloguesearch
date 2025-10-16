@@ -42,11 +42,11 @@ def setup(copy_ocr_files=False, add_scan_config=False):
     # Create directory structure for hindi and gujarati
     hindi_base = f"{pdf_dir}/hindi"
     gujarati_base = f"{pdf_dir}/gujarati"
-    
+
     # Create base language directories
     os.makedirs(hindi_base, exist_ok=True)
     os.makedirs(gujarati_base, exist_ok=True)
-    
+
     # Create subdirectories for each language
     for lang_base in [hindi_base, gujarati_base]:
         os.makedirs(f"{lang_base}/cities/metro", exist_ok=True)
@@ -117,17 +117,17 @@ def setup(copy_ocr_files=False, add_scan_config=False):
     # Create config files for language base directories
     hindi_config = {"language": "hi", "category": "Pravachan"}
     gujarati_config = {"language": "gu", "category": "Pravachan"}
-    
+
     write_config_file(f"{hindi_base}/config.json", hindi_config)
     write_config_file(f"{gujarati_base}/config.json", gujarati_config)
-    
+
     # Create config files for category directories
     cities_config = {"Anuyog": "city"}
     spiritual_config = {"Anuyog": "spiritual"}
     history_config = {"Anuyog": "history"}
     metro_config = {"type": "metro"}
     non_metro_config = {"type": "non_metro"}
-    
+
     # Write config files for all category and type directories
     for lang_base in [hindi_base, gujarati_base]:
         write_config_file(f"{lang_base}/cities/config.json", cities_config)
@@ -147,7 +147,7 @@ def setup(copy_ocr_files=False, add_scan_config=False):
             log_handle.info(f"Relative path: {relpath}")
 
             src_folder = os.path.join(
-                TEST_BASE_DIR, "data", "ocr",
+                TEST_BASE_DIR, "data", "ocr", config.CHUNK_STRATEGY,
                 os.path.basename(relpath))
             dest_folder = os.path.join(
                 config.BASE_OCR_PATH,
@@ -155,43 +155,55 @@ def setup(copy_ocr_files=False, add_scan_config=False):
             )
             log_handle.info(f"Copying text ocr from {src_folder} to {dest_folder}")
             shutil.copytree(src_folder, dest_folder)
-    
+
     if add_scan_config:
         # Create scan_config.json files for each directory containing PDF files
         # Group PDFs by their directories
         pdf_directories = {}
-        
+
         for file_path, _ in doc_ids.values():
             directory = os.path.dirname(file_path)
             filename = os.path.basename(file_path)
             filename_without_ext = os.path.splitext(filename)[0]
-            
+
             if directory not in pdf_directories:
                 pdf_directories[directory] = []
             pdf_directories[directory].append((file_path, filename_without_ext))
-        
+
         # Create scan_config for each directory
         for directory, pdf_files in pdf_directories.items():
             scan_config = {}
-            
+
             for pdf_path, filename_without_ext in pdf_files:
                 try:
                     # Open PDF and get page count
                     doc = fitz.open(pdf_path)
                     total_pages = doc.page_count
                     doc.close()
-                    
+
                     # Add to scan_config
                     scan_config[filename_without_ext] = {
                         "start_page": 1,
-                        "end_page": total_pages
+                        "end_page": total_pages,
+                        "header_regex": [
+                            "^.{0,20}इतिहास एवं लेख$",
+                            "^.{0,15}पर.{0,5}निबंध$",
+                            "^निबंध.{0,15}$",
+                            "^નિબંધ.{0,15}$",
+                            "^.{0,15}ઉપર.{0,15}નિબંધ$",
+                            "^.{0,20}ઇતિહાસ.{0,8}લેખ$"
+                        ],
+                        "crop": {
+                            "top": 8,
+                            "bottom": 8
+                        }
                     }
                     log_handle.info(f"Added {filename_without_ext} to scan_config: pages 1-{total_pages}")
-                    
+
                 except Exception as e:
                     log_handle.error(f"Error processing PDF {pdf_path}: {e}")
                     continue
-            
+
             # Write scan_config.json to the directory
             if scan_config:
                 config_path = os.path.join(directory, "scan_config.json")

@@ -11,8 +11,6 @@ from PIL import Image
 from tqdm import tqdm
 
 from backend.config import Config
-from backend.crawler.paragraph_generator.hindi import HindiParagraphGenerator
-from backend.crawler.paragraph_generator.gujarati import GujaratiParagraphGenerator
 
 # Disable tokenizers parallelism to avoid fork conflicts
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -62,12 +60,12 @@ class PDFProcessor:
                         existing_files.add(page_num)
                     except ValueError:
                         continue
-            
+
             # If all required pages exist, return early
             if set(pages_list).issubset(existing_files):
                 log_handle.info(f"All required pages already processed in {output_ocr_dir}")
                 return True
-            
+
             # Otherwise, remove existing directory to reprocess
             shutil.rmtree(output_ocr_dir)
 
@@ -76,8 +74,20 @@ class PDFProcessor:
         paragraphs = self._generate_paragraphs(
             pdf_file, pages_list, scan_config, language)
 
-        # Write to the OCR directory.
-        # Save paragraphs to OCR directory with same format as text files
+        # Write to the OCR directory
+        self._write_output_to_file(output_ocr_dir, paragraphs)
+
+        log_handle.info(f"Generated OCR text files for {pdf_file} in dir {output_ocr_dir}")
+        return True
+
+    def _write_output_to_file(self, output_ocr_dir: str, paragraphs: list[tuple[int, list[str]]]):
+        """
+        Writes the extracted paragraphs to files in the output directory.
+
+        Args:
+            output_ocr_dir: Directory where output files should be written
+            paragraphs: List of tuples (page_num, list of paragraph strings)
+        """
         for page_num, page_paragraphs in paragraphs:
             fname = f"{output_ocr_dir}/page_{page_num:04d}.txt"
             content = "\n----\n".join(page_paragraphs)
@@ -87,9 +97,6 @@ class PDFProcessor:
             except IOError as e:
                 traceback.print_exc()
                 log_handle.error(f"Failed to write OCR file {fname}: {e}")
-
-        log_handle.info(f"Generated OCR text files for {pdf_file} in dir {output_ocr_dir}")
-        return True
 
 
     def _generate_paragraphs(
@@ -141,7 +148,7 @@ class PDFProcessor:
         extracted_data = []
         with ProcessPoolExecutor(max_workers=8) as executor:
             results = list(tqdm(
-                executor.map(PDFProcessor._process_single_page, tasks),
+                executor.map(self.__class__._process_single_page, tasks),
                 total=len(tasks), desc="Processing Pages"))
             extracted_data = results
 
@@ -205,6 +212,26 @@ class PDFProcessor:
             traceback.print_exc()
             return [], []
 
+    def read_paragraphs(self, ocr_dir: str, pages_list: list[int]) -> list[tuple[int, list[str]]]:
+        """
+        Reads OCR output files and returns paragraphs.
+
+        Args:
+            ocr_dir: Directory containing OCR output files
+            pages_list: List of page numbers to read
+
+        Returns:
+            List of tuples (page_num, list of paragraph strings)
+        """
+        paragraphs = []
+        for page_num in pages_list:
+            ocr_file = f"{ocr_dir}/page_{page_num:04d}.txt"
+            with open(ocr_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                page_paragraphs = content.split("\n----\n") if content.strip() else []
+                paragraphs.append((page_num, page_paragraphs))
+        return paragraphs
+
     def fetch_bookmarks(self, pdf_file: str) -> dict[int, str]:
         doc = fitz.open(pdf_file)
         toc = doc.get_toc(simple=True)  # Format: [level, title, page_number]
@@ -244,7 +271,7 @@ class PDFProcessor:
         # Backward compatible: support both 3-element and 4-element tuples
         if len(args) == 3:
             page_num, image, language_code = args
-            psm = 6  # Default PSM (current behavior)
+            psm = 3  # Default PSM (current behavior)
         else:
             page_num, image, language_code, psm = args
         try:

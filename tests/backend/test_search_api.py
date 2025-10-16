@@ -12,7 +12,7 @@ from backend.common.opensearch import get_opensearch_client
 from backend.crawler.discovery import Discovery
 from backend.crawler.index_state import IndexState
 from backend.crawler.index_generator import IndexGenerator
-from backend.crawler.pdf_processor import PDFProcessor
+from backend.crawler.pdf_factory import create_pdf_processor
 from backend.crawler.granth_index import GranthIndexer
 from backend.crawler.markdown_parser import MarkdownParser
 from backend.search.index_searcher import IndexSearcher
@@ -28,30 +28,30 @@ def run_api_server_in_thread(host, port, stop_event):
     import os
     from dotenv import load_dotenv
     from backend.config import Config
-    
+
     # Load .env file (same logic as in tests.backend.base.initialise)
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     load_dotenv(dotenv_path=f"{project_root}/.env", verbose=True)
-    
+
     # Set test environment variables
     test_base_dir = os.getenv("TEST_BASE_DIR")
     if not test_base_dir:
         raise ValueError("TEST_BASE_DIR not set in .env file")
-    
+
     # Set environment variables for the API server
     os.environ["LOGS_DIR"] = "logs"
     os.environ["CONFIG_PATH"] = f"{test_base_dir}/data/configs/test_config.yaml"
-    
+
     # Reset Config singleton to use the test config
     Config.reset()
-    
+
     # Import the FastAPI app
     from backend.api.search_api import app
-    
+
     # Create a custom server that can be stopped
     import uvicorn
     from uvicorn import Config as UvicornConfig
-    
+
     config = UvicornConfig(
         app=app,
         host=host,
@@ -60,13 +60,13 @@ def run_api_server_in_thread(host, port, stop_event):
         access_log=False
     )
     server = uvicorn.Server(config)
-    
+
     # Run server until stop event is set
     import asyncio
-    
+
     async def serve():
         await server.serve()
-    
+
     # Run the server
     try:
         asyncio.run(serve())
@@ -78,15 +78,15 @@ def run_api_server_in_thread(host, port, stop_event):
 def build_index(initialise):
     """
     Setup test data and build search index.
-    Copy OCR data to base_ocr_path and call discovery with process=False, index=True.
+    Process PDFs and index them to support both 'paragraph' and 'advanced' CHUNK_STRATEGY.
     """
-    # Setup test environment with scan_config files
+    # Setup test environment with scan_config files (don't copy OCR files, we'll process PDFs)
     setup(copy_ocr_files=True, add_scan_config=True)
     config = Config()
-    
+
     # Initialize OpenSearch client and ensure clean index state
     opensearch_client = get_opensearch_client(config)
-    
+
     # Explicitly delete indices to ensure clean state and proper mapping creation
     log_handle.info("Deleting existing indices to ensure clean state for vector search")
     indices_to_delete = [config.OPENSEARCH_INDEX_NAME, config.OPENSEARCH_METADATA_INDEX_NAME, config.OPENSEARCH_GRANTH_INDEX_NAME]
@@ -94,22 +94,22 @@ def build_index(initialise):
         if index_name and opensearch_client.indices.exists(index=index_name):
             opensearch_client.indices.delete(index=index_name)
             log_handle.info(f"Deleted existing index: {index_name}")
-    
+
     # Create indices with proper mapping (including knn_vector for embeddings)
     from backend.common.opensearch import create_indices_if_not_exists
     create_indices_if_not_exists(config, opensearch_client)
     log_handle.info("Created indices with proper mapping for vector search")
-    
-    pdf_processor = PDFProcessor(config)  # We won't actually use this since process=False
+
+    pdf_processor = create_pdf_processor(config)
     discovery = Discovery(
-        config, 
+        config,
         IndexGenerator(config, opensearch_client),
-        pdf_processor, 
+        pdf_processor,
         IndexState(config.SQLITE_DB_PATH)
     )
 
-    # Call discovery with process=False, index=True
-    log_handle.info("Starting discovery with process=False, index=True")
+    # Call discovery with process=True, index=True to generate OCR files based on CHUNK_STRATEGY
+    log_handle.info(f"Starting discovery with process=True, index=True (CHUNK_STRATEGY={config.CHUNK_STRATEGY})")
     discovery.crawl(process=False, index=True)
 
     # Verify indexes are present
@@ -154,28 +154,28 @@ def build_index(initialise):
 
 class APIServerManager:
     """Manager class to handle API server startup and shutdown."""
-    
+
     def __init__(self, host="127.0.0.1", port=8001):
         self.host = host
         self.port = port
         self.server_thread = None
         self.stop_event = None
-        
+
     def start_server_in_thread(self):
         """Start the API server in a separate thread."""
         self.stop_event = threading.Event()
-        
+
         # Start server in a separate thread
         self.server_thread = threading.Thread(
-            target=run_api_server_in_thread, 
+            target=run_api_server_in_thread,
             args=(self.host, self.port, self.stop_event),
             daemon=True
         )
         self.server_thread.start()
-        
+
         # Wait for server to start up
         self._wait_for_server_startup()
-        
+
     def _wait_for_server_startup(self, timeout=30):
         """Wait for the server to start up by checking if it's responding."""
         start_time = time.time()
@@ -187,22 +187,22 @@ class APIServerManager:
                     return True
             except requests.exceptions.RequestException:
                 pass  # Server not ready yet
-            
+
             time.sleep(0.5)
-        
+
         raise TimeoutError(f"API server failed to start within {timeout} seconds")
-        
+
     def stop_server(self):
         """Stop the API server."""
         if self.stop_event:
             self.stop_event.set()
-        
+
         if self.server_thread and self.server_thread.is_alive():
             log_handle.info("Stopping API server thread...")
             self.server_thread.join(timeout=5)
             if self.server_thread.is_alive():
                 log_handle.warning("API server thread did not stop gracefully")
-        
+
         self.server_thread = None
         self.stop_event = None
 
@@ -211,7 +211,7 @@ class APIServerManager:
 def api_server():
     """Fixture to start and stop the API server for tests."""
     server_manager = APIServerManager(host="127.0.0.1", port=8001)  # Use different port to avoid conflicts
-    
+
     try:
         log_handle.info("Starting API server for tests...")
         server_manager.start_server_in_thread()
@@ -378,7 +378,7 @@ def test_api_exact_phrase_search(api_server):
             "expected_file": "thanjavur_hindi.pdf"
         },
         {
-            "query": "વિધાધર ભટ્ટાયાર્યની",
+            "query": "એતિહાસિક દીવાલોની",
             "language": "gu",
             "expected_file": "jaipur_gujarati.pdf"
         }
@@ -629,7 +629,7 @@ def test_is_lexical_query(api_server):
         },
         "enable_reranking": True
     }
-    
+
     response_2 = requests.post(
         f"http://{api_server.host}:{api_server.port}/api/search",
         json=search_payload_2
@@ -638,10 +638,10 @@ def test_is_lexical_query(api_server):
 
     assert response_2.status_code == 200
     log_handle.info(f"Response for 'इंदौर का इतिहास?': {json_dumps(data_2, truncate_fields=['vector_embedding'])}")
-    
+
     # Validate response structure for vector search
     validate_result_schema(data_2, False)
-    
+
     # Should have vector results (can be from any file)
     assert data_2["pravachan_results"]["total_hits"] > 0, "Expected vector results for 'इंदौर का इतिहास?'"
 
@@ -705,22 +705,22 @@ def test_is_lexical_query(api_server):
         },
         "enable_reranking": True
     }
-    
+
     response_4 = requests.post(
         f"http://{api_server.host}:{api_server.port}/api/search",
         json=search_payload_4
     )
-    
+
     assert response_4.status_code == 200
     data_4 = response_4.json()
     log_handle.info(f"Response for 'સોનગઢનો ઇતિહાસ?': {json_dumps(data_4, truncate_fields=['vector_embedding'])}")
-    
+
     # Validate response structure for vector search
     validate_result_schema(data_4, False)
-    
+
     # Should have vector results
     assert data_4["pravachan_results"]["total_hits"] > 0, "Expected vector results for 'સોનગઢનો ઇતિહાસ?'"
-    
+
     # Test case 5: "हंपी के बारे में कुछ बताइए" - should trigger vector search
     # (has question phrase "कुछ बताइए", so is_lexical_query should return False)
     search_payload_5 = {
@@ -925,21 +925,21 @@ def test_get_context(api_server):
         # Step 2: Get document_id from first result
         document_id = first_result.get("document_id") or first_result.get("id") or first_result.get("_id")
         assert document_id is not None, "Expected document_id in search result"
-        
+
         # Step 3: Issue get_context API call
         context_response = requests.get(
             f"http://{api_server.host}:{api_server.port}/api/context/{document_id}?language={test_case['language']}"
         )
-        
+
         assert context_response.status_code == 200, f"Context API should return 200 for document_id: {document_id}"
         context_data = context_response.json()
         log_handle.info(f"Context response for document_id '{document_id}': {json_dumps(context_data, truncate_fields=['vector_embedding'])}")
-        
+
         # Step 4: Validate response structure - should have previous, current, next keys
         expected_keys = {"previous", "current", "next"}
         actual_keys = set(context_data.keys())
         assert expected_keys.issubset(actual_keys), f"Expected keys {expected_keys} in context response, got {actual_keys}"
-        
+
         # Step 5: Validate consecutive paragraph_id values
         paragraphs = []
         for key in ["previous", "current", "next"]:
@@ -947,19 +947,19 @@ def test_get_context(api_server):
                 paragraph_id = context_data[key].get("paragraph_id")
                 if paragraph_id is not None:
                     paragraphs.append((key, paragraph_id))
-        
+
         # Sort by paragraph_id to check if they are consecutive
         paragraphs.sort(key=lambda x: x[1])
         assert len(paragraphs) > 2
-        
+
         # Check if paragraph_ids are consecutive
         for j in range(1, len(paragraphs)):
             current_id = paragraphs[j][1]
             previous_id = paragraphs[j-1][1]
             assert current_id == previous_id + 1, f"Expected consecutive paragraph_ids, got {previous_id} and {current_id}"
-        
+
         log_handle.info(f"✓ {test_case['language']} context test passed - document_id: {document_id}, paragraph_ids: {[p[1] for p in paragraphs]}")
-    
+
     log_handle.info("✓ All context tests passed")
 
 
@@ -1007,7 +1007,7 @@ def test_get_similar_documents(api_server):
         assert search_response.status_code == 200
         search_data = search_response.json()
         log_handle.info(f"Search response for '{test_case['query']}': {json_dumps(search_data, truncate_fields=['vector_embedding'])}")
-        
+
         # Validate we have enough search results to get the second one
         pravachan_results = search_data.get("pravachan_results", {})
         results = pravachan_results.get("results", [])
@@ -1018,34 +1018,34 @@ def test_get_similar_documents(api_server):
         one_result = results[1]
 
         assert one_result is not None, "Could not find search result"
-        
+
         document_id = one_result.get("document_id")
         assert document_id is not None, "Expected document_id in second search result"
-        
+
         log_handle.info(f"Using document_id '{document_id}' from second search result")
-        
+
         # Step 3: Issue get similar documents API call
         similar_response = requests.get(
             f"http://{api_server.host}:{api_server.port}/api/similar-documents/{document_id}?language={test_case['language']}"
         )
-        
+
         assert similar_response.status_code == 200, f"Similar documents API should return 200 for document_id: {document_id}"
         similar_data = similar_response.json()
         log_handle.info(f"Similar documents response for document_id '{document_id}': {json_dumps(similar_data, truncate_fields=['vector_embedding'])}")
-        
+
         # Step 4: Validate response has non-zero results
         similar_results_count = similar_data.get("total_results", 0)
         assert similar_results_count > 0, f"Expected non-zero similar documents for document_id: {document_id}, got {similar_results_count}"
-        
+
         # Step 5: Validate response structure
         # Validate each similar document has required fields
         for doc in similar_data["results"]:
             assert "document_id" in doc or "_id" in doc or "document_id" in doc, "Expected id field in similar document"
             assert "filename" in doc, "Expected filename field in similar document"
             assert "content_snippet" in doc
-        
+
         log_handle.info(f"✓ {test_case['language']} similar documents test passed - document_id: {document_id}, found {similar_results_count} similar documents")
-    
+
     log_handle.info("✓ All similar documents tests passed")
 
 
@@ -1061,19 +1061,19 @@ def test_cache_invalidation(api_server):
     assert response1.status_code == 200
     metadata_before = response1.json()
     log_handle.info(f"before: {json_dumps(metadata_before)}")
-    
+
     # Invalidate cache
     invalidate_response = requests.post(f"http://{api_server.host}:{api_server.port}/api/cache/invalidate")
     assert invalidate_response.status_code == 200
     assert invalidate_response.json()["status"] == "success"
     assert "Cache invalidated successfully" in invalidate_response.json()["message"]
-    
+
     # Second call after cache invalidation
     response2 = requests.get(f"http://{api_server.host}:{api_server.port}/api/metadata")
     assert response2.status_code == 200
     metadata_after = response2.json()
     log_handle.info(f"after: {json_dumps(metadata_after)}")
-    
+
     # Data should be the same (no change in underlying OpenSearch data)
     assert metadata_before == metadata_after
     assert "Pravachan" in metadata_after
