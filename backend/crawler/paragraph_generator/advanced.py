@@ -156,8 +156,8 @@ class ParagraphGenerator:
     def _finalize_paragraph(self):
         if not self.current_paragraph_lines:
             return
-        # Use newlines for verses to preserve line structure, spaces for prose
-        separator = '\n' if self.state == State.VERSE_BLOCK else ' '
+        # Use newlines for verses and Q&A to preserve line structure, spaces for prose
+        separator = '\n' if self.state in (State.VERSE_BLOCK, State.QA_BLOCK) else ' '
         full_text = separator.join(
             line.text.strip() for line in self.current_paragraph_lines).strip()
         if full_text:
@@ -207,15 +207,18 @@ class ParagraphGenerator:
             self._finalize_paragraph()
             self._reset_current_paragraph()
             return False
-        if 'IS_CENTERED' in line.tags:
-            self._finalize_paragraph()
-            self._reset_current_paragraph(line)
-            self.state = State.VERSE_BLOCK
-            return True
+
+        # Check IS_QA before IS_CENTERED because Q&A lines take priority
+        # (short Q&A lines can be both centered and QA, but should be treated as QA)
         if 'IS_QA' in line.tags:
             self._finalize_paragraph()
             self._reset_current_paragraph(line)
             self.state = State.QA_BLOCK
+            return True
+        if 'IS_CENTERED' in line.tags:
+            self._finalize_paragraph()
+            self._reset_current_paragraph(line)
+            self.state = State.VERSE_BLOCK
             return True
 
         # IS_INDENTED should start a new paragraph
@@ -271,13 +274,8 @@ class ParagraphGenerator:
             self._reset_current_paragraph(line)
             self.state = State.STANDARD_PROSE
             return True
-        if 'IS_QA' in line.tags:
-            if self.current_paragraph_speaker is None:
-                self.current_paragraph_speaker = line.speaker
-            elif self.current_paragraph_speaker != line.speaker:
-                self._finalize_paragraph()
-                self._reset_current_paragraph(line)
-                self.current_paragraph_speaker = line.speaker
+
+        # Add the line to current paragraph (no speaker-based splitting)
         if not self.current_paragraph_lines:
             self._reset_current_paragraph(line)
         self.current_paragraph_lines.append(line)

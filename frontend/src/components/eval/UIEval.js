@@ -12,6 +12,7 @@ const UIEval = () => {
     const [showFileBrowser, setShowFileBrowser] = useState(false);
     const [selectedFolder, setSelectedFolder] = useState(null);
     const [baseDirectoryHandles, setBaseDirectoryHandles] = useState(null);
+    const [pdfParentDirPath, setPdfParentDirPath] = useState('');
 
     // Debug activeTab changes
     useEffect(() => {
@@ -177,13 +178,14 @@ const UIEval = () => {
         <div className="min-h-screen bg-slate-50">
             {/* File Browser Modal */}
             {showFileBrowser && (
-                <FileBrowser 
+                <FileBrowser
                     isOpen={showFileBrowser}
                     onClose={handleCloseFileBrowser}
                     onFolderSelect={handleFolderSelect}
                     basePaths={basePaths}
                     baseDirectoryHandles={baseDirectoryHandles}
                     currentTab={activeTab}
+                    startPath={pdfParentDirPath}
                 />
             )}
             
@@ -392,12 +394,16 @@ const UIEval = () => {
                         )}
 
                         {activeTab === 'paragraph-eval' && basePaths && (
-                            <ParagraphGenEval 
+                            <ParagraphGenEval
                                 showFileBrowser={showFileBrowser}
                                 onCloseFileBrowser={handleCloseFileBrowser}
                                 basePaths={basePaths}
                                 selectedFolder={selectedFolder}
                                 baseDirectoryHandles={baseDirectoryHandles}
+                                onPdfParentDirChange={(dirPath) => {
+                                    console.log('PDF parent directory changed to:', dirPath);
+                                    setPdfParentDirPath(dirPath);
+                                }}
                             />
                         )}
 

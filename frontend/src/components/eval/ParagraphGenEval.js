@@ -14,7 +14,7 @@ import {
     readFileContent
 } from '../../utils/directoryHandlers';
 
-const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, basePaths: parentBasePaths, selectedFolder: propSelectedFolder, baseDirectoryHandles: parentBaseDirectoryHandles }) => {
+const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, basePaths: parentBasePaths, selectedFolder: propSelectedFolder, baseDirectoryHandles: parentBaseDirectoryHandles, onPdfParentDirChange }) => {
     const [selectedFolder, setSelectedFolder] = useState(propSelectedFolder || null);
     const [sourceHandle, setSourceHandle] = useState(null);
     const [targetHandle, setTargetHandle] = useState(null);
@@ -37,6 +37,13 @@ const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, 
     const [bookmarks, setBookmarks] = useState([]);
     const [showBookmarksModal, setShowBookmarksModal] = useState(false);
     const [pdfDoc, setPdfDoc] = useState(null);
+
+    // PDF page rendering
+    const [pdfPageDataUrl, setPdfPageDataUrl] = useState(null);
+    const canvasRef = useRef(null);
+
+    // Store PDF's parent directory handle for better UX when browsing
+    const [pdfParentDirHandle, setPdfParentDirHandle] = useState(null);
     
     // PDF.js loading
     useEffect(() => {
@@ -226,23 +233,46 @@ const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, 
     // Fallback function for manual directory selection (when permissions not granted)
     const promptForDirectories = async (selection) => {
         try {
+            // First, try to get the PDF parent directory handle for better UX
+            let startDirHandle = null;
+            if (selection.selectedPDFFile && baseDirectoryHandles.pdf) {
+                try {
+                    const pathParts = selection.relativePath.split('/');
+                    const pdfDirectory = pathParts.slice(0, -1).join('/');
+                    const pdfDirHandle = await navigateToPath(
+                        baseDirectoryHandles.pdf,
+                        pdfDirectory
+                    );
+                    if (pdfDirHandle) {
+                        startDirHandle = pdfDirHandle;
+                        setPdfParentDirHandle(pdfDirHandle);
+                        console.log('Using PDF parent directory as starting point:', pdfDirectory);
+                    }
+                } catch (err) {
+                    console.log('Could not navigate to PDF parent directory:', err);
+                }
+            }
+
             const message = `Selected: ${selection.selectedPDFFile || selection.selectedFolderName}
-            
+
 Calculated paths:
 • Source: ${selection.sourcePath}
 • Target: ${selection.targetPath}
 
 Please select the SOURCE directory (${selection.sourcePath})`;
-            
+
             if (window.confirm(message)) {
-                const sourceHandle = await window.showDirectoryPicker();
+                // Use PDF parent directory as starting point if available
+                const pickerOptions = startDirHandle ? { startIn: startDirHandle } : {};
+                const sourceHandle = await window.showDirectoryPicker(pickerOptions);
                 setSourceHandle(sourceHandle);
-                
+
                 const targetMessage = `Now select the TARGET directory (${selection.targetPath})`;
                 if (window.confirm(targetMessage)) {
-                    const targetHandle = await window.showDirectoryPicker();
+                    // Use PDF parent directory as starting point if available
+                    const targetHandle = await window.showDirectoryPicker(pickerOptions);
                     setTargetHandle(targetHandle);
-                    
+
                     checkAndStart(sourceHandle, targetHandle);
                 } else {
                     setSourceHandle(null);
@@ -286,16 +316,29 @@ Please select the SOURCE directory (${selection.sourcePath})`;
 
         setIsLoading(true);
         try {
-            const [sourceText, targetText] = await Promise.all([
-                readFileContent(sourceDir, fileName),
-                readFileContent(targetDir, fileName)
-            ]);
+            // Extract page number from filename (handle both .txt and .json extensions)
+            const pageNumber = parseInt(
+                fileName.replace('page_', '').replace(/\.(txt|json)$/, ''),
+                10
+            );
 
-            setSourceContent(sourceText);
+            // Target directory ALWAYS has .txt files
+            const targetFileName = `page_${String(pageNumber).padStart(4, '0')}.txt`;
+            const targetText = await readFileContent(targetDir, targetFileName);
             setTargetContent(targetText);
-            
+
+            // Render PDF page if pdfDoc is loaded
+            if (pdfDoc) {
+                setSourceContent(''); // Clear source content when showing PDF
+                await renderPDFPage(pageNumber);
+            } else {
+                // Fallback: still read source content if PDF is not loaded
+                setPdfPageDataUrl(null); // Clear PDF preview when showing source
+                const sourceText = await readFileContent(sourceDir, fileName);
+                setSourceContent(sourceText);
+            }
+
             // Update jump page number input
-            const pageNumber = parseInt(fileName.replace('page_', '').replace('.txt', ''), 10);
             setJumpPageNumber(pageNumber.toString());
         } catch (err) {
             setError(`Error displaying files: ${err.message}`);
@@ -318,14 +361,16 @@ Please select the SOURCE directory (${selection.sourcePath})`;
             return;
         }
 
-        const fileName = `page_${String(pageNum).padStart(4, '0')}.txt`;
-        const foundIndex = fileList.indexOf(fileName);
+        // Try both .txt and .json extensions
+        const pagePrefix = `page_${String(pageNum).padStart(4, '0')}`;
+        const fileName = fileList.find(f => f.startsWith(pagePrefix));
 
-        if (foundIndex !== -1) {
+        if (fileName) {
+            const foundIndex = fileList.indexOf(fileName);
             setCurrentIndex(foundIndex);
             displayFiles(fileName);
         } else {
-            setError(`Page ${pageNum} (${fileName}) not found.`);
+            setError(`Page ${pageNum} not found in the comparison files.`);
             setTimeout(() => setError(null), 3000);
         }
     };
@@ -366,7 +411,15 @@ Please select the SOURCE directory (${selection.sourcePath})`;
                 console.error('Could not navigate to PDF directory:', pdfDirectory);
                 return;
             }
-            
+
+            // Store the PDF parent directory handle for better UX when browsing
+            setPdfParentDirHandle(pdfDirHandle);
+
+            // Notify parent component of the PDF parent directory path
+            if (onPdfParentDirChange) {
+                onPdfParentDirChange(pdfDirectory);
+            }
+
             const pdfFileHandle = await pdfDirHandle.getFileHandle(selectedFolder.selectedPDFFile);
             const pdfFile = await pdfFileHandle.getFile();
             const arrayBuffer = await pdfFile.arrayBuffer();
@@ -422,16 +475,51 @@ Please select the SOURCE directory (${selection.sourcePath})`;
 
     // Jump to a specific page number (helper function)
     const jumpToPageByNumber = (pageNumber) => {
-        const fileName = `page_${String(pageNumber).padStart(4, '0')}.txt`;
-        const foundIndex = fileList.indexOf(fileName);
+        // Try both .txt and .json extensions
+        const pagePrefix = `page_${String(pageNumber).padStart(4, '0')}`;
+        const fileName = fileList.find(f => f.startsWith(pagePrefix));
 
-        if (foundIndex !== -1) {
+        if (fileName) {
+            const foundIndex = fileList.indexOf(fileName);
             setCurrentIndex(foundIndex);
             displayFiles(fileName);
             setJumpPageNumber(pageNumber.toString());
         } else {
-            setError(`Page ${pageNumber} (${fileName}) not found in the comparison files.`);
+            setError(`Page ${pageNumber} not found in the comparison files.`);
             setTimeout(() => setError(null), 3000);
+        }
+    };
+
+    // Render a specific PDF page
+    const renderPDFPage = async (pageNumber) => {
+        if (!pdfDoc) {
+            console.error('PDF document not loaded');
+            return;
+        }
+
+        try {
+            const page = await pdfDoc.getPage(pageNumber);
+            const viewport = page.getViewport({ scale: 1.5 });
+
+            // Create a temporary canvas for rendering
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            const renderContext = {
+                canvasContext: context,
+                viewport: viewport
+            };
+
+            await page.render(renderContext).promise;
+
+            // Convert canvas to data URL
+            const dataUrl = canvas.toDataURL();
+            setPdfPageDataUrl(dataUrl);
+        } catch (err) {
+            console.error('Error rendering PDF page:', err);
+            setError(`Error rendering PDF page ${pageNumber}: ${err.message}`);
         }
     };
 
@@ -651,33 +739,67 @@ Please select the SOURCE directory (${selection.sourcePath})`;
             {/* Content Comparison */}
             {!isLoading && fileList.length > 0 && (
                 <div className="flex flex-col lg:flex-row">
-                    {/* Source Column */}
+                    {/* PDF Page Column */}
                     <div className="flex-1 p-4 border-r border-slate-200">
                         <div className="flex justify-between items-center mb-3">
-                            <h3 className="text-lg font-semibold text-slate-800">Source</h3>
+                            <h3 className="text-lg font-semibold text-slate-800">PDF Page</h3>
                             <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded font-mono">
-                                {sourceHandle?.name}
+                                {jumpPageNumber ? `Page ${jumpPageNumber}` : ''}
                             </span>
                         </div>
                         <div className="bg-slate-50 border border-slate-300 rounded-lg overflow-hidden">
-                            <pre className="p-4 text-sm font-mono whitespace-pre-wrap max-h-[700px] overflow-y-auto text-slate-800">
-                                {sourceContent}
-                            </pre>
+                            <div className="p-4 max-h-[700px] overflow-y-auto flex justify-center">
+                                {pdfPageDataUrl ? (
+                                    <img
+                                        src={pdfPageDataUrl}
+                                        alt={`PDF Page ${jumpPageNumber}`}
+                                        className="max-w-full h-auto"
+                                    />
+                                ) : sourceContent ? (
+                                    <pre className="text-sm font-mono whitespace-pre-wrap text-slate-800 w-full">
+                                        {sourceContent}
+                                    </pre>
+                                ) : (
+                                    <div className="text-slate-500 text-center py-8">
+                                        <p>No PDF page available</p>
+                                        <p className="text-sm mt-2">Ensure PDF file is loaded</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
-                    {/* Target Column */}
+                    {/* Generated Paragraphs Column */}
                     <div className="flex-1 p-4">
                         <div className="flex justify-between items-center mb-3">
-                            <h3 className="text-lg font-semibold text-slate-800">Target</h3>
+                            <h3 className="text-lg font-semibold text-slate-800">Generated Paragraphs</h3>
                             <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded font-mono">
                                 {targetHandle?.name}
                             </span>
                         </div>
                         <div className="bg-slate-50 border border-slate-300 rounded-lg overflow-hidden">
-                            <pre className="p-4 text-sm font-mono whitespace-pre-wrap max-h-[700px] overflow-y-auto text-slate-800">
-                                {targetContent}
-                            </pre>
+                            <div className="p-4 space-y-3 max-h-[700px] overflow-y-auto">
+                                {targetContent.split('----').map((paragraph, index) => {
+                                    const trimmedParagraph = paragraph.trim();
+                                    if (!trimmedParagraph) return null;
+
+                                    return (
+                                        <div
+                                            key={index}
+                                            className="bg-slate-50 border border-slate-200 rounded-lg p-3 transition-colors relative"
+                                        >
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="text-xs text-slate-500 font-semibold">
+                                                    Paragraph {index + 1}
+                                                </div>
+                                            </div>
+                                            <div className="text-sm text-slate-800 whitespace-pre-wrap font-mono">
+                                                {trimmedParagraph}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 </div>

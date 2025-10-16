@@ -132,7 +132,7 @@ export const navigateToPath = async (baseHandle, relativePath) => {
 /**
  * Loads files matching a pattern from a directory
  */
-export const loadFilesFromDirectory = async (directoryHandle, fileRegex = /^page_\d{4}\.txt$/) => {
+export const loadFilesFromDirectory = async (directoryHandle, fileRegex = /^page_\d{4}\.(txt|json)$/) => {
     const fileSet = new Set();
 
     for await (const entry of directoryHandle.values()) {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Spinner } from '../SharedComponents';
 
-const FileBrowser = ({ isOpen, onClose, onFolderSelect, basePaths, baseDirectoryHandles, currentTab }) => {
+const FileBrowser = ({ isOpen, onClose, onFolderSelect, basePaths, baseDirectoryHandles, currentTab, startPath }) => {
     const [currentPath, setCurrentPath] = useState('');
     const [directories, setDirectories] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -14,14 +14,49 @@ const FileBrowser = ({ isOpen, onClose, onFolderSelect, basePaths, baseDirectory
             if (baseDirectoryHandles && baseDirectoryHandles.pdf && !basePdfHandle) {
                 // Use the provided base directory handle
                 setBasePdfHandle(baseDirectoryHandles.pdf);
-                setCurrentPath('');
-                setPathHistory(['']);
-                loadDirectory(baseDirectoryHandles.pdf, '');
+
+                // Navigate to startPath if provided, otherwise start at root
+                const initialPath = startPath || '';
+                setCurrentPath(initialPath);
+
+                // Build path history for the startPath
+                if (initialPath) {
+                    const pathParts = initialPath.split('/').filter(p => p);
+                    const history = [''];
+                    let buildPath = '';
+                    for (const part of pathParts) {
+                        buildPath = buildPath ? `${buildPath}/${part}` : part;
+                        history.push(buildPath);
+                    }
+                    setPathHistory(history);
+                } else {
+                    setPathHistory(['']);
+                }
+
+                navigateToPath(baseDirectoryHandles.pdf, initialPath);
             } else if (!basePdfHandle) {
                 initializeBasePdfFolder();
             }
         }
-    }, [isOpen, basePaths, baseDirectoryHandles]);
+    }, [isOpen, basePaths, baseDirectoryHandles, startPath]);
+
+    // Helper function to navigate to a specific path
+    const navigateToPath = async (baseHandle, targetPath) => {
+        try {
+            let dirHandle = baseHandle;
+            if (targetPath) {
+                const pathParts = targetPath.split('/').filter(p => p);
+                for (const part of pathParts) {
+                    dirHandle = await dirHandle.getDirectoryHandle(part);
+                }
+            }
+            await loadDirectory(dirHandle, targetPath);
+        } catch (err) {
+            console.error('Error navigating to path:', targetPath, err);
+            // Fall back to root if navigation fails
+            await loadDirectory(baseHandle, '');
+        }
+    };
 
     const initializeBasePdfFolder = async () => {
         // Don't automatically open the directory picker
