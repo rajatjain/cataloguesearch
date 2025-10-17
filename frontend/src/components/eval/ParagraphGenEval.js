@@ -4,15 +4,16 @@ import { api } from '../../services/api';
 import FileBrowser from './FileBrowser';
 import BookmarksModal from '../BookmarksModal';
 import ShowBookmarksButton from '../ShowBookmarksButton';
-import { 
-    storeDirectoryHandles, 
-    getStoredDirectoryHandles, 
+import {
+    storeDirectoryHandles,
+    getStoredDirectoryHandles,
     clearStoredDirectoryHandles,
     validateDirectoryHandles,
     navigateToPath,
     loadFilesFromDirectory,
     readFileContent
 } from '../../utils/directoryHandlers';
+import { addPageNumbersToBookmarks } from '../../utils/pdfUtils';
 
 const ParagraphGenEval = ({ onBrowseFiles, showFileBrowser, onCloseFileBrowser, basePaths: parentBasePaths, selectedFolder: propSelectedFolder, baseDirectoryHandles: parentBaseDirectoryHandles, onPdfParentDirChange }) => {
     const [selectedFolder, setSelectedFolder] = useState(propSelectedFolder || null);
@@ -382,47 +383,9 @@ Please select the SOURCE directory (${selection.sourcePath})`;
     };
 
     const getCurrentFileName = () => {
-        return currentIndex >= 0 && currentIndex < fileList.length 
-            ? fileList[currentIndex] 
+        return currentIndex >= 0 && currentIndex < fileList.length
+            ? fileList[currentIndex]
             : '';
-    };
-
-    // Helper function to recursively add page numbers to bookmarks
-    const addPageNumbersToBookmarks = async (bookmarkItems, pdfDoc) => {
-        const processedItems = [];
-
-        for (const item of bookmarkItems) {
-            const processedItem = { ...item };
-
-            // Calculate page number for this bookmark
-            try {
-                if (item.dest) {
-                    let dest = item.dest;
-
-                    // If dest is a string, get the actual destination
-                    if (typeof dest === 'string') {
-                        dest = await pdfDoc.getDestination(dest);
-                    }
-
-                    if (dest && dest[0]) {
-                        const pageRef = dest[0];
-                        const pageIndex = await pdfDoc.getPageIndex(pageRef);
-                        processedItem.pageNumber = pageIndex + 1; // PDF pages are 1-indexed
-                    }
-                }
-            } catch (err) {
-                console.error(`Error calculating page number for "${item.title}":`, err);
-            }
-
-            // Recursively process nested items
-            if (item.items && item.items.length > 0) {
-                processedItem.items = await addPageNumbersToBookmarks(item.items, pdfDoc);
-            }
-
-            processedItems.push(processedItem);
-        }
-
-        return processedItems;
     };
 
     // Load bookmarks from the selected PDF file

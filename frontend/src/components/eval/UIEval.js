@@ -385,11 +385,15 @@ const UIEval = () => {
                         )}
 
                         {activeTab === 'ocr-eval' && (
-                            <OCRUtils 
-                                selectedFile={selectedFile} 
+                            <OCRUtils
+                                selectedFile={selectedFile}
                                 onFileSelect={handleFileSelect}
                                 basePaths={basePaths}
                                 baseDirectoryHandles={baseDirectoryHandles}
+                                onPdfParentDirChange={(dirPath) => {
+                                    console.log('PDF parent directory changed to:', dirPath);
+                                    setPdfParentDirPath(dirPath);
+                                }}
                             />
                         )}
 

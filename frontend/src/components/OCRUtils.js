@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Spinner } from './SharedComponents';
 import ShowBookmarksButton from './ShowBookmarksButton';
+import BookmarksModal from './BookmarksModal';
+import { addPageNumbersToBookmarks } from '../utils/pdfUtils';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '/api';
 
-const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, baseDirectoryHandles }) => {
+const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, baseDirectoryHandles, onPdfParentDirChange }) => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [language, setLanguage] = useState('hin');
     const [cropTop, setCropTop] = useState(0);
@@ -76,23 +78,6 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
         };
     }, []);
 
-    // Effect to handle Escape key for bookmark modal
-    useEffect(() => {
-        const handleEsc = (event) => {
-            if (event.key === 'Escape') {
-                setShowBookmarkModal(false);
-            }
-        };
-
-        if (showBookmarkModal) {
-            window.addEventListener('keydown', handleEsc);
-        }
-
-        return () => {
-            window.removeEventListener('keydown', handleEsc);
-        };
-    }, [showBookmarkModal]);
-
     // Effect to handle file selection from file browser
     useEffect(() => {
         if (propSelectedFile && propSelectedFile.selectedPDFFile && 
@@ -107,26 +92,31 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                         // Navigate to the PDF file using the relative path
                         const pathParts = propSelectedFile.relativePath.split('/');
                         const pdfDirectory = pathParts.slice(0, -1).join('/'); // Remove the last part (PDF name without extension)
-                        
+
                         // Navigate to the PDF directory
                         let currentHandle = baseDirectoryHandles.pdf;
                         const pathSegments = pdfDirectory.split('/').filter(segment => segment.length > 0);
-                        
+
                         for (const segment of pathSegments) {
                             currentHandle = await currentHandle.getDirectoryHandle(segment);
                         }
-                        
+
+                        // Notify parent component of the PDF parent directory path
+                        if (onPdfParentDirChange) {
+                            onPdfParentDirChange(pdfDirectory);
+                        }
+
                         // Get the PDF file handle
                         const pdfFileHandle = await currentHandle.getFileHandle(propSelectedFile.selectedPDFFile);
                         const pdfFile = await pdfFileHandle.getFile();
-                        
+
                         // Set the selected file and load it
                         setSelectedFile(pdfFile);
                         setIsPDF(true);
-                        
+
                         // Load the PDF
                         await loadPDF(pdfFile);
-                        
+
                         setIsLoading(false);
                     } else if (propSelectedFile.selectedPDFFile) {
                         setError('Directory permissions not granted. Please grant permissions on the Home tab first.');
@@ -225,7 +215,9 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
             try {
                 const outline = await pdf.getOutline();
                 if (outline && outline.length > 0) {
-                    setBookmarks(outline);
+                    // Add page numbers to all bookmarks
+                    const bookmarksWithPages = await addPageNumbersToBookmarks(outline, pdf);
+                    setBookmarks(bookmarksWithPages);
                 } else {
                     setBookmarks([]);
                 }
@@ -627,79 +619,27 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
 
     const handleBookmarkClick = async (bookmark) => {
         if (!pdfDoc || !bookmark.dest) return;
-        
+
         try {
             let dest = bookmark.dest;
             if (typeof dest === 'string') {
                 dest = await pdfDoc.getDestination(dest);
             }
-            
+
             if (dest && dest.length > 0) {
                 const pageRef = dest[0];
                 const pageNumber = await pdfDoc.getPageIndex(pageRef) + 1;
-                
+
                 if (pageNumber !== currentPage) {
                     setCurrentPage(pageNumber);
                     await renderPDFPage(pdfDoc, pageNumber);
                     setOcrResults(null);
+                    setCroppedPreviewUrl(null);
                 }
             }
-            
-            setShowBookmarkModal(false);
         } catch (err) {
             console.error('Error navigating to bookmark:', err);
         }
-    };
-
-    const BookmarkItem = ({ item, level = 0 }) => {
-        const [isExpanded, setIsExpanded] = useState(level < 2);
-        
-        const hasChildren = item.items && item.items.length > 0;
-        const indent = level * 16;
-        
-        return (
-            <div className="select-none">
-                <div 
-                    className="flex items-center py-1 px-2 hover:bg-slate-100 rounded cursor-pointer text-sm"
-                    style={{ paddingLeft: `${8 + indent}px` }}
-                    onClick={() => handleBookmarkClick(item)}
-                >
-                    {hasChildren && (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setIsExpanded(!isExpanded);
-                            }}
-                            className="mr-1 p-0.5 hover:bg-slate-200 rounded flex-shrink-0"
-                        >
-                            <svg 
-                                className={`w-3 h-3 transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                                fill="none" 
-                                stroke="currentColor" 
-                                viewBox="0 0 24 24"
-                            >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                        </button>
-                    )}
-                    {!hasChildren && <div className="w-4 flex-shrink-0" />}
-                    <span 
-                        className="text-slate-700 hover:text-slate-900 truncate flex-1"
-                        title={item.title}
-                    >
-                        {item.title}
-                    </span>
-                </div>
-                
-                {hasChildren && isExpanded && (
-                    <div>
-                        {item.items.map((child, index) => (
-                            <BookmarkItem key={index} item={child} level={level + 1} />
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
     };
 
     const ProgressBar = ({ progress, total }) => {
@@ -717,37 +657,12 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
     return (
         <div>
             {/* Bookmarks Modal */}
-            {showBookmarkModal && bookmarks.length > 0 && (
-                <div 
-                    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-                    onClick={() => setShowBookmarkModal(false)}
-                >
-                    <div 
-                        className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between p-4 border-b border-slate-200">
-                            <h3 className="text-lg font-semibold text-slate-800">Select Bookmark</h3>
-                            <button
-                                onClick={() => setShowBookmarkModal(false)}
-                                className="text-slate-500 hover:text-slate-700 p-1 rounded"
-                                title="Close bookmarks"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-                        <div className="p-4 overflow-y-auto max-h-[calc(80vh-65px)]">
-                            <div className="space-y-1">
-                                {bookmarks.map((bookmark, index) => (
-                                    <BookmarkItem key={index} item={bookmark} level={0} />
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <BookmarksModal
+                isOpen={showBookmarkModal}
+                onClose={() => setShowBookmarkModal(false)}
+                bookmarks={bookmarks}
+                onBookmarkClick={handleBookmarkClick}
+            />
 
             {/* Main OCR Utils Panel Container */}
             <div className="bg-white rounded-lg shadow-sm border border-slate-200" style={{ width: '130%', maxWidth: 'none' }}>
