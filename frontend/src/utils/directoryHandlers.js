@@ -36,19 +36,25 @@ export const getFromStore = (store, key) => {
  */
 export const storeDirectoryHandles = async (handles) => {
     try {
+        console.log('[PERMISSIONS] Storing directory handles:', {
+            pdf: handles.pdf?.name || 'null',
+            ocr: handles.ocr?.name || 'null',
+            text: handles.text?.name || 'null'
+        });
+
         const db = await openDirectoryHandleDB();
         const transaction = db.transaction(['handles'], 'readwrite');
         const store = transaction.objectStore('handles');
-        
+
         await Promise.all([
             store.put(handles.pdf, 'pdf'),
             store.put(handles.ocr, 'ocr'),
             store.put(handles.text, 'text')
         ]);
-        
-        console.log('Directory handles stored successfully');
+
+        console.log('[PERMISSIONS] ✅ Directory handles stored successfully in IndexedDB');
     } catch (err) {
-        console.log('Error storing directory handles:', err);
+        console.error('[PERMISSIONS] ❌ Error storing directory handles:', err);
     }
 };
 
@@ -57,19 +63,28 @@ export const storeDirectoryHandles = async (handles) => {
  */
 export const getStoredDirectoryHandles = async () => {
     try {
+        console.log('[PERMISSIONS] Attempting to retrieve stored directory handles from IndexedDB...');
         const db = await openDirectoryHandleDB();
         const transaction = db.transaction(['handles'], 'readonly');
         const store = transaction.objectStore('handles');
-        
+
         const [pdf, ocr, text] = await Promise.all([
             getFromStore(store, 'pdf'),
             getFromStore(store, 'ocr'),
             getFromStore(store, 'text')
         ]);
-        
-        return { pdf, ocr, text };
+
+        const result = { pdf, ocr, text };
+        console.log('[PERMISSIONS] Retrieved handles from IndexedDB:', {
+            pdf: pdf?.name || 'null',
+            ocr: ocr?.name || 'null',
+            text: text?.name || 'null',
+            allPresent: !!(pdf && ocr && text)
+        });
+
+        return result;
     } catch (err) {
-        console.log('Error reading from IndexedDB:', err);
+        console.error('[PERMISSIONS] ❌ Error reading from IndexedDB:', err);
         return { pdf: null, ocr: null, text: null };
     }
 };
@@ -79,12 +94,15 @@ export const getStoredDirectoryHandles = async () => {
  */
 export const clearStoredDirectoryHandles = async () => {
     try {
+        console.log('[PERMISSIONS] ⚠️ CLEARING all stored directory handles from IndexedDB');
+        console.trace('[PERMISSIONS] Clear called from:');
         const db = await openDirectoryHandleDB();
         const transaction = db.transaction(['handles'], 'readwrite');
         const store = transaction.objectStore('handles');
         await store.clear();
+        console.log('[PERMISSIONS] ✅ Directory handles cleared from IndexedDB');
     } catch (err) {
-        console.log('Error clearing stored handles:', err);
+        console.error('[PERMISSIONS] ❌ Error clearing stored handles:', err);
     }
 };
 
@@ -93,17 +111,30 @@ export const clearStoredDirectoryHandles = async () => {
  */
 export const validateDirectoryHandles = async (handles) => {
     try {
+        console.log('[PERMISSIONS] Validating directory handle permissions...');
+
+        // Use queryPermission() instead of requestPermission() for automatic checks
+        // queryPermission() doesn't require user activation and just checks the current state
         const [pdfPermission, ocrPermission, textPermission] = await Promise.all([
-            handles.pdf?.requestPermission({ mode: 'read' }),
-            handles.ocr?.requestPermission({ mode: 'read' }),
-            handles.text?.requestPermission({ mode: 'read' })
+            handles.pdf?.queryPermission({ mode: 'read' }),
+            handles.ocr?.queryPermission({ mode: 'read' }),
+            handles.text?.queryPermission({ mode: 'read' })
         ]);
 
-        return pdfPermission === 'granted' && 
-               ocrPermission === 'granted' && 
-               textPermission === 'granted';
+        const isValid = pdfPermission === 'granted' &&
+                        ocrPermission === 'granted' &&
+                        textPermission === 'granted';
+
+        console.log('[PERMISSIONS] Validation result:', {
+            pdf: pdfPermission,
+            ocr: ocrPermission,
+            text: textPermission,
+            isValid
+        });
+
+        return isValid;
     } catch (err) {
-        console.log('Error validating directory handles:', err);
+        console.error('[PERMISSIONS] ❌ Error validating directory handles:', err);
         return false;
     }
 };

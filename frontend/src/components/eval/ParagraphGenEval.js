@@ -387,26 +387,64 @@ Please select the SOURCE directory (${selection.sourcePath})`;
             : '';
     };
 
+    // Helper function to recursively add page numbers to bookmarks
+    const addPageNumbersToBookmarks = async (bookmarkItems, pdfDoc) => {
+        const processedItems = [];
+
+        for (const item of bookmarkItems) {
+            const processedItem = { ...item };
+
+            // Calculate page number for this bookmark
+            try {
+                if (item.dest) {
+                    let dest = item.dest;
+
+                    // If dest is a string, get the actual destination
+                    if (typeof dest === 'string') {
+                        dest = await pdfDoc.getDestination(dest);
+                    }
+
+                    if (dest && dest[0]) {
+                        const pageRef = dest[0];
+                        const pageIndex = await pdfDoc.getPageIndex(pageRef);
+                        processedItem.pageNumber = pageIndex + 1; // PDF pages are 1-indexed
+                    }
+                }
+            } catch (err) {
+                console.error(`Error calculating page number for "${item.title}":`, err);
+            }
+
+            // Recursively process nested items
+            if (item.items && item.items.length > 0) {
+                processedItem.items = await addPageNumbersToBookmarks(item.items, pdfDoc);
+            }
+
+            processedItems.push(processedItem);
+        }
+
+        return processedItems;
+    };
+
     // Load bookmarks from the selected PDF file
     const loadPDFBookmarks = async () => {
         if (!selectedFolder?.selectedPDFFile || !baseDirectoryHandles.pdf) return;
 
         try {
             console.log('Loading bookmarks for:', selectedFolder);
-            
+
             // The relativePath includes the full path to the PDF directory
             // We need to navigate to the parent directory and then get the PDF file
             const pathParts = selectedFolder.relativePath.split('/');
             const pdfDirectory = pathParts.slice(0, -1).join('/'); // Remove the last part (PDF name without extension)
-            
+
             console.log('PDF directory path:', pdfDirectory);
             console.log('PDF file name:', selectedFolder.selectedPDFFile);
-            
+
             const pdfDirHandle = await navigateToPath(
-                baseDirectoryHandles.pdf, 
+                baseDirectoryHandles.pdf,
                 pdfDirectory
             );
-            
+
             if (!pdfDirHandle) {
                 console.error('Could not navigate to PDF directory:', pdfDirectory);
                 return;
@@ -423,18 +461,20 @@ Please select the SOURCE directory (${selection.sourcePath})`;
             const pdfFileHandle = await pdfDirHandle.getFileHandle(selectedFolder.selectedPDFFile);
             const pdfFile = await pdfFileHandle.getFile();
             const arrayBuffer = await pdfFile.arrayBuffer();
-            
+
             if (window.pdfjsLib) {
                 const loadingTask = window.pdfjsLib.getDocument(arrayBuffer);
                 const pdf = await loadingTask.promise;
                 setPdfDoc(pdf);
-                
+
                 // Extract bookmarks
                 const outline = await pdf.getOutline();
                 console.log('PDF outline result:', outline);
                 if (outline && outline.length > 0) {
-                    setBookmarks(outline);
-                    console.log('Bookmarks loaded:', outline.length, outline);
+                    // Add page numbers to all bookmarks
+                    const bookmarksWithPages = await addPageNumbersToBookmarks(outline, pdf);
+                    setBookmarks(bookmarksWithPages);
+                    console.log('Bookmarks with page numbers loaded:', bookmarksWithPages.length);
                 } else {
                     setBookmarks([]);
                     console.log('No bookmarks found in PDF');

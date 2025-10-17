@@ -44,6 +44,11 @@ const BookmarkItem = ({ item, level = 0, onBookmarkClick }) => {
                     <span className="text-slate-700 truncate" title={item.title}>
                         {item.title}
                     </span>
+                    {item.pageNumber && (
+                        <span className="ml-auto text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-medium whitespace-nowrap">
+                            Page {item.pageNumber}
+                        </span>
+                    )}
                 </div>
             </div>
             
@@ -113,8 +118,8 @@ const BookmarksModal = ({
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
             onClick={onClose}
         >
-            <div 
-                className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col"
+            <div
+                className="bg-white rounded-lg shadow-xl max-w-xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
