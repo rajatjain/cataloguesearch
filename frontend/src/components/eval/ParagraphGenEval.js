@@ -4,6 +4,7 @@ import { api } from '../../services/api';
 import FileBrowser from './FileBrowser';
 import BookmarksModal from '../BookmarksModal';
 import ShowBookmarksButton from '../ShowBookmarksButton';
+import { CopyPathButton, CopyPathButtons } from '../CopyPathButton';
 import {
     storeDirectoryHandles,
     getStoredDirectoryHandles,
@@ -533,6 +534,29 @@ Please select the SOURCE directory (${selection.sourcePath})`;
         }
     }, [selectedFolder, permissionsGranted, sourceHandle, targetHandle]);
 
+    // Helper functions to construct file paths for copy buttons
+    const getPdfPath = () => {
+        if (!basePaths || !selectedFolder?.relativePath || !selectedFolder?.selectedPDFFile) {
+            return '';
+        }
+        return `${basePaths.base_pdf_path}/${selectedFolder.relativePath}/${selectedFolder.selectedPDFFile}`;
+    };
+
+    const getJsonPath = () => {
+        if (!basePaths || !selectedFolder?.relativePath || currentIndex < 0 || !fileList[currentIndex]) {
+            return '';
+        }
+        return `${basePaths.base_ocr_path}/${selectedFolder.relativePath}/${fileList[currentIndex]}`;
+    };
+
+    const getTxtPath = () => {
+        if (!basePaths || !selectedFolder?.relativePath || !jumpPageNumber) {
+            return '';
+        }
+        const txtFileName = `page_${String(jumpPageNumber).padStart(4, '0')}.txt`;
+        return `${basePaths.base_text_path}/${selectedFolder.relativePath}/${txtFileName}`;
+    };
+
     // Show directory selection if no directories selected
     if (!sourceHandle || !targetHandle) {
         return (
@@ -746,9 +770,11 @@ Please select the SOURCE directory (${selection.sourcePath})`;
                     <div className="flex-1 p-4 border-r border-slate-200">
                         <div className="flex justify-between items-center mb-3">
                             <h3 className="text-lg font-semibold text-slate-800">PDF Page</h3>
-                            <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded font-mono">
-                                {jumpPageNumber ? `Page ${jumpPageNumber}` : ''}
-                            </span>
+                            <CopyPathButtons
+                                pdfPath={getPdfPath()}
+                                jsonPath={getJsonPath()}
+                                disabled={!selectedFolder || !basePaths}
+                            />
                         </div>
                         <div className="bg-slate-50 border border-slate-300 rounded-lg overflow-hidden">
                             <div className="p-4 max-h-[700px] overflow-y-auto flex justify-center">
@@ -776,9 +802,11 @@ Please select the SOURCE directory (${selection.sourcePath})`;
                     <div className="flex-1 p-4">
                         <div className="flex justify-between items-center mb-3">
                             <h3 className="text-lg font-semibold text-slate-800">Generated Paragraphs</h3>
-                            <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded font-mono">
-                                {targetHandle?.name}
-                            </span>
+                            <CopyPathButton
+                                path={getTxtPath()}
+                                label="TXT"
+                                disabled={!selectedFolder || !basePaths}
+                            />
                         </div>
                         <div className="bg-slate-50 border border-slate-300 rounded-lg overflow-hidden">
                             <div className="p-4 space-y-3 max-h-[700px] overflow-y-auto">
