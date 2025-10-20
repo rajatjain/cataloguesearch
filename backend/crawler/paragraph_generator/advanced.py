@@ -45,14 +45,15 @@ class Paragraph:
 
 # --- Configuration Constants (from para_gen.py) ---
 
-HEADING_MARKERS = (
-    '★',
-    'काव्य -',
-    'काव्य-',
-    'अर्थः',
-    'शब्दार्थः',
-    'शब्दार्थ',
-)
+HEADING_MARKERS = ()
+# HEADING_MARKERS = (
+#     '★',
+#     'काव्य -',
+#     'काव्य-',
+#     'अर्थः',
+#     'शब्दार्थः',
+#     'शब्दार्थ',
+# )
 
 HINDI_SENTENCE_TERMINATORS = ('।', '?', '!', '।।', ')', ']', '}')
 GUJARATI_SENTENCE_TERMINATORS = ('।', '.', '?', '!', '।।', ')', ']', '}')
@@ -105,6 +106,13 @@ class LineClassifier:
         stripped_text = text.strip()
         if not stripped_text:
             tags.add('IS_EMPTY')
+            return Line(text, int(x_start), int(x_end), page_num, line_num, tags, speaker)
+
+        # Detect very short centered lines (likely decorative elements misread by OCR)
+        # Examples: stars (★ ★ ★) OCR'd as random chars like "और #औ", dashes, etc.
+        # Treat them as headers so they become standalone paragraphs and don't break prose flow
+        if is_centered and len(stripped_text) <= 10:
+            tags.add('IS_HEADER_REGEX')
 
         # Check for header regex matches
         for pattern in self.header_regexes:
@@ -174,10 +182,11 @@ class ParagraphGenerator:
     def process_line(self, line: Line):
         if 'IS_EMPTY' in line.tags:
             return
-        # Handle header regex matches: end paragraph and skip the line
+        # Handle header regex matches: end paragraph, reset state, and skip the line
         if 'IS_HEADER_REGEX' in line.tags:
             self._finalize_paragraph()
             self._reset_current_paragraph()
+            self.state = State.STANDARD_PROSE
             return
         initial_state = self.state
         handler = getattr(self, f'_handle_{initial_state.name.lower()}_state')
@@ -249,6 +258,14 @@ class ParagraphGenerator:
             return True
 
     def _handle_qa_block_state(self, line: Line) -> bool:
+        """
+        Handle QA block state. Exit when encountering:
+        1. Headers (IS_HEADING)
+        2. Absolute terminators (IS_ABSOLUTE_TERMINATOR)
+        3. New QA blocks (IS_QA - start of new question/answer)
+        4. Verse blocks (IS_CENTERED)
+        5. New prose paragraphs (IS_INDENTED but not IS_QA)
+        """
         # IS_HEADING should end QA block and switch to prose state
         if 'IS_HEADING' in line.tags:
             self._finalize_paragraph()
@@ -266,10 +283,23 @@ class ParagraphGenerator:
             self.state = State.STANDARD_PROSE
             return False
 
-        # Indented non-QA lines should end QA block and switch to prose
-        is_new_prose = ('IS_INDENTED' in line.tags and
-                        'IS_QA' not in line.tags)
-        if is_new_prose:
+        # New QA block (new question/answer starts) - end current and start new
+        if 'IS_QA' in line.tags:
+            self._finalize_paragraph()
+            self._reset_current_paragraph(line)
+            self.current_paragraph_lines.append(line)
+            # Stay in QA_BLOCK state, don't reprocess
+            return False
+
+        # Centered text (verse) - end QA block and switch to verse
+        if 'IS_CENTERED' in line.tags:
+            self._finalize_paragraph()
+            self._reset_current_paragraph(line)
+            self.state = State.VERSE_BLOCK
+            return True
+
+        # Indented non-QA lines (new prose paragraph) - end QA block and switch to prose
+        if 'IS_INDENTED' in line.tags:
             self._finalize_paragraph()
             self._reset_current_paragraph(line)
             self.state = State.STANDARD_PROSE
