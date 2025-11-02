@@ -1,10 +1,10 @@
 services:
   opensearch:
-    image: jain9rajat/cataloguesearch:opensearch
+    image: swalakshya/cataloguesearch:opensearch
     build:
       context: .
       dockerfile: docker/opensearch/Dockerfile
-    platform: linux/amd64
+    platform: ${DOCKER_PLATFORM}
     container_name: opensearch-node
     environment:
       - cluster.name=opensearch-cluster
@@ -39,11 +39,11 @@ services:
     restart: ${RESTART_POLICY:-no}
 
   cataloguesearch-api:
-    image: jain9rajat/cataloguesearch:api
+    image: swalakshya/cataloguesearch:api
     build:
       context: .
       dockerfile: docker/api/Dockerfile
-    platform: linux/amd64
+    platform: ${DOCKER_PLATFORM}
     container_name: cataloguesearch-api
     environment:
       - OPENSEARCH_HOST=opensearch
@@ -82,11 +82,11 @@ services:
     restart: ${RESTART_POLICY:-no}
 
   cataloguesearch-frontend:
-    image: jain9rajat/cataloguesearch:frontend
+    image: swalakshya/cataloguesearch:frontend
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
-    platform: linux/amd64
+    platform: ${DOCKER_PLATFORM}
     container_name: cataloguesearch-frontend
     environment:
       - REACT_APP_RECAPTCHA_SITE_KEY=${REACT_APP_RECAPTCHA_SITE_KEY}
