@@ -1,4 +1,4 @@
-FROM opensearchproject/opensearch:3.0.0
+FROM opensearchproject/opensearch:3.3.1
 
 # Install required plugins
 RUN /usr/share/opensearch/bin/opensearch-plugin install --batch analysis-icu && \
