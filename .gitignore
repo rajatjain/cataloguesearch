@@ -131,3 +131,5 @@ snapshots*tar*gz
 indic_nlp_*
 
 models
+
+.vscode
