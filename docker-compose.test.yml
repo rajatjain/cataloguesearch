@@ -1,10 +1,11 @@
 services:
   opensearch-test:
-    image: jain9rajat/cataloguesearch:opensearch
+    image: swalakshya/cataloguesearch:opensearch
     build:
       context: .
       dockerfile: docker/opensearch/Dockerfile
-    platform: linux/amd64
+    platform: ${DOCKER_PLATFORM}
+    pull_policy: never
     container_name: opensearch-test
     environment:
       - cluster.name=opensearch-test-cluster
