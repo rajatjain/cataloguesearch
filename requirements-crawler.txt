@@ -17,5 +17,10 @@ opencv-python==4.8.1.78
 markdown==3.7             # Markdown to HTML conversion
 beautifulsoup4==4.12.3    # HTML parsing for structured content extraction
 
+## Language Detection
+fasttext-wheel==0.9.2     # FastText library for ML-based language classification (pre-built wheels)
+transformers>=4.34.0      # Hugging Face transformers for IndicBERT (compatible with sentence-transformers)
+torch>=2.2.0              # PyTorch for transformer models (use latest compatible version) 
+
 # Note: These libraries significantly increase Docker image size
 # Only include in crawler/processing containers, not API containers

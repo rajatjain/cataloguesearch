@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import OCRUtils from '../OCRUtils';
 import ParagraphGenEval from './ParagraphGenEval';
 import ScriptureEval from './ScriptureEval';
+import LanguageDetectEval from './LanguageDetectEval';
 import FileBrowser from './FileBrowser';
 import { storeDirectoryHandles, getStoredDirectoryHandles, validateDirectoryHandles } from '../../utils/directoryHandlers';
 
@@ -220,11 +221,17 @@ const UIEval = () => {
                                         isActive={activeTab === 'paragraph-eval'} 
                                         onClick={setActiveTab} 
                                     />
-                                    <NavButton 
-                                        id="scripture-eval" 
-                                        label="Scripture Eval" 
-                                        isActive={activeTab === 'scripture-eval'} 
-                                        onClick={setActiveTab} 
+                                    <NavButton
+                                        id="scripture-eval"
+                                        label="Scripture Eval"
+                                        isActive={activeTab === 'scripture-eval'}
+                                        onClick={setActiveTab}
+                                    />
+                                    <NavButton
+                                        id="language-detect"
+                                        label="Language Detect"
+                                        isActive={activeTab === 'language-detect'}
+                                        onClick={setActiveTab}
                                     />
                                 </div>
 
@@ -412,12 +419,16 @@ const UIEval = () => {
                         )}
 
                         {activeTab === 'scripture-eval' && basePaths && (
-                            <ScriptureEval 
-                                selectedFile={selectedFile} 
+                            <ScriptureEval
+                                selectedFile={selectedFile}
                                 onFileSelect={handleFileSelect}
                                 basePaths={basePaths}
                                 baseDirectoryHandles={baseDirectoryHandles}
                             />
+                        )}
+
+                        {activeTab === 'language-detect' && (
+                            <LanguageDetectEval />
                         )}
                     </div>
                 </div>

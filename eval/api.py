@@ -33,8 +33,19 @@ from config import Config
 from backend.crawler.pdf_processor import PDFProcessor
 from backend.crawler.markdown_parser import MarkdownParser
 from backend.common.scan_config import get_scan_config
+from backend.common.langdetect import classify_devanagari_text, ClassificationMethod, DevanagariLanguageClassifier
 from .ocr import get_ocr_service
 from para_gen import process_image_to_paragraphs
+
+# Global classifier instance (loaded once and reused across all requests)
+_global_classifier = None
+
+def get_language_classifier():
+    """Get or create the global language classifier instance."""
+    global _global_classifier
+    if _global_classifier is None:
+        _global_classifier = DevanagariLanguageClassifier()
+    return _global_classifier
 
 log_handle = logging.getLogger(__name__)
 
@@ -107,6 +118,21 @@ class CostCalculationResponse(BaseModel):
 # --- Scripture Eval Request Model ---
 class ScriptureEvalRequest(BaseModel):
     relative_path: str
+
+# --- Language Classification Models ---
+class LanguageClassificationRequest(BaseModel):
+    text: str = Field(..., description="Devanagari text to classify")
+    method: ClassificationMethod = Field(
+        ClassificationMethod.RULE_BASED,
+        description="Classification method: 'fasttext' (ML-based), 'rule_based' (heuristics), or 'hybrid' (combination)"
+    )
+
+class LanguageClassificationResponse(BaseModel):
+    text: str
+    language: str = Field(..., description="Detected language: 'sanskrit' or 'hindi'")
+    confidence: float = Field(..., description="Confidence score (0.0 to 1.0)")
+    method: str = Field(..., description="Classification method used")
+    details: Optional[Dict] = Field(None, description="Additional debugging information")
 
 # --- Helper Functions ---
 def get_memory_usage():
@@ -575,3 +601,134 @@ async def proxy_pdf(url: str):
     except Exception as e:
         log_handle.error(f"Error proxying PDF: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error proxying PDF: {str(e)}")
+
+@router.post("/language/classify", response_model=LanguageClassificationResponse)
+async def classify_language(request: LanguageClassificationRequest):
+    """
+    Classify Devanagari text as Sanskrit or Hindi.
+
+    Supports three classification methods:
+    - fasttext: ML-based classification using FastText (requires model)
+    - rule_based: Linguistic heuristics (no external dependencies)
+    - hybrid: Combines both methods
+
+    Args:
+        request: Contains text and method
+
+    Returns:
+        Language classification result with confidence score and details
+
+    Example:
+        POST /eval/language/classify
+        {
+            "text": "श्री भगवान् उवाच",
+            "method": "rule_based"
+        }
+    """
+    try:
+        log_handle.info(f"Classifying text using method {request.method}: {request.text[:50]}...")
+
+        # Use global classifier instance for better performance
+        classifier = get_language_classifier()
+        result = classifier.classify(text=request.text, method=request.method)
+
+        log_handle.info(f"Classification result: {result.language} (confidence: {result.confidence:.2f})")
+
+        return LanguageClassificationResponse(
+            text=request.text,
+            language=result.language,
+            confidence=result.confidence,
+            method=result.method,
+            details=result.details
+        )
+
+    except HTTPException:
+        raise
+    except ImportError as e:
+        log_handle.error(f"Import error during classification: {str(e)}")
+        if "fasttext" in str(e).lower():
+            raise HTTPException(
+                status_code=400,
+                detail="FastText model not available. Please use method 'rule_based' or install fasttext: pip install fasttext"
+            )
+        raise HTTPException(status_code=500, detail=f"Import error: {str(e)}")
+    except ValueError as e:
+        log_handle.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        log_handle.error(f"Language classification failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Classification failed: {str(e)}")
+
+@router.post("/language/classify/batch")
+async def classify_language_batch(request: dict):
+    """
+    Classify multiple Devanagari texts as Sanskrit or Hindi in a single request.
+
+    This is much faster than making individual requests for each text.
+
+    Args:
+        request: Contains list of texts and method
+
+    Returns:
+        List of language classification results
+
+    Example:
+        POST /eval/language/classify/batch
+        {
+            "texts": ["श्री भगवान् उवाच", "यह एक हिंदी वाक्य है"],
+            "method": "indicbert"
+        }
+    """
+    try:
+        texts = request.get("texts", [])
+        method_str = request.get("method", "rule_based")
+
+        if not texts:
+            raise HTTPException(status_code=400, detail="No texts provided")
+
+        # Convert method string to enum
+        try:
+            method = ClassificationMethod(method_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid method: {method_str}")
+
+        log_handle.info(f"Batch classifying {len(texts)} texts using method {method_str}")
+
+        # Use global classifier instance (loaded once per server lifetime)
+        # This avoids reloading the model for each request
+        classifier = get_language_classifier()
+
+        # Classify all texts using the same classifier instance
+        results = []
+        for i, text in enumerate(texts):
+            try:
+                result = classifier.classify(text=text, method=method)
+                results.append({
+                    "text": text,
+                    "language": result.language,
+                    "confidence": result.confidence,
+                    "method": result.method,
+                    "details": result.details
+                })
+            except Exception as e:
+                log_handle.error(f"Error classifying text {i}: {str(e)}")
+                results.append({
+                    "text": text,
+                    "language": "error",
+                    "confidence": 0.0,
+                    "method": method_str,
+                    "details": {"error": str(e)}
+                })
+
+        log_handle.info(f"Batch classification complete: {len(results)} results")
+
+        return {
+            "results": results,
+            "total_count": len(results)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_handle.error(f"Batch classification failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Batch classification failed: {str(e)}")
