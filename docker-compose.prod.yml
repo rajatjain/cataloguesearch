@@ -1,6 +1,6 @@
 services:
   opensearch:
-    image: jain9rajat/cataloguesearch:opensearch
+    image: swalakshya/cataloguesearch:opensearch
     platform: linux/amd64
     container_name: opensearch-node
     environment:
@@ -36,7 +36,7 @@ services:
     restart: ${RESTART_POLICY:-no}
 
   cataloguesearch-api:
-    image: jain9rajat/cataloguesearch:api
+    image: swalakshya/cataloguesearch:api
     platform: linux/amd64
     container_name: cataloguesearch-api
     environment:
@@ -72,7 +72,7 @@ services:
     restart: unless-stopped
 
   cataloguesearch-frontend:
-    image: jain9rajat/cataloguesearch:frontend
+    image: swalakshya/cataloguesearch:frontend
     platform: linux/amd64
     container_name: cataloguesearch-frontend
     environment:
