@@ -13,6 +13,7 @@ sentence-transformers==2.7.0 # For creating sentence and text embeddings
 optimum[onnxruntime]==1.19.1 # For ONNX model optimization and inference
 langdetect==1.0.9            # Language detection library
 indic-nlp-library==0.92      # Core library for Indian language NLP tasks
+ai4bharat-transliteration==1.1.3 # ML-based transliteration for Indic languages (IndicXlit)
 
 ## Dependencies for NLP Libraries
 morfessor==2.0.6             # Dependency for indic-nlp-library

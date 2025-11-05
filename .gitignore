@@ -133,3 +133,5 @@ indic_nlp_*
 models
 
 .vscode
+
+.env.*

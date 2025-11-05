@@ -125,6 +125,14 @@ class Config:
             return self._settings.get("vector_embeddings", {}).get("reranker_onnx_path", None)
         elif name == "FILTERED_METADATA_FIELDS":
             return self._settings.get("search", {}).get("filtered_metadata_fields", {})
+        elif name == "TRANSLITERATION_API_URL":
+            return self._settings.get("transliteration", {}).get("api_url", "http://localhost:8001")
+        elif name == "TRANSLITERATION_DEFAULT_LANGUAGE":
+            return self._settings.get("transliteration", {}).get("default_language", "hi")
+        elif name == "TRANSLITERATION_DEFAULT_TOPK":
+            return self._settings.get("transliteration", {}).get("default_topk", 5)
+        elif name == "TRANSLITERATION_TIMEOUT":
+            return self._settings.get("transliteration", {}).get("timeout", 10)
         else:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 

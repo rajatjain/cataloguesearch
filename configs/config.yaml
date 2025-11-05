@@ -33,3 +33,9 @@ vector_embeddings:
   reranker_onnx_path: "{BASE_DIR}/models/bge-reranker-base-onnx"
   # Supported types: base, fp16, quantized_8bit
   embedding_model_type: fp16
+
+transliteration:
+  api_url: "http://localhost:8500"
+  default_language: "hi"
+  default_topk: 5
+  timeout: 10  # seconds
