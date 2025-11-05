@@ -598,6 +598,7 @@ const AppContent = () => {
                                             query={query}
                                             setQuery={setQuery}
                                             onSearch={() => handleSearch(1)}
+                                            language={language}
                                         />
                                     </div>
                                     <button

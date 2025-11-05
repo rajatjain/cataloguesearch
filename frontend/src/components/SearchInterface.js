@@ -1,46 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+import TransliterationInput from './TransliterationInput';
 
 // --- SEARCH INTERFACE COMPONENTS ---
-export const SearchBar = ({ query, setQuery, onSearch }) => {
-    const inputRef = useRef(null);
-
-    useEffect(() => {
-        // Auto-focus search box when component mounts
-        if (inputRef.current) {
-            inputRef.current.focus();
-        }
-    }, []);
-
-    useEffect(() => {
-        const handleKeyPress = (event) => {
-            // Only focus if "/" is pressed and we're not already in an input field
-            if (event.key === '/' && 
-                !['INPUT', 'TEXTAREA'].includes(event.target.tagName) &&
-                inputRef?.current) {
-                event.preventDefault();
-                inputRef.current.focus();
-            }
-        };
-
-        document.addEventListener('keydown', handleKeyPress);
-
-        return () => {
-            document.removeEventListener('keydown', handleKeyPress);
-        };
-    }, [inputRef]);
-
+export const SearchBar = ({ query, setQuery, onSearch, language }) => {
     return (
-        <div className="relative">
-            <input 
-                ref={inputRef}
-                type="text" 
-                value={query} 
-                onChange={(e) => setQuery(e.target.value)} 
-                onKeyDown={(e) => e.key === 'Enter' && onSearch()} 
-                placeholder="Enter your search query..." 
-                className="w-full p-3 pl-4 text-lg bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-slate-900 font-sans" 
-            />
-        </div>
+        <TransliterationInput
+            value={query}
+            onChange={setQuery}
+            onSearch={onSearch}
+            language={language}
+            placeholder="Enter your search query..."
+            autoFocus={true}
+        />
     );
 };
 
