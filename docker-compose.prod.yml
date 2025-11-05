@@ -8,7 +8,7 @@ services:
       - node.name=opensearch-node
       - discovery.type=single-node
       - bootstrap.memory_lock=true
-      - "OPENSEARCH_JAVA_OPTS=${OPENSEARCH_JAVA_OPTS:-Xms512m -Xmx1g}"
+      - "OPENSEARCH_JAVA_OPTS=${OPENSEARCH_JAVA_OPTS:--Xms512m -Xmx1g}"
       - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-Admin@Password123!}"
       - plugins.security.disabled=true
       - network.host=0.0.0.0
@@ -34,6 +34,26 @@ services:
       timeout: 10s
       retries: 5
     restart: ${RESTART_POLICY:-no}
+
+  varnmala-io:
+    image: swalakshya/varnmala-io:latest
+    platform: linux/amd64
+    container_name: varnmala-io
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8500:8500"
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8500/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
 
   cataloguesearch-api:
     image: swalakshya/cataloguesearch:api
@@ -63,6 +83,8 @@ services:
       - app-net
     depends_on:
       opensearch:
+        condition: service_healthy
+      varnmala-io:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/metadata"]
