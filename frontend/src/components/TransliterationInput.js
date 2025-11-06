@@ -18,7 +18,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
  * @param {function} props.onChange - Callback when value changes: (newValue) => void
  * @param {function} props.onSearch - Callback when search is triggered (Enter key): () => void
  * @param {string} props.language - Target language: 'hindi' or 'gujarati'
- * @param {string} [props.apiBaseUrl='http://localhost:8500'] - Base URL for transliteration API
+ * @param {string} [props.apiBaseUrl='/api'] - Base URL for transliteration API
  * @param {string} [props.placeholder='Enter your search query...'] - Input placeholder (when OFF)
  * @param {string} [props.className=''] - Additional CSS classes for input
  * @param {boolean} [props.autoFocus=false] - Whether to autofocus input on mount
@@ -32,7 +32,7 @@ const TransliterationInput = ({
     onChange,
     onSearch,
     language,
-    apiBaseUrl = 'http://localhost:8500',
+    apiBaseUrl = '/api',
     placeholder = 'Enter your search query...',
     className = '',
     autoFocus = false,
