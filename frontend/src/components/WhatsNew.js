@@ -10,8 +10,8 @@ const WhatsNew = () => {
             return (
                 <span className="text-slate-700">
                     {item.text}{' '}
-                    <a 
-                        href={item.link} 
+                    <a
+                        href={item.link}
                         target={isExternalLink ? "_blank" : "_self"}
                         rel={isExternalLink ? "noopener noreferrer" : undefined}
                         className="text-sky-600 hover:text-sky-800 underline font-medium"
@@ -25,6 +25,15 @@ const WhatsNew = () => {
     };
 
     const updates = [
+        {
+            date: "November 7, 2025",
+            newContent: [
+                "No new content"
+            ],
+            newFeatures: [
+                "Transliteration support! Users can now type in english letters to generate words in Hindi or Gujarati Scripts."
+            ]
+        },
         {
             date: "October 5, 2025",
             newContent: [
@@ -108,7 +117,7 @@ const WhatsNew = () => {
                 },
                 "Directly open and view the original PDF file along with the search results.",
                 "\"Did you mean?\": Spell Check functionality",
-                "Similar document discovery functionality", 
+                "Similar document discovery functionality",
                 "Numerous improvements in data quality",
             ]
         },
@@ -144,7 +153,7 @@ const WhatsNew = () => {
                         <div className="bg-sky-50 border-b border-sky-100 px-6 py-4">
                             <h2 className="text-xl font-semibold text-sky-800">{update.date}</h2>
                         </div>
-                        
+
                         <div className="px-6 py-6">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                 {/* New Content Section */}
@@ -195,7 +204,7 @@ const WhatsNew = () => {
                     <p className="text-slate-600 mb-4">
                         We're always looking to improve Aagam-Khoj based on your feedback and needs.
                     </p>
-                    <button 
+                    <button
                         onClick={() => window.location.href = '/feedback'}
                         className="bg-sky-600 text-white font-semibold py-2 px-6 rounded-md hover:bg-sky-700 transition-colors duration-200"
                     >
