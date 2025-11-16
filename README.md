@@ -69,24 +69,6 @@ Poppler is required for PDF to image conversion.
 brew install poppler
 ```
 
-### Indic NLP Resources Setup
-Download and set up the Indic NLP resources for advanced language processing.
-
-1. Clone the Indic NLP resources repository:
-    ```bash
-    git clone https://github.com/anoopkunchukuttan/indic_nlp_resources.git
-    ```
-
-2. Set the environment variable to point to the resources:
-    ```bash
-    export INDIC_RESOURCES_PATH="/path/to/indic_nlp_resources"
-    ```
-
-3. Add this to your shell profile (`.bashrc`, `.zshrc`, etc.) for persistence:
-    ```bash
-    echo 'export INDIC_RESOURCES_PATH="/path/to/indic_nlp_resources"' >> ~/.zshrc
-    ```
-
 ### Python Environment Setup
 
 **NOTE**: Python's dependencies should be installed after setting up the above.
@@ -142,7 +124,6 @@ pytest
 
 - **OpenSearch** - Search engine and document indexing
 - **Tesseract OCR** - Optical character recognition
-- **Indic NLP Library** - Specialized processing for Indic languages
 - **Sentence Transformers** - Vector embeddings generation
 - **Python 3.11+** - Core runtime environment
 - **Docker** - Containerization and deployment
