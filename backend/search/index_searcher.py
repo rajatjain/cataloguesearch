@@ -253,9 +253,9 @@ class IndexSearcher:
             if "Kanji" in metadata.get("Pravachankar", {}):
                 # Set Pravachankar text based on language
                 if language in ['gujarati', 'gu']:
-                    result["Pravachankar"] = "પૂજ્ય ગુરુદેવશ્રી કાંજી સ્વામી, સોનગઢ"
+                    result["Pravachankar"] = "પૂજ્ય ગુરુદેવશ્રી કાનજી સ્વામી, સોનગઢ"
                 else:
-                    result["Pravachankar"] = "पूज्य गुरुदेव श्री कांजी स्वामी, सोनगढ़"
+                    result["Pravachankar"] = "पूज्य गुरुदेव श्री कानजी स्वामी, सोनगढ़"
             extracted.append(result)
         return extracted
 
