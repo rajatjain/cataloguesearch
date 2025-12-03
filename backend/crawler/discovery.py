@@ -100,6 +100,36 @@ class SingleFileProcessor:
         # 3. Return the final sorted list of unique pages
         return sorted(list(all_pages))
 
+    def _apply_forward_fill(self, parsed_bookmarks, total_pages):
+        """
+        Maps every page to pravachan data using forward-fill logic.
+        Pages without bookmarks inherit data from the previous bookmark.
+
+        Args:
+            parsed_bookmarks: List of dicts with 'page', 'pravachan_no', 'date'
+            total_pages: Total number of pages in PDF
+
+        Returns:
+            dict[int, dict]: Mapping of page_num -> {pravachan_no, date}
+        """
+        page_to_data = {}
+        current_data = {"pravachan_no": None, "date": None}
+        bookmark_index = 0
+        sorted_bookmarks = sorted(parsed_bookmarks, key=lambda x: x['page'])
+
+        for page_num in range(1, total_pages + 1):
+            # Advance bookmark if next one starts on this page
+            while (bookmark_index < len(sorted_bookmarks) and
+                   sorted_bookmarks[bookmark_index]['page'] <= page_num):
+                current_data = {
+                    "pravachan_no": sorted_bookmarks[bookmark_index].get('pravachan_no'),
+                    "date": sorted_bookmarks[bookmark_index].get('date')
+                }
+                bookmark_index += 1
+            page_to_data[page_num] = current_data.copy()
+
+        return page_to_data
+
     def process(self):
         relative_pdf_path = os.path.relpath(self._file_path, self._base_pdf_folder)
         document_id = str(uuid.uuid5(uuid.NAMESPACE_URL, relative_pdf_path))
@@ -189,11 +219,39 @@ class SingleFileProcessor:
             log_handle.info(f"No changes detected for {self._file_path}. Not indexing.")
             return
 
-        bookmarks = self._pdf_processor.fetch_bookmarks(self._file_path)
+        # Extract or load cached parsed bookmarks (pravachan_no and date)
+        parsed_bookmarks_json = index_state.get("parsed_bookmarks")
+        if parsed_bookmarks_json:
+            # Use cached parsed bookmarks
+            parsed_bookmarks = json.loads(parsed_bookmarks_json)
+            log_handle.info(f"Using cached parsed bookmarks for {self._file_path}")
+        else:
+            # Call bookmark extractor to parse bookmarks
+            log_handle.info(f"Extracting parsed bookmarks for {self._file_path}")
+            try:
+                from backend.crawler.bookmark_extractor.gemini import GeminiBookmarkExtractor
+
+                api_key = self._config.GEMINI_API_KEY
+                extractor = GeminiBookmarkExtractor(api_key)
+                parsed_bookmarks = extractor.parse_bookmarks(self._file_path)
+                log_handle.info(f"Successfully extracted {len(parsed_bookmarks)} bookmarks")
+            except Exception as e:
+                log_handle.error(f"Failed to extract bookmarks: {e}")
+                parsed_bookmarks = []
+
+        # Get total pages for forward-fill
+        doc = fitz.open(self._file_path)
+        total_pages = doc.page_count
+        doc.close()
+
+        # Apply forward-fill logic to map all pages
+        page_to_pravachan_data = self._apply_forward_fill(parsed_bookmarks, total_pages)
+
         self._indexing_module.index_document(
             document_id, relative_path, output_ocr_dir, output_text_dir,
-            pages_list, file_metadata, scan_config, bookmarks, False,
-            dry_run
+            pages_list, file_metadata, scan_config,
+            page_to_pravachan_data,
+            False, dry_run
         )
 
         if not dry_run:
@@ -203,7 +261,8 @@ class SingleFileProcessor:
                 "file_checksum": "",
                 "config_hash": current_config_hash,
                 "index_checksum": "",
-                "ocr_checksum": current_ocr_checksum
+                "ocr_checksum": current_ocr_checksum,
+                "parsed_bookmarks": json.dumps(parsed_bookmarks)
             })
             log_handle.info(f"Completed indexing of {self._file_path}")
 

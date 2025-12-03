@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import time
 from typing import Any, Dict, List
 
@@ -15,8 +16,9 @@ from backend.utils import json_dumps, JSONResponse, log_memory_usage
 from utils.logger import setup_logging, VERBOSE_LEVEL_NUM, METRICS_LEVEL_NUM
 from backend.api.feedback_api import router as feedback_router
 
-# Only import eval router if not in Docker environment (eval/ folder not available in Docker)
-if not Config.is_docker_environment():
+# Only import eval router if not in Docker environment and not running pytest
+# (eval/ folder not available in Docker, and eval imports may fail in tests)
+if not Config.is_docker_environment() and 'pytest' not in sys.modules:
     from eval.api import router as eval_router
 
 log_handle = logging.getLogger(__name__)
@@ -40,8 +42,8 @@ app.add_middleware(
 # --- Include Routers ---
 app.include_router(feedback_router, prefix="/api")
 
-# Only include eval router if not in Docker environment
-if not Config.is_docker_environment():
+# Only include eval router if not in Docker environment and not running pytest
+if not Config.is_docker_environment() and 'pytest' not in sys.modules:
     app.include_router(eval_router, prefix="/api")
 
 @app.on_event("startup")
@@ -183,7 +185,7 @@ class SearchRequest(BaseModel):
     language: str = Field(..., description="Language of the query.", example="hindi")
     exact_match: bool = Field(False, description="Use exact phrase matching instead of regular match.")
     exclude_words: List[str] = Field([], description="List of words to exclude from search results.")
-    categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
+    categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "category": ["Pravachan"]})
 
     # Search types configuration
     search_types: Dict[str, Dict[str, Any]] = Field(

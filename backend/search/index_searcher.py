@@ -34,7 +34,6 @@ class IndexSearcher:
             "gu": "text_content_gujarati",
         }
         self._vector_field = "vector_embedding"
-        self._bookmark_field = "bookmarks"
         self._metadata_prefix = "metadata"
         try:
             embedding_model = get_embedding_model_factory(self._config)
@@ -53,23 +52,13 @@ class IndexSearcher:
             if not values:
                 continue
 
-            if category_key == "bookmarks":
-                filters.append({
-                    "bool": {
-                        "should": [{"match": {self._bookmark_field: value}} for value in values],
-                        "minimum_should_match": 1
-                    }
-                })
-                log_handle.debug(
-                    f"Added bookmark filter: {self._bookmark_field} with values {values}")
-            else:
-                field_name = f"{self._metadata_prefix}.{category_key}.keyword"
-                filters.append({
-                    "terms": {
-                        field_name: values
-                    }
-                })
-                log_handle.debug(f"Added metadata filter: {field_name} with values {values}")
+            field_name = f"{self._metadata_prefix}.{category_key}.keyword"
+            filters.append({
+                "terms": {
+                    field_name: values
+                }
+            })
+            log_handle.debug(f"Added metadata filter: {field_name} with values {values}")
         return filters
 
     def _build_lexical_query(
@@ -246,7 +235,6 @@ class IndexSearcher:
                 "paragraph_id": source.get('paragraph_id'),
                 "content_snippet": content_snippet,
                 "score": float(score) if score is not None else 0.0,
-                "bookmarks": source.get(self._bookmark_field, {}),
                 "metadata": source.get(self._metadata_prefix, {}),
                 "file_url": metadata.get("file_url", "")
             }

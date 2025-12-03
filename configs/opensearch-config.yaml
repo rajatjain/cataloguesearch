@@ -133,12 +133,15 @@ search_index:
         search_analyzer: gujarati_analyzer
       metadata:
         type: object
-      bookmarks:
-        type: text
       timestamp_indexed:
         type: date
       paragraph_id:
         type: keyword
+      pravachan_number:
+        type: keyword
+      date:
+        type: date
+        format: "yyyy-MM-dd||strict_date_optional_time||epoch_millis"
       vector_embedding:
         type: knn_vector
         dimension: 1024
@@ -235,7 +238,7 @@ granth_index:
       filter:
         mixed_indic_stop:
           type: stop
-          stopwords: 
+          stopwords:
             # Hindi stop words
             - "और"
             - "या"

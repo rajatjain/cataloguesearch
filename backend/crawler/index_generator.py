@@ -43,7 +43,7 @@ class IndexGenerator:
     def index_document(
         self, document_id: str, original_filename: str,
         ocr_dir: str, output_text_dir: str, pages_list: list[int], metadata: dict,
-        scan_config: dict, bookmarks: dict[int, str],
+        scan_config: dict, page_to_pravachan_data: dict[int, dict],
         reindex_metadata_only: bool = False, dry_run: bool = True):
         log_handle.info(
             f"Indexing document: {document_id}, reindex_metadata_only: {reindex_metadata_only}, "
@@ -77,7 +77,7 @@ class IndexGenerator:
 
         timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
         if reindex_metadata_only:
-            self._reindex_metadata_only(document_id, metadata, bookmarks, timestamp)
+            self._reindex_metadata_only(document_id, metadata, page_to_pravachan_data, timestamp)
             return
 
         # --- Full Re-indexing Logic ---
@@ -99,7 +99,8 @@ class IndexGenerator:
         paras = self._get_paras(page_text_paths)
 
         chunks = self._create_chunks_from_paras(
-            paras, document_id, original_filename, metadata, bookmarks, timestamp
+            paras, document_id, original_filename, metadata,
+            page_to_pravachan_data, timestamp
         )
         log_handle.info(f"Created {len(chunks)} initial chunks for document {document_id}.")
 
@@ -135,8 +136,8 @@ class IndexGenerator:
                 traceback.print_exc()
                 log_handle.error(f"Failed to write {fname}")
 
-    def _reindex_metadata_only(self, document_id, metadata, bookmarks, timestamp):
-        """Handles the logic for updating metadata of existing documents."""
+    def _reindex_metadata_only(self, document_id, metadata, page_to_pravachan_data, timestamp):
+        """Handles the logic for updating metadata and pravachan fields of existing documents."""
         try:
             query = {"query": {"term": {"document_id": document_id}}, "size": 10000}
             response = self._opensearch_client.search(index=self._index_name, body=query)
@@ -150,13 +151,29 @@ class IndexGenerator:
             for hit in hits:
                 doc_id = hit['_id']
                 page_number = hit['_source'].get('page_number')
+
+                # Get pravachan data for this page
+                pravachan_data = page_to_pravachan_data.get(page_number, {})
+                pravachan_number = pravachan_data.get('pravachan_no')
+                date_str = pravachan_data.get('date')  # Format: DD-MM-YYYY
+
+                # Convert date from DD-MM-YYYY to YYYY-MM-DD for OpenSearch
+                date_iso = None
+                if date_str:
+                    try:
+                        date_obj = datetime.strptime(date_str, "%d-%m-%Y")
+                        date_iso = date_obj.strftime("%Y-%m-%d")
+                    except ValueError:
+                        log_handle.warning(f"Invalid date format for page {page_number}: {date_str}")
+
                 action = {
                     "_op_type": "update",
                     "_index": self._index_name,
                     "_id": doc_id,
                     "doc": {
                         "metadata": metadata,
-                        "bookmarks": bookmarks.get(page_number),
+                        "pravachan_number": pravachan_number,
+                        "date": date_iso,
                         "timestamp_indexed": timestamp
                     }
                 }
@@ -168,16 +185,32 @@ class IndexGenerator:
             # Also update the dedicated metadata index
             update_metadata_index(self._config, self._opensearch_client, metadata)
 
-            log_handle.info(f"Metadata re-indexed for document {document_id}.")
+            log_handle.info(f"Metadata and pravachan fields re-indexed for document {document_id}.")
         except Exception as e:
             log_handle.error(f"Error during metadata-only re-indexing for {document_id}: {e}")
 
     def _create_chunks_from_paras(self, paras, document_id,
-                                  original_filename, metadata, bookmarks, timestamp):
+                                  original_filename, metadata,
+                                  page_to_pravachan_data, timestamp):
         """Converts a list of paragraphs into a list of chunk dictionaries."""
         chunks = []
         for i, (page_num, para_text) in enumerate(paras):
             chunk_id = f"{document_id}_p{page_num}_para{i}"
+
+            # Get pravachan data for this page
+            pravachan_data = page_to_pravachan_data.get(page_num, {})
+            pravachan_number = pravachan_data.get('pravachan_no')
+            date_str = pravachan_data.get('date')  # Format: DD-MM-YYYY
+
+            # Convert date from DD-MM-YYYY to YYYY-MM-DD for OpenSearch
+            date_iso = None
+            if date_str:
+                try:
+                    date_obj = datetime.strptime(date_str, "%d-%m-%Y")
+                    date_iso = date_obj.strftime("%Y-%m-%d")
+                except ValueError:
+                    log_handle.warning(f"Invalid date format for page {page_num}: {date_str}")
+
             chunk = {
                 "chunk_id": chunk_id,
                 "document_id": document_id,
@@ -186,7 +219,8 @@ class IndexGenerator:
                 "paragraph_id": i,
                 "embedding_text": para_text,
                 "metadata": metadata,
-                "bookmarks": bookmarks.get(page_num),
+                "pravachan_number": pravachan_number,
+                "date": date_iso,
                 "timestamp_indexed": timestamp,
             }
 

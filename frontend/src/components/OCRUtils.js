@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Spinner } from './SharedComponents';
 import ShowBookmarksButton from './ShowBookmarksButton';
 import BookmarksModal from './BookmarksModal';
+import ParsedBookmarksModal from './ParsedBookmarksModal';
 import { addPageNumbersToBookmarks } from '../utils/pdfUtils';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '/api';
@@ -22,6 +23,9 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
     const [previewUrl, setPreviewUrl] = useState(null);
     const [bookmarks, setBookmarks] = useState([]);
     const [showBookmarkModal, setShowBookmarkModal] = useState(false);
+    const [parsedBookmarks, setParsedBookmarks] = useState({ extracted: [], ignored: [] });
+    const [showParsedBookmarkModal, setShowParsedBookmarkModal] = useState(false);
+    const [isParsedBookmarksLoading, setIsParsedBookmarksLoading] = useState(false);
     const [useGoogleOCR, setUseGoogleOCR] = useState(false);
     const [ocrMode, setOcrMode] = useState('psm6');
 
@@ -154,16 +158,18 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
         setTotalPages(1);
         setBookmarks([]);
         setShowBookmarkModal(false);
-        
+        setParsedBookmarks({ extracted: [], ignored: [] });
+        setShowParsedBookmarkModal(false);
+
         // Reset OCR state
         setOcrResults(null);
         setCroppedPreviewUrl(null);
         setError(null);
         setIsLoading(false);
-        
+
         // Reset batch state
         resetBatchState();
-        
+
         // Reset file input
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
@@ -642,6 +648,70 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
         }
     };
 
+    const handleFetchParsedBookmarks = async () => {
+        if (!selectedFile || !isPDF) {
+            setError('Please select a PDF file to extract bookmarks.');
+            return;
+        }
+
+        // Get the PDF path - need to construct full path for API call
+        let pdfPath = '';
+        const isFromBrowser = propSelectedFile && propSelectedFile.relativePath &&
+                              selectedFile.name === propSelectedFile.selectedPDFFile;
+
+        if (isFromBrowser && basePaths) {
+            // Construct full path from base path + relative path
+            pdfPath = `${basePaths.base_pdf_path}/${propSelectedFile.relativePath}.pdf`;
+        } else {
+            setError('PDF path not available. Please select a file from the browser.');
+            return;
+        }
+
+        setIsParsedBookmarksLoading(true);
+        setError(null);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/eval/bookmarks/extract`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    pdf_path: pdfPath,
+                    use_local_llm: false,
+                    ollama_model: 'llama3.2'
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || `HTTP error! status: ${response.status}`);
+            }
+
+            // Categorize bookmarks into extracted and ignored
+            const extracted = [];
+            const ignored = [];
+
+            data.bookmarks.forEach(bookmark => {
+                if (bookmark.pravachan_no || bookmark.date) {
+                    extracted.push(bookmark);
+                } else {
+                    ignored.push(bookmark);
+                }
+            });
+
+            setParsedBookmarks({ extracted, ignored });
+            setShowParsedBookmarkModal(true);
+
+        } catch (err) {
+            setError(`Failed to fetch parsed bookmarks: ${err.message}`);
+            console.error('Parsed Bookmarks Error:', err);
+        } finally {
+            setIsParsedBookmarksLoading(false);
+        }
+    };
+
     const ProgressBar = ({ progress, total }) => {
         const percentage = total > 0 ? Math.round((progress / total) * 100) : 0;
         return (
@@ -662,6 +732,14 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                 onClose={() => setShowBookmarkModal(false)}
                 bookmarks={bookmarks}
                 onBookmarkClick={handleBookmarkClick}
+            />
+
+            {/* Parsed Bookmarks Modal */}
+            <ParsedBookmarksModal
+                isOpen={showParsedBookmarkModal}
+                onClose={() => setShowParsedBookmarkModal(false)}
+                extractedBookmarks={parsedBookmarks.extracted}
+                ignoredBookmarks={parsedBookmarks.ignored}
             />
 
             {/* Main OCR Utils Panel Container */}
@@ -861,10 +939,33 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                             )}
 
                             {/* Show bookmarks toggle */}
-                            <ShowBookmarksButton 
+                            <ShowBookmarksButton
                                 hasBookmarks={isPDF && bookmarks.length > 0}
                                 onClick={() => setShowBookmarkModal(true)}
                             />
+
+                            {/* Show parsed bookmarks button */}
+                            {isPDF && selectedFile && propSelectedFile && propSelectedFile.relativePath && (
+                                <button
+                                    onClick={handleFetchParsedBookmarks}
+                                    disabled={isParsedBookmarksLoading}
+                                    className="text-sm text-purple-600 hover:text-purple-800 flex items-center disabled:text-gray-400 disabled:hover:text-gray-400"
+                                >
+                                    {isParsedBookmarksLoading ? (
+                                        <>
+                                            <Spinner />
+                                            <span className="ml-1">Loading...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                            </svg>
+                                            Show Parsed Bookmarks
+                                        </>
+                                    )}
+                                </button>
+                            )}
                         </div>
 
                         {/* Action Buttons */}
