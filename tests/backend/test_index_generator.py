@@ -29,10 +29,11 @@ def setup():
     config.settings()["crawler"]["base_ocr_path"] = ocr_dest_dir
     return temp_dir
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="module")
 def indexing_module():
     """
     Provides an initialized IndexingEmbeddingModule instance for testing.
+    Module-scoped so it's created once per test module.
     """
     config = Config()
     opensearch_client = get_opensearch_client(config)
@@ -50,6 +51,122 @@ def indexing_module():
     create_indices_if_not_exists(config, opensearch_client)
     return module
 
+@pytest.fixture(scope="module")
+def indexed_documents(setup, indexing_module):
+    """
+    Module-scoped fixture that indexes documents once with bookmark data.
+    All tests in this module can reuse the indexed data.
+
+    Returns:
+        List of document configs used for indexing
+    """
+    config = Config()
+    opensearch_client = get_opensearch_client(config)
+    temp_dir = setup
+
+    scan_config = {
+        "header_regex": [
+            "^.{0,20}इतिहास एवं लेख$",
+            "^.{0,15}पर.{0,5}निबंध$",
+            "^निबंध.{0,15}$",
+            "^નિબંધ.{0,15}$",
+            "^.{0,15}ઉપર.{0,15}નિબંધ$",
+            "^.{0,20}ઇતિહાસ.{0,8}લેખ$",
+            "^[0-9]{0,4}$"
+        ],
+        "crop": {
+            "top": 8,
+            "bottom": 8
+        }
+    }
+
+    # Document configurations for testing - using documents WITH bookmarks
+    document_configs = [
+        {
+            'doc_name': 'hampi_hindi',
+            'doc_id': 'hampi_hindi_doc_id',
+            'filename': 'hampi_hindi.pdf',
+            'language': 'hi',
+            'metadata': {'language': 'hi'},
+            'para_count_advanced': 20,
+            'para_count_paragraph': 20
+        },
+        {
+            'doc_name': 'jaipur_hindi',
+            'doc_id': 'jaipur_hindi_doc_id',
+            'filename': 'jaipur_hindi.pdf',
+            'language': 'hi',
+            'metadata': {'language': 'hi'},
+            'para_count_advanced': 21,
+            'para_count_paragraph': 20
+        },
+        {
+            'doc_name': 'indore_gujarati',
+            'doc_id': 'indore_gujarati_doc_id',
+            'filename': 'indore_gujarati.pdf',
+            'language': 'gu',
+            'metadata': {'language': 'gu'},
+            'para_count_advanced': 21,
+            'para_count_paragraph': 20
+        },
+        {
+            'doc_name': 'thanjavur_gujarati',
+            'doc_id': 'thanjavur_gujarati_doc_id',
+            'filename': 'thanjavur_gujarati.pdf',
+            'language': 'gu',
+            'metadata': {'language': 'gu'},
+            'para_count_advanced': 2,
+            'para_count_paragraph': 20
+        }
+    ]
+
+    log_handle.info("=== INDEXED_DOCUMENTS FIXTURE: SETUP PHASE ===")
+
+    # Setup document paths and expected counts
+    for doc_config in document_configs:
+        doc_name = doc_config['doc_name']
+
+        # Setup paths
+        ocr_dir, pages_list = setup_document_paths(temp_dir, doc_name)
+        output_dir = os.path.join(temp_dir, "text", doc_name)
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Calculate expected count
+        para_count_key = "para_count_%s" % config.CHUNK_STRATEGY
+        expected_count = doc_config[para_count_key]
+
+        # Add to config
+        doc_config.update({
+            'ocr_dir': ocr_dir,
+            'pages_list': pages_list,
+            'output_dir': output_dir,
+            'expected_count': expected_count
+        })
+
+        log_handle.info(f"{doc_name}: {len(pages_list)} pages, expected {expected_count} paragraphs")
+
+    log_handle.info("=== INDEXED_DOCUMENTS FIXTURE: INDEXING WITH BOOKMARK DATA ===")
+
+    # Index all documents with bookmark data
+    for i, doc_config in enumerate(document_configs):
+        doc_name = doc_config['doc_name']
+        log_handle.info(f"Indexing document {i+1}/{len(document_configs)}: {doc_name}")
+
+        # Get bookmark data for this document
+        page_to_pravachan_data = get_page_to_pravachan_data(doc_name)
+
+        indexing_module.index_document(
+            doc_config['doc_id'], doc_config['filename'], doc_config['ocr_dir'],
+            doc_config['output_dir'], doc_config['pages_list'], doc_config['metadata'],
+            scan_config, page_to_pravachan_data, reindex_metadata_only=False, dry_run=False)
+
+    # Refresh index
+    opensearch_client.indices.refresh(index=indexing_module._index_name)
+
+    total_docs = len(get_documents(config, "match_all"))
+    log_handle.info(f"=== INDEXED_DOCUMENTS FIXTURE: COMPLETE ({total_docs} documents indexed) ===")
+
+    return document_configs
 
 # Helper functions for test_index_generator
 def setup_document_paths(temp_dir, doc_name):
@@ -102,6 +219,58 @@ def count_paragraphs_in_output_dir(output_dir):
                     paragraphs = content.split("\n----\n")
                     total_paragraphs += len(paragraphs)
     return total_paragraphs
+
+def get_page_to_pravachan_data(doc_name):
+    """
+    Returns hardcoded page_to_pravachan_data for test documents.
+    Based on bookmarks added in common.py lines 219-238.
+
+    Bookmark behavior: A bookmark applies from that page onwards until the next bookmark.
+    """
+    bookmarks_data = {
+        'hampi_hindi': {
+            # Bookmark at page 2: "prav number 248, 1985-10-23"
+            2: {'pravachan_no': '248', 'date': '23-10-1985'},
+            3: {'pravachan_no': '248', 'date': '23-10-1985'},
+            # Bookmark at page 4: "Prav 324. Date 24-05-1986"
+            4: {'pravachan_no': '324', 'date': '24-05-1986'},
+            5: {'pravachan_no': '324', 'date': '24-05-1986'},
+            6: {'pravachan_no': '324', 'date': '24-05-1986'},
+        },
+        'jaipur_hindi': {
+            # Bookmark at page 1: "Pravachan Num 10 on Date 03-05-1986"
+            1: {'pravachan_no': '10', 'date': '03-05-1986'},
+            2: {'pravachan_no': '10', 'date': '03-05-1986'},
+            3: {'pravachan_no': '10', 'date': '03-05-1986'},
+            4: {'pravachan_no': '10', 'date': '03-05-1986'},
+            # Bookmark at page 5: "Pravachan Num 12 on Date 04-06-1987"
+            5: {'pravachan_no': '12', 'date': '04-06-1987'},
+            6: {'pravachan_no': '12', 'date': '04-06-1987'},
+        },
+        'indore_gujarati': {
+            # Bookmark at page 2: "pr number 28, 1982-10-23"
+            2: {'pravachan_no': '28', 'date': '23-10-1982'},
+            3: {'pravachan_no': '28', 'date': '23-10-1982'},
+            # Bookmark at page 4: "Prav 324. Date 24-05-1982"
+            4: {'pravachan_no': '324', 'date': '24-05-1982'},
+            5: {'pravachan_no': '324', 'date': '24-05-1982'},
+            6: {'pravachan_no': '324', 'date': '24-05-1982'},
+            7: {'pravachan_no': '324', 'date': '24-05-1982'},
+        },
+        'thanjavur_gujarati': {
+            # Bookmark at page 2: "Pravachan Num 15 on Date 06-05-1980"
+            2: {'pravachan_no': '15', 'date': '06-05-1980'},
+            # Bookmark at page 3: "Pravachan Num 18 on Date 04-06-1983"
+            3: {'pravachan_no': '18', 'date': '04-06-1983'},
+            4: {'pravachan_no': '18', 'date': '04-06-1983'},
+            5: {'pravachan_no': '18', 'date': '04-06-1983'},
+        },
+        # Documents without bookmarks
+        'bangalore_hindi': {},
+        'bangalore_gujarati': {},
+        'songadh_gujarati': {},
+    }
+    return bookmarks_data.get(doc_name, {})
 
 def validate_dry_run_phase(config, temp_dir, doc_configs, indexing_module, opensearch_client):
     """Validate dry run phase: no documents indexed, but paragraphs generated."""
@@ -256,6 +425,42 @@ def get_all_documents(config, max_results: int = 1000) -> list:
     """Legacy function - use get_documents() instead."""
     return get_documents(config, "match_all", max_results=max_results)
 
+def query_by_pravachan_number(config, pravachan_num: str, max_results: int = 1000) -> list:
+    """
+    Query documents by pravachan_number field.
+
+    Args:
+        config: Configuration object
+        pravachan_num: The pravachan number to search for (e.g., "248")
+        max_results: Maximum number of results to return
+
+    Returns:
+        List of matching documents
+    """
+    try:
+        opensearch_client = get_opensearch_client(config)
+        index_name = config.OPENSEARCH_INDEX_NAME
+
+        search_body = {
+            "size": max_results,
+            "query": {
+                "term": {
+                    "pravachan_number": pravachan_num
+                }
+            }
+        }
+
+        response = opensearch_client.search(
+            index=index_name,
+            body=search_body
+        )
+
+        return response['hits']['hits']
+
+    except Exception as e:
+        log_handle.error(f"Error querying by pravachan_number '{pravachan_num}': {e}")
+        return []
+
 def test_create_index_if_not_exists(indexing_module):
     """
     Tests that the index is created correctly with the specified mappings and settings.
@@ -286,14 +491,14 @@ def test_generate_embedding_empty_text(indexing_module):
     embedding = embedding_model.get_embedding("")
     assert len(embedding) == embedding_model.get_embedding_dimension()
 
-def test_index_generator(setup, indexing_module):
+def test_dry_run_behavior(setup, indexing_module):
     """
-    Tests comprehensive indexing workflow with incremental validation.
-    Validates dry run, paragraph generation, live indexing, and vector embeddings.
+    Tests that dry run mode generates paragraphs but does NOT index to OpenSearch.
     """
     config = Config()
     opensearch_client = get_opensearch_client(config)
     temp_dir = setup
+
     scan_config = {
         "header_regex": [
             "^.{0,20}इतिहास एवं लेख$",
@@ -310,9 +515,8 @@ def test_index_generator(setup, indexing_module):
         }
     }
 
-    # Document configurations for testing
+    # Test with a single document
     document_configs = [
-        # First test case: Bangalore documents
         {
             'doc_name': 'bangalore_hindi',
             'doc_id': 'bangalore_hindi_doc_id',
@@ -321,55 +525,21 @@ def test_index_generator(setup, indexing_module):
             'metadata': {'language': 'hi'},
             'para_count_advanced': 20,
             'para_count_paragraph': 20
-        },
-        {
-            'doc_name': 'bangalore_gujarati',
-            'doc_id': 'bangalore_gujarati_doc_id',
-            'filename': 'bangalore_gujarati.pdf',
-            'language': 'gu',
-            'metadata': {'language': 'gu'},
-            'para_count_advanced': 21,
-            'para_count_paragraph': 20
-        },
-        # Second test case: Thanjavur/Songadh documents
-        {
-            'doc_name': 'thanjavur_hindi',
-            'doc_id': 'thanjavur_hindi_doc_id',
-            'filename': 'thanjavur_hindi.pdf',
-            'language': 'hi',
-            'metadata': {'language': 'hi'},
-            'para_count_advanced': 21,
-            'para_count_paragraph': 20
-        },
-        {
-            'doc_name': 'songadh_gujarati',
-            'doc_id': 'songadh_gujarati_doc_id',
-            'filename': 'songadh_gujarati.pdf',
-            'language': 'gu',
-            'metadata': {'language': 'gu'},
-            'para_count_advanced': 21,
-            'para_count_paragraph': 20
         }
     ]
 
-    log_handle.info("=== SETUP PHASE ===")
+    log_handle.info("=== DRY RUN TEST: SETUP ===")
 
-    # Setup document paths and expected counts
+    # Setup document paths
     for doc_config in document_configs:
         doc_name = doc_config['doc_name']
-        language = doc_config['language']
-
-        # Setup paths
         ocr_dir, pages_list = setup_document_paths(temp_dir, doc_name)
-        output_dir = os.path.join(temp_dir, "text", doc_name)
+        output_dir = os.path.join(temp_dir, "text_dry_run", doc_name)
         os.makedirs(output_dir, exist_ok=True)
 
-        # Calculate expected count
         para_count_key = "para_count_%s" % config.CHUNK_STRATEGY
         expected_count = doc_config[para_count_key]
-        # expected_count = get_expected_paragraph_count(ocr_dir, pages_list, language, indexing_module)
 
-        # Add to config
         doc_config.update({
             'ocr_dir': ocr_dir,
             'pages_list': pages_list,
@@ -377,44 +547,80 @@ def test_index_generator(setup, indexing_module):
             'expected_count': expected_count
         })
 
-        log_handle.info(f"{doc_name}: {len(pages_list)} pages, expected {expected_count} paragraphs")
+    log_handle.info("=== DRY RUN TEST: INDEXING WITH DRY_RUN=TRUE ===")
 
-    # Phase 1: Dry run indexing
-    log_handle.info("=== PHASE 1: DRY RUN INDEXING ===")
+    # Run dry run indexing
     for doc_config in document_configs:
         indexing_module.index_document(
             doc_config['doc_id'], doc_config['filename'], doc_config['ocr_dir'],
             doc_config['output_dir'], doc_config['pages_list'], doc_config['metadata'],
             scan_config, {}, reindex_metadata_only=False, dry_run=True)
 
-    # Validate dry run phase
+    # Validate dry run behavior
     validate_dry_run_phase(config, temp_dir, document_configs, indexing_module, opensearch_client)
 
-    # Phase 2: Live indexing (incremental)
-    log_handle.info("=== PHASE 2: LIVE INDEXING ===")
-    for i, doc_config in enumerate(document_configs):
-        log_handle.info(f"Indexing document {i+1}/{len(document_configs)}: {doc_config['doc_name']}")
+    log_handle.info("✅ Dry run test completed successfully!")
 
-        indexing_module.index_document(
-            doc_config['doc_id'], doc_config['filename'], doc_config['ocr_dir'],
-            doc_config['output_dir'], doc_config['pages_list'], doc_config['metadata'],
-            scan_config, {}, reindex_metadata_only=False, dry_run=False)
+def validate_query_by_pravachan_number(config, indexed_documents):
+    """
+    Validates querying documents by pravachan_number field.
+    Tests with pravachan number "248" which exists only in hampi_hindi (pages 2-3).
+    """
+    log_handle.info("=== VALIDATE QUERY BY PRAVACHAN NUMBER ===")
 
-        opensearch_client.indices.refresh(index=indexing_module._index_name)
+    pravachan_num = "248"
+    results = query_by_pravachan_number(config, pravachan_num)
 
-        # Log incremental progress
-        total_docs = len(get_documents(config, "match_all"))
-        log_handle.info(f"Total documents after indexing {doc_config['doc_name']}: {total_docs}")
+    log_handle.info(f"Query for pravachan_number='{pravachan_num}' returned {len(results)} documents")
 
-    # Phase 3: Final validation
-    log_handle.info("=== PHASE 3: FINAL VALIDATION ===")
+    # Expected: Only documents from hampi_hindi pages 2-3 should be returned
+    # Looking at get_page_to_pravachan_data, hampi_hindi has pravachan 248 on pages 2-3
+    assert len(results) > 0, f"Expected results for pravachan_number '{pravachan_num}', got 0"
+
+    # Validate all results have correct pravachan_number
+    for doc in results:
+        source = doc['_source']
+        assert 'pravachan_number' in source, f"Missing pravachan_number in document {doc['_id']}"
+        assert source['pravachan_number'] == pravachan_num, \
+            f"Expected pravachan_number '{pravachan_num}', got '{source['pravachan_number']}' in document {doc['_id']}"
+
+        # Validate date field also exists
+        assert 'date' in source, f"Missing date field in document {doc['_id']}"
+        assert source['date'] == '1985-10-23', \
+            f"Expected date '1985-10-23' (YYYY-MM-DD) for pravachan_number '{pravachan_num}', got '{source['date']}'"
+
+        # Validate it's from hampi_hindi
+        assert source['original_filename'] == 'hampi_hindi.pdf', \
+            f"Expected hampi_hindi.pdf, got {source['original_filename']}"
+
+        # Validate page number is 2 or 3
+        page_num = source.get('page_number')
+        assert page_num in [2, 3], \
+            f"Expected page_number 2 or 3 for pravachan '{pravachan_num}', got {page_num}"
+
+        log_handle.info(
+            f"✓ Document {doc['_id']}: pravachan={source['pravachan_number']}, "
+            f"date={source['date']}, page={page_num}, file={source['original_filename']}"
+        )
+
+    log_handle.info(f"✅ Pravachan number query validation passed for '{pravachan_num}': {len(results)} documents")
+
+def test_index_generator(indexed_documents):
+    """
+    Tests that documents are indexed correctly with proper counts and embeddings.
+    Uses the indexed_documents fixture which indexes documents once per module.
+    """
+    config = Config()
+    doc_configs = indexed_documents
+
+    log_handle.info("=== VALIDATION PHASE ===")
 
     # Validate document counts and properties
-    hindi_docs, gujarati_docs = validate_document_counts(config, document_configs)
+    hindi_docs, gujarati_docs = validate_document_counts(config, doc_configs)
 
     # Validate total counts match expectations
-    total_expected_hindi = sum(d['expected_count'] for d in document_configs if d['language'] == 'hi')
-    total_expected_gujarati = sum(d['expected_count'] for d in document_configs if d['language'] == 'gu')
+    total_expected_hindi = sum(d['expected_count'] for d in doc_configs if d['language'] == 'hi')
+    total_expected_gujarati = sum(d['expected_count'] for d in doc_configs if d['language'] == 'gu')
 
     assert len(hindi_docs) == total_expected_hindi, \
         f"Total Hindi count mismatch: expected {total_expected_hindi}, got {len(hindi_docs)}"
@@ -426,7 +632,11 @@ def test_index_generator(setup, indexing_module):
     # Validate vector embeddings for all documents
     validate_vector_embeddings(config)
 
-    log_handle.info("🎉 All phases completed successfully!")
+    log_handle.info("✅ All validations passed!")
 
-
-    log_handle.info("🎉 Bookmark indexing test completed successfully!")
+def test_pravachan_query_single_number(indexed_documents):
+    """
+    Tests querying by a single pravachan number that exists in only one document.
+    """
+    config = Config()
+    validate_query_by_pravachan_number(config, indexed_documents)
