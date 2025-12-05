@@ -129,7 +129,11 @@ def setup(copy_ocr_files=False, add_scan_config=False, add_bookmarks=True):
 
     # Create config files for category directories
     cities_config = {"Anuyog": "city"}
-    spiritual_config = {"Anuyog": "spiritual"}
+    spiritual_config = {
+        "Anuyog": "spiritual",
+        "series_start_date": "1975-01-01",
+        "series_end_date": "1977-12-31"
+    }
     history_config = {"Anuyog": "history"}
     metro_config = {"type": "metro"}
     non_metro_config = {"type": "non_metro"}
@@ -141,6 +145,13 @@ def setup(copy_ocr_files=False, add_scan_config=False, add_bookmarks=True):
         write_config_file(f"{lang_base}/cities/non_metro/config.json", non_metro_config)
         write_config_file(f"{lang_base}/spiritual/config.json", spiritual_config)
         write_config_file(f"{lang_base}/history/config.json", history_config)
+
+    # Add file-specific config for thanjavur_gujarati with series dates
+    thanjavur_gujarati_file_config = {
+        "series_start_date": "1978-01-01",
+        "series_end_date": "1983-12-31"
+    }
+    write_config_file(f"{gujarati_base}/history/thanjavur_gujarati_config.json", thanjavur_gujarati_file_config)
 
     if copy_ocr_files:
         # This is to simulate the text files that would be generated

@@ -65,29 +65,87 @@ class IndexSearcher:
         """
         Builds a date range filter for OpenSearch queries.
 
+        Returns documents where EITHER:
+        1. The document has a 'date' field AND it falls within the search range, OR
+        2. The document has NO 'date' field AND its series date range overlaps with the search range
+
+        This ensures that documents with specific bookmark dates are only included if those dates
+        are within range, while documents without bookmarks can be included via series date overlap.
+
         Args:
             start_year: Start year (e.g., 1985)
             end_year: End year (e.g., 1987)
 
         Returns:
-            Date range filter dict, or None if no year parameters provided
+            Date range filter dict with OR logic, or None if no year parameters provided
         """
         if start_year is None and end_year is None:
             return None
 
         # Convert years to date strings (YYYY-MM-DD format)
-        start_date = f"{start_year}-01-01" if start_year is not None else None
-        end_date = f"{end_year}-12-31" if end_year is not None else None
+        search_start_date = f"{start_year}-01-01" if start_year is not None else None
+        search_end_date = f"{end_year}-12-31" if end_year is not None else None
 
-        date_filter = {"range": {"date": {}}}
+        # Build conditions for OR logic
+        should_conditions = []
 
-        if start_date:
-            date_filter["range"]["date"]["gte"] = start_date
-            log_handle.debug(f"Added date filter: gte {start_date}")
+        # CONDITION 1: Document HAS a date field AND it's within search range
+        date_exists_and_in_range = {
+            "bool": {
+                "must": [
+                    {"exists": {"field": "date"}}
+                ]
+            }
+        }
+        date_range_condition = {"range": {"date": {}}}
+        if search_start_date:
+            date_range_condition["range"]["date"]["gte"] = search_start_date
+        if search_end_date:
+            date_range_condition["range"]["date"]["lte"] = search_end_date
+        date_exists_and_in_range["bool"]["must"].append(date_range_condition)
+        should_conditions.append(date_exists_and_in_range)
+        log_handle.debug(f"Added document date filter (must exist and be in range): {search_start_date} to {search_end_date}")
 
-        if end_date:
-            date_filter["range"]["date"]["lte"] = end_date
-            log_handle.debug(f"Added date filter: lte {end_date}")
+        # CONDITION 2: Document has NO date field AND series dates overlap with search range
+        # Overlap occurs when: series_start_date <= search_end_date AND series_end_date >= search_start_date
+        no_date_and_series_overlap = {
+            "bool": {
+                "must": [
+                    {"bool": {"must_not": [{"exists": {"field": "date"}}]}}
+                ]
+            }
+        }
+
+        if search_end_date:
+            # series_start_date <= search_end_date
+            no_date_and_series_overlap["bool"]["must"].append({
+                "range": {
+                    "metadata.series_start_date": {
+                        "lte": search_end_date
+                    }
+                }
+            })
+
+        if search_start_date:
+            # series_end_date >= search_start_date
+            no_date_and_series_overlap["bool"]["must"].append({
+                "range": {
+                    "metadata.series_end_date": {
+                        "gte": search_start_date
+                    }
+                }
+            })
+
+        should_conditions.append(no_date_and_series_overlap)
+        log_handle.debug(f"Added series date overlap filter (only for docs without date field): series overlapping with {search_start_date} to {search_end_date}")
+
+        # Combine with OR logic (should with minimum_should_match=1)
+        date_filter = {
+            "bool": {
+                "should": should_conditions,
+                "minimum_should_match": 1
+            }
+        }
 
         return date_filter
 
@@ -283,7 +341,9 @@ class IndexSearcher:
                 "metadata": source.get(self._metadata_prefix, {}),
                 "file_url": metadata.get("file_url", ""),
                 "date": source.get('date'),
-                "pravachan_number": source.get('pravachan_number')
+                "pravachan_number": source.get('pravachan_number'),
+                "series_start_date": metadata.get('series_start_date'),
+                "series_end_date": metadata.get('series_end_date')
             }
             if "Kanji" in metadata.get("Pravachankar", {}):
                 # Set Pravachankar text based on language

@@ -133,6 +133,13 @@ search_index:
         search_analyzer: gujarati_analyzer
       metadata:
         type: object
+        properties:
+          series_start_date:
+            type: date
+            format: "yyyy-MM-dd||strict_date_optional_time||epoch_millis"
+          series_end_date:
+            type: date
+            format: "yyyy-MM-dd||strict_date_optional_time||epoch_millis"
       timestamp_indexed:
         type: date
       paragraph_id:
