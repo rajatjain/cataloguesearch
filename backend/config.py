@@ -133,6 +133,8 @@ class Config:
             return self._settings.get("transliteration", {}).get("default_topk", 5)
         elif name == "TRANSLITERATION_TIMEOUT":
             return self._settings.get("transliteration", {}).get("timeout", 10)
+        elif name == "GEMINI_API_KEY":
+            return os.getenv("GEMINI_API_KEY")
         else:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 

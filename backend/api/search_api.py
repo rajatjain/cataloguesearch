@@ -186,6 +186,8 @@ class SearchRequest(BaseModel):
     exact_match: bool = Field(False, description="Use exact phrase matching instead of regular match.")
     exclude_words: List[str] = Field([], description="List of words to exclude from search results.")
     categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "category": ["Pravachan"]})
+    start_year: int | None = Field(None, description="Start year for date range filter (e.g., 1985).", example=1985)
+    end_year: int | None = Field(None, description="End year for date range filter (e.g., 1987).", example=1987)
 
     # Search types configuration
     search_types: Dict[str, Dict[str, Any]] = Field(
@@ -241,6 +243,8 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
     search_types = request_data.search_types
     enable_reranking = request_data.enable_reranking
     language = request_data.language
+    start_year = request_data.start_year
+    end_year = request_data.end_year
 
     # Extract search type configurations
     pravachan_config = search_types.get("Pravachan")
@@ -281,7 +285,9 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                     categories=categories,
                     detected_language=language,
                     page_size=pravachan_config.get("page_size", 20),
-                    page_number=pravachan_config.get("page_number", 1)
+                    page_number=pravachan_config.get("page_number", 1),
+                    start_year=start_year,
+                    end_year=end_year
                 )
                 log_handle.info(f"Pravachan search returned {len(pravachan_results)} results (total: {pravachan_total_hits}).")
 
@@ -293,7 +299,9 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                     categories=categories,
                     detected_language=language,
                     page_size=granth_config.get("page_size", 20),
-                    page_number=granth_config.get("page_number", 1)
+                    page_number=granth_config.get("page_number", 1),
+                    start_year=start_year,
+                    end_year=end_year
                 )
                 log_handle.info(f"Granth search returned {len(granth_results)} results (total: {granth_total_hits}).")
 
@@ -390,7 +398,9 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                         page_number=1,
                         language=language,
                         rerank=enable_reranking,
-                        rerank_top_k=30
+                        rerank_top_k=30,
+                        start_year=start_year,
+                        end_year=end_year
                     )
                     log_handle.info(f"Pravachan vector search returned {len(pravachan_results)} results (total: {pravachan_total_hits}).")
 
@@ -403,7 +413,9 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                         page_number=1,
                         language=language,
                         rerank=enable_reranking,
-                        rerank_top_k=20
+                        rerank_top_k=20,
+                        start_year=start_year,
+                        end_year=end_year
                     )
                     log_handle.info(f"Granth vector search returned {len(granth_results)} results (total: {granth_total_hits}).")
 

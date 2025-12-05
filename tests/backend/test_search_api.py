@@ -1405,3 +1405,184 @@ def validate_result_schema(data, lexical_results):
     granth_keys = ["results", "total_hits", "page_size", "page_number"]
     for key in granth_keys:
         assert key in data["granth_results"], f"Expected {key} in granth_results"
+
+
+def test_api_year_filter_single_year_lexical(api_server):
+    """Test year filtering with a single year (1985) using lexical search."""
+    # Query for content that exists in hampi_hindi with dates in 1985
+    # Based on common.py bookmarks: hampi_hindi page 2 has date 1985-10-23
+
+    # First, search WITHOUT year filter to verify the word exists and check what dates are present
+    search_payload_no_filter = {
+        "query": "गोलकोंडा",  # This word appears in hampi_hindi
+        "language": "hi",
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 20,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 20,
+                "page_number": 1
+            }
+        },
+        "enable_reranking": True
+    }
+
+    response_no_filter = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload_no_filter
+    )
+
+    assert response_no_filter.status_code == 200
+    data_no_filter = response_no_filter.json()
+    log_handle.info(f"Search WITHOUT year filter response: {json_dumps(data_no_filter, truncate_fields=['vector_embedding'])}")
+
+    # Check if we have any results without year filter
+    if data_no_filter["pravachan_results"]["total_hits"] > 0:
+        # Log what dates are actually in the results
+        for result in data_no_filter["pravachan_results"]["results"]:
+            date = result.get("date") or result.get("metadata", {}).get("date")
+            log_handle.info(f"Result without filter: file={result['filename']}, page={result.get('page_number')}, date={date}")
+    else:
+        log_handle.warning("No results found even WITHOUT year filter - the word may not be indexed")
+
+    # Test Case: Single year 1985 - should only return results from hampi_hindi pages 2-3
+    search_payload = {
+        "query": "गोलकोंडा",  # This word appears in hampi_hindi
+        "language": "hi",
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "start_year": 1985,
+        "end_year": 1985,
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 20,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 20,
+                "page_number": 1
+            }
+        },
+        "enable_reranking": True
+    }
+
+    response = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    log_handle.info(f"Year filter (1985) response: {json_dumps(data, truncate_fields=['vector_embedding'])}")
+
+    # Validate response structure
+    validate_result_schema(data, True)
+
+    # Should have results from 1985
+    assert data["pravachan_results"]["total_hits"] > 0, "Expected results for year 1985"
+
+    # Validate all results have dates in 1985
+    for result in data["pravachan_results"]["results"]:
+        # The date field should be at the root level of the result or in metadata
+        # Based on the implementation, it should be in metadata
+        date = result.get("date") or result.get("metadata", {}).get("date")
+        assert date is not None, f"Expected date field in result {result.get('document_id')}"
+
+        # Extract year from date (format: YYYY-MM-DD)
+        year = date.split("-")[0]
+        assert year == "1985", f"Expected year 1985, got {year} for result with date {date}"
+
+        # Should be from hampi_hindi.pdf
+        assert "hampi_hindi.pdf" in result["filename"], \
+            f"Expected result from hampi_hindi.pdf, got {result['filename']}"
+
+        log_handle.info(f"✓ Result: file={result['filename']}, page={result.get('page_number')}, date={date}")
+
+    log_handle.info(f"✓ Year filter test (1985) passed - found {data['pravachan_results']['total_hits']} results, all from 1985")
+
+
+def test_api_year_filter_range_lexical(api_server):
+    """Test year filtering with a year range (1986-1987) using lexical search."""
+    # Based on common.py bookmarks:
+    # - jaipur_hindi: pages 1-4 (1986-05-03), pages 5-6 (1987-06-04)
+    # - hampi_hindi: pages 4-5 (1986-05-24)
+
+    # Test Case: Year range 1986-1987 - should return results from both files
+    search_payload = {
+        "query": "इतिहास",  # Common word that appears in multiple files
+        "language": "hi",
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "start_year": 1986,
+        "end_year": 1987,
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 50,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 20,
+                "page_number": 1
+            }
+        },
+        "enable_reranking": True
+    }
+
+    response = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    log_handle.info(f"Year filter (1986-1987) response: {json_dumps(data, truncate_fields=['vector_embedding'])}")
+
+    # Validate response structure
+    validate_result_schema(data, True)
+
+    # Should have results from 1986-1987
+    assert data["pravachan_results"]["total_hits"] > 0, "Expected results for year range 1986-1987"
+
+    # Track files and years found
+    files_found = set()
+    years_found = set()
+
+    # Validate all results have dates in 1986-1987
+    for result in data["pravachan_results"]["results"]:
+        date = result.get("date") or result.get("metadata", {}).get("date")
+        assert date is not None, f"Expected date field in result {result.get('document_id')}"
+
+        # Extract year from date (format: YYYY-MM-DD)
+        year = int(date.split("-")[0])
+        assert 1986 <= year <= 1987, f"Expected year between 1986-1987, got {year} for result with date {date}"
+
+        # Track files and years
+        files_found.add(result["filename"])
+        years_found.add(year)
+
+        log_handle.info(f"✓ Result: file={result['filename']}, page={result.get('page_number')}, date={date}, year={year}")
+
+    # Should have results from both jaipur_hindi and hampi_hindi
+    expected_files = {"jaipur_hindi.pdf", "hampi_hindi.pdf"}
+    assert files_found == expected_files, \
+        f"Expected results from {expected_files}, got {files_found}"
+
+    # Should have results from both 1986 and 1987
+    expected_years = {1986, 1987}
+    assert years_found == expected_years, \
+        f"Expected years {expected_years}, got {years_found}"
+
+    log_handle.info(f"✓ Year range filter test (1986-1987) passed - found {data['pravachan_results']['total_hits']} results from years {years_found} across files {files_found}")
