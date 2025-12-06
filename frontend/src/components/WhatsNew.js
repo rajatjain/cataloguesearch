@@ -26,6 +26,16 @@ const WhatsNew = () => {
 
     const updates = [
         {
+            date: "December 6, 2025",
+            newContent: [
+                "No new content"
+            ],
+            newFeatures: [
+                "The user can now filter the Pravachan to a particular year to narrow down the search.",
+                "The search results also show the date and pravachan number of a pravachan series, if available."
+            ]
+        },
+        {
             date: "November 7, 2025",
             newContent: [
                 "No new content"

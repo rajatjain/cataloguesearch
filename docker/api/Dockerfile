@@ -42,7 +42,6 @@ COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/pytho
   COPY --from=builder /usr/local/bin/uvicorn* /usr/local/bin/
 
 # Copy static resources first (rarely change)
-COPY indic_nlp_resources /app/indic_nlp_resources
 COPY models/bge-reranker-base-onnx /app/models/bge-reranker-base-onnx
 
 # Copy and set up entrypoint script
