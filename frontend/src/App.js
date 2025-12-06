@@ -175,6 +175,8 @@ const AppContent = () => {
         setExactMatch(false);
         setExcludeWords('');
         setShowFilters(true);
+        setStartYear(null);
+        setEndYear(null);
         setSearchData(null);
         setIsLoading(false);
         setActiveTab('pravachan');
@@ -217,6 +219,8 @@ const AppContent = () => {
     const [excludeWords, setExcludeWords] = useState('');
     const [searchType] = useState('relevance'); // Always use better relevance
     const [showFilters, setShowFilters] = useState(true);
+    const [startYear, setStartYear] = useState(null);
+    const [endYear, setEndYear] = useState(null);
     const [allMetadata, setAllMetadata] = useState({});
     const [metadata, setMetadata] = useState({});
     const [searchData, setSearchData] = useState(null);
@@ -334,7 +338,9 @@ const AppContent = () => {
                     "page_number": 1
                 }
             },
-            enable_reranking: searchType === 'relevance'
+            enable_reranking: searchType === 'relevance',
+            ...(startYear && { start_year: startYear }),
+            ...(endYear && { end_year: endYear })
         };
 
         const data = await api.search(requestPayload);
@@ -638,12 +644,17 @@ const AppContent = () => {
                                     <div className="mt-4 border-t border-slate-200 pt-4">
                                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                             <MetadataFilters
-                                                metadata={metadata}
+                                                metadata={allMetadata}
                                                 activeFilters={activeFilters}
                                                 onAddFilter={addFilter}
                                                 onRemoveFilter={removeFilter}
                                                 contentTypes={contentTypes}
                                                 setContentTypes={setContentTypes}
+                                                language={language}
+                                                startYear={startYear}
+                                                setStartYear={setStartYear}
+                                                endYear={endYear}
+                                                setEndYear={setEndYear}
                                             />
                                             <SearchOptions
                                                 language={language}
