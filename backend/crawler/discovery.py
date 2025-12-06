@@ -224,7 +224,12 @@ class SingleFileProcessor:
         if parsed_bookmarks_json:
             # Use cached parsed bookmarks
             parsed_bookmarks = json.loads(parsed_bookmarks_json)
-            log_handle.info(f"Using cached parsed bookmarks for {self._file_path}")
+            log_handle.info(f"Using cached parsed bookmarks for {self._file_path}: "
+                          f"Received {len(parsed_bookmarks)} bookmarks")
+            # Log first 2 bookmarks for sanity check
+            if parsed_bookmarks:
+                sample_bookmarks = parsed_bookmarks[:2]
+                log_handle.info(f"Sample bookmarks: {sample_bookmarks}")
         else:
             # Call bookmark extractor to parse bookmarks
             log_handle.info(f"Extracting parsed bookmarks for {self._file_path}")
@@ -254,7 +259,14 @@ class SingleFileProcessor:
             False, dry_run
         )
 
-        if not dry_run:
+        if dry_run:
+            # During dry run, only cache the parsed bookmarks
+            current_state = self._index_state.get_state(document_id) or {}
+            current_state["parsed_bookmarks"] = json.dumps(parsed_bookmarks)
+            self._save_state(document_id, current_state)
+            log_handle.info(f"[DRY RUN] Cached parsed bookmarks for {self._file_path}")
+        else:
+            # During normal run, save complete state including parsed bookmarks
             self._save_state(document_id, {
                 "file_path": relative_path,
                 "last_indexed_timestamp": self._scan_time,

@@ -14,7 +14,7 @@ class GeminiBookmarkExtractor(BookmarkExtractor):
     Gemini API implementation for bookmark extraction.
     """
 
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash-preview-09-2025"):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
         """
         Initialize Gemini bookmark extractor.
 
@@ -110,7 +110,11 @@ class GeminiBookmarkExtractor(BookmarkExtractor):
                     log_handle.warning("Received empty response from Gemini on attempt %s", attempt + 1)
 
             except requests.exceptions.RequestException as e:
-                if attempt < max_retries - 1 and (hasattr(e, 'response') and e.response is not None and e.response.status_code >= 500):
+                # Retry on server errors (500+) or rate limit errors (429)
+                should_retry = (hasattr(e, 'response') and e.response is not None and
+                               (e.response.status_code >= 500 or e.response.status_code == 429))
+
+                if attempt < max_retries - 1 and should_retry:
                     wait_time = 2 ** attempt
                     log_handle.warning("Transient error occurred: %s. Retrying in %s seconds...", e, wait_time)
                     time.sleep(wait_time)

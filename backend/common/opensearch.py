@@ -364,7 +364,7 @@ def update_metadata_index(config: Config, opensearch_client: OpenSearch, metadat
             continue
 
         # Skip file_url and category as they're not useful for metadata filtering
-        if key not in ["Anuyog", "Granth", "Year", "Author"]:
+        if key not in ["Anuyog", "Granth", "series_start_date", "series_end_date", "Author"]:
             continue
 
         # Ensure new_values is a list of strings

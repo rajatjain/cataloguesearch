@@ -37,6 +37,15 @@ class PDFProcessor:
         self._base_ocr_folder = config.BASE_OCR_PATH
         self._base_pdf_folder = config.BASE_PDF_PATH
 
+    def get_output_file_extension(self) -> str:
+        """
+        Returns the file extension for OCR output files.
+
+        Returns:
+            str: File extension including the dot (e.g., '.txt')
+        """
+        return ".txt"
+
     def process_pdf(
             self, pdf_file: str, scan_config: dict,
             pages_list: list[int]):
@@ -51,9 +60,10 @@ class PDFProcessor:
 
         # Check if output directory exists and has all required pages
         if os.path.exists(output_ocr_dir):
+            expected_extension = self.get_output_file_extension()
             existing_files = set()
             for filename in os.listdir(output_ocr_dir):
-                if filename.startswith("page_") and filename.endswith(".txt"):
+                if filename.startswith("page_") and filename.endswith(expected_extension):
                     # Extract page number from filename (page_0001.txt -> 1)
                     try:
                         page_num = int(filename[5:9])  # Extract 4-digit number
@@ -67,6 +77,12 @@ class PDFProcessor:
                 return True
 
             # Otherwise, remove existing directory to reprocess
+            missing_pages = set(pages_list) - existing_files
+            log_handle.info(
+                f"OCR directory exists but needs reprocessing. "
+                f"Required pages: {len(pages_list)}, Found: {len(existing_files)}, "
+                f"Missing: {len(missing_pages)}. First few missing: {sorted(list(missing_pages))[:10]}"
+            )
             shutil.rmtree(output_ocr_dir)
 
         os.makedirs(output_ocr_dir, exist_ok=True)

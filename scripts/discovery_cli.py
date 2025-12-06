@@ -359,6 +359,14 @@ def main():
         logging.error(f"Failed to load config: {e}")
         sys.exit(1)
 
+    # Check if GEMINI_API_KEY is available
+    if not config.GEMINI_API_KEY:
+        logging.error(
+            "GEMINI_API_KEY is not set. Please set it in your environment or .env.local file.\n"
+            "You can obtain a Gemini API key from: https://ai.google.dev/gemini-api/docs/api-key"
+        )
+        sys.exit(1)
+
     if args.cleanup:
         cleanup_files(config, args.cleanup)
         sys.exit(0) # Exit after cleanup is done

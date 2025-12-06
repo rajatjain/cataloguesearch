@@ -16,7 +16,7 @@ index:
   chunk_strategy: "advanced"
 
 search:
-  filtered_metadata_fields: ["Year", "Granth", "Anuyog", "Author"]
+  filtered_metadata_fields: ["series_start_time", "series_end_time", "Granth", "Anuyog", "Author"]
 
 opensearch:
   host: "{OPENSEARCH_HOST}"
