@@ -494,8 +494,10 @@ class IndexSearcher:
             end_index = start_index + page_size
             paginated_hits = reranked_hits[start_index:end_index]
 
+            # Do not return total hits for vector search because we only care about the top-30
+            # always
             return (self._extract_results(paginated_hits, is_lexical=False, language=language),
-                    total_hits)
+                    page_size)
         except Exception as e:
             log_handle.error(f"Error during vector search: {e}", exc_info=True)
             return [], 0

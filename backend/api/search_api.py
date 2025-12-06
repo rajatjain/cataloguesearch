@@ -394,11 +394,11 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                         keywords=keywords,
                         embedding=query_embedding,
                         categories={**categories, 'category': ['Pravachan']},
-                        page_size=30,
-                        page_number=1,
+                        page_size=pravachan_config.get("page_size", 20),
+                        page_number=pravachan_config.get("page_number", 1),
                         language=language,
                         rerank=enable_reranking,
-                        rerank_top_k=30,
+                        rerank_top_k=pravachan_config.get("page_size", 20),
                         start_year=start_year,
                         end_year=end_year
                     )
@@ -409,11 +409,11 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                         keywords=keywords,
                         embedding=query_embedding,
                         categories={**categories, 'category': ['Granth']},
-                        page_size=20,
-                        page_number=1,
+                        page_size=granth_config.get("page_size", 20),
+                        page_number=granth_config.get("page_number", 1),
                         language=language,
                         rerank=enable_reranking,
-                        rerank_top_k=20,
+                        rerank_top_k=granth_config.get("page_size", 20),
                         start_year=start_year,
                         end_year=end_year
                     )
@@ -424,14 +424,14 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                 pravachan_results=SearchTypeResults(
                     results=pravachan_results,
                     total_hits=pravachan_total_hits,
-                    page_size=30,
-                    page_number=1
+                    page_size=pravachan_config.get("page_size", 20),
+                    page_number=pravachan_config.get("page_number", 1)
                 ),
                 granth_results=SearchTypeResults(
                     results=granth_results,
                     total_hits=granth_total_hits,
-                    page_size=20,
-                    page_number=1
+                    page_size=granth_config.get("page_size", 20),
+                    page_number=granth_config.get("page_number", 1)
                 ),
                 suggestions=[]
             )
