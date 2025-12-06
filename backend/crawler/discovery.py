@@ -121,10 +121,14 @@ class SingleFileProcessor:
             # Advance bookmark if next one starts on this page
             while (bookmark_index < len(sorted_bookmarks) and
                    sorted_bookmarks[bookmark_index]['page'] <= page_num):
-                current_data = {
-                    "pravachan_no": sorted_bookmarks[bookmark_index].get('pravachan_no'),
-                    "date": sorted_bookmarks[bookmark_index].get('date')
-                }
+                bookmark = sorted_bookmarks[bookmark_index]
+                # Only process bookmarks with valid dates (pravachan bookmarks)
+                # Skip section headers, gatha titles, etc. which have null dates
+                if bookmark.get('date') is not None:
+                    current_data = {
+                        "pravachan_no": bookmark.get('pravachan_no'),
+                        "date": bookmark.get('date')
+                    }
                 bookmark_index += 1
             page_to_data[page_num] = current_data.copy()
 
@@ -177,10 +181,10 @@ class SingleFileProcessor:
             return
 
 
-    def index(self, dry_run=False):
+    def index(self, dry_run=False, reindex_metadata_only=False):
         relative_path = os.path.relpath(self._file_path, self._base_pdf_folder)
         document_id = str(uuid.uuid5(uuid.NAMESPACE_URL, relative_path))
-        log_handle.info(f"Indexing PDF: {self._file_path} ID: {document_id}")
+        log_handle.info(f"Indexing PDF: {self._file_path} ID: {document_id}, reindex_metadata_only: {reindex_metadata_only}")
 
         output_ocr_dir = f"{self._output_ocr_base_dir}/{os.path.splitext(relative_path)[0]}"
         output_text_dir = f"{self._output_text_base_dir}/{os.path.splitext(relative_path)[0]}"
@@ -216,11 +220,13 @@ class SingleFileProcessor:
         index_state = self._index_state.get_state(document_id)
 
         # Check if indexing is needed based on config changes or OCR changes
-        if (index_state and
-            index_state.get("config_hash") == current_config_hash and
-            index_state.get("ocr_checksum") == current_ocr_checksum):
-            log_handle.info(f"No changes detected for {self._file_path}. Not indexing.")
-            return
+        # Skip this check when reindex_metadata_only=True to force re-indexing
+        if not reindex_metadata_only:
+            if (index_state and
+                index_state.get("config_hash") == current_config_hash and
+                index_state.get("ocr_checksum") == current_ocr_checksum):
+                log_handle.info(f"No changes detected for {self._file_path}. Not indexing.")
+                return
 
         # Extract or load cached parsed bookmarks (pravachan_no and date)
         parsed_bookmarks_json = index_state.get("parsed_bookmarks")
@@ -259,7 +265,7 @@ class SingleFileProcessor:
             document_id, relative_path, output_ocr_dir, output_text_dir,
             pages_list, file_metadata, scan_config,
             page_to_pravachan_data,
-            False, dry_run
+            reindex_metadata_only, dry_run
         )
 
         if dry_run:
@@ -364,7 +370,7 @@ class Discovery:
 
         return directories_to_crawl
 
-    def process_directory(self, directory, process=False, index=False, dry_run=False, scan_time=None):
+    def process_directory(self, directory, process=False, index=False, dry_run=False, reindex_metadata_only=False, scan_time=None):
         """
         Process all PDF files in a single directory (non-recursive).
 
@@ -373,6 +379,7 @@ class Discovery:
             process: Whether to process (OCR) files
             index: Whether to index files
             dry_run: Whether to perform dry run (no actual indexing)
+            reindex_metadata_only: Whether to only update metadata fields
             scan_time: Timestamp for this scan (uses current time if not provided)
         """
         if scan_time is None:
@@ -406,9 +413,9 @@ class Discovery:
                     log_handle.info(f"[DRY RUN] Would index file {file_name}")
                 else:
                     log_handle.info(f"Indexing file {file_name}")
-                single_file_processor.index(dry_run)
+                single_file_processor.index(dry_run, reindex_metadata_only)
 
-    def crawl(self, process=False, index=False, dry_run=False):
+    def crawl(self, process=False, index=False, dry_run=False, reindex_metadata_only=False):
         """
         Scans the base PDF folder, identifies new or changed files/configs,
         and triggers indexing or re-indexing.
@@ -418,7 +425,7 @@ class Discovery:
         current_scan_time = datetime.now().isoformat()
         log_handle.info(f"Starting scan process... at {current_scan_time}")
         log_handle.info(f"Base PDF path: {self.base_pdf_folder}")
-        log_handle.info(f"process: {process}, index: {index}")
+        log_handle.info(f"process: {process}, index: {index}, reindex_metadata_only: {reindex_metadata_only}")
 
         if not process and not index:
             return
@@ -429,7 +436,7 @@ class Discovery:
 
         # Second, crawl each directory for PDF files
         for directory in directories_to_crawl:
-            self.process_directory(directory, process, index, dry_run, current_scan_time)
+            self.process_directory(directory, process, index, dry_run, reindex_metadata_only, current_scan_time)
 
         self._index_state.garbage_collect(self.base_pdf_folder)
 

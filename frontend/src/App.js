@@ -310,6 +310,32 @@ const AppContent = () => {
         setActiveFilters(prevFilters => prevFilters.filter((_, i) => i !== index));
     };
 
+    // Single source of truth for building search payload
+    const buildSearchPayload = useCallback((pravachanPage = 1, granthPage = 1) => {
+        return {
+            query,
+            exact_match: exactMatch,
+            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
+            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
+            language: language,
+            search_types: {
+                "Pravachan": {
+                    "enabled": contentTypes.pravachans,
+                    "page_size": PAGE_SIZE,
+                    "page_number": pravachanPage
+                },
+                "Granth": {
+                    "enabled": contentTypes.granths,
+                    "page_size": PAGE_SIZE,
+                    "page_number": granthPage
+                }
+            },
+            enable_reranking: searchType === 'relevance',
+            ...(startYear && { start_year: startYear }),
+            ...(endYear && { end_year: endYear })
+        };
+    }, [query, activeFilters, contentTypes, language, exactMatch, excludeWords, searchType, startYear, endYear]);
+
     const handleSearch = useCallback(async (page = 1) => {
         if (!query.trim()) {
             alert("Please enter a search query.");
@@ -320,29 +346,7 @@ const AppContent = () => {
         setSimilarDocumentsData(null);
         setSourceDocForSimilarity(null);
 
-        const requestPayload = {
-            query,
-            exact_match: exactMatch,
-            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
-            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
-            language: language,
-            search_types: {
-                "Pravachan": {
-                    "enabled": contentTypes.pravachans,
-                    "page_size": PAGE_SIZE,
-                    "page_number": 1
-                },
-                "Granth": {
-                    "enabled": contentTypes.granths,
-                    "page_size": PAGE_SIZE,
-                    "page_number": 1
-                }
-            },
-            enable_reranking: searchType === 'relevance',
-            ...(startYear && { start_year: startYear }),
-            ...(endYear && { end_year: endYear })
-        };
-
+        const requestPayload = buildSearchPayload(1, 1);
         const data = await api.search(requestPayload);
         setSearchData(data);
 
@@ -352,7 +356,7 @@ const AppContent = () => {
             setActiveTab('granth');
         }
         setIsLoading(false);
-    }, [query, activeFilters, contentTypes, language, exactMatch, excludeWords, searchType]);
+    }, [query, buildSearchPayload]);
 
     const handlePravachanSearch = useCallback(async (page = 1) => {
         if (!query.trim()) {
@@ -361,31 +365,11 @@ const AppContent = () => {
         setIsLoading(true);
         setPravachanPage(page);
 
-        const requestPayload = {
-            query,
-            exact_match: exactMatch,
-            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
-            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
-            language: language,
-            search_types: {
-                "Pravachan": {
-                    "enabled": contentTypes.pravachans,
-                    "page_size": PAGE_SIZE,
-                    "page_number": page
-                },
-                "Granth": {
-                    "enabled": contentTypes.granths,
-                    "page_size": PAGE_SIZE,
-                    "page_number": 1
-                }
-            },
-            enable_reranking: searchType === 'relevance'
-        };
-
+        const requestPayload = buildSearchPayload(page, 1);
         const data = await api.search(requestPayload);
         setSearchData(data);
         setIsLoading(false);
-    }, [query, activeFilters, contentTypes, language, exactMatch, excludeWords, searchType]);
+    }, [query, buildSearchPayload]);
 
     const handleGranthSearch = useCallback(async (page = 1) => {
         if (!query.trim()) {
@@ -394,31 +378,11 @@ const AppContent = () => {
         setIsLoading(true);
         setGranthPage(page);
 
-        const requestPayload = {
-            query,
-            exact_match: exactMatch,
-            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
-            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
-            language: language,
-            search_types: {
-                "Pravachan": {
-                    "enabled": contentTypes.pravachans,
-                    "page_size": PAGE_SIZE,
-                    "page_number": 1
-                },
-                "Granth": {
-                    "enabled": contentTypes.granths,
-                    "page_size": PAGE_SIZE,
-                    "page_number": page
-                }
-            },
-            enable_reranking: searchType === 'relevance'
-        };
-
+        const requestPayload = buildSearchPayload(1, page);
         const data = await api.search(requestPayload);
         setSearchData(data);
         setIsLoading(false);
-    }, [query, activeFilters, contentTypes, language, exactMatch, excludeWords, searchType]);
+    }, [query, buildSearchPayload]);
 
     const handleFindSimilar = async (sourceDoc) => {
         setIsLoading(true); 
@@ -481,32 +445,15 @@ const AppContent = () => {
 
     const handleSuggestionClick = (suggestion) => {
         setQuery(suggestion);
-        // Trigger a new search with the suggestion
-        const newQuery = suggestion;
         setIsLoading(true);
         setPravachanPage(1);
         setSimilarDocumentsData(null);
         setSourceDocForSimilarity(null);
 
+        // Temporarily override query state for building payload
         const requestPayload = {
-            query: newQuery,
-            exact_match: exactMatch,
-            exclude_words: excludeWords.split(',').map(word => word.trim()).filter(word => word.length > 0),
-            categories: activeFilters.reduce((acc, f) => ({ ...acc, [f.key]: [...(acc[f.key] || []), f.value] }), {}),
-            language: language,
-            search_types: {
-                "Pravachan": {
-                    "enabled": contentTypes.pravachans,
-                    "page_size": PAGE_SIZE,
-                    "page_number": 1
-                },
-                "Granth": {
-                    "enabled": contentTypes.granths,
-                    "page_size": PAGE_SIZE,
-                    "page_number": 1
-                }
-            },
-            enable_reranking: searchType === 'relevance'
+            ...buildSearchPayload(1, 1),
+            query: suggestion  // Override with suggestion
         };
 
         api.search(requestPayload).then(data => {
