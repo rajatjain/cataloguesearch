@@ -273,9 +273,15 @@ def get_metadata(config: Config) -> dict[str, dict[str, list[str]]]:
             content_type = source.get('content_type')
             key = source.get('key')
             language = source.get('language', 'hi')
-            values = source.get('values', [])
 
-            if key and values and content_type:
+            # Handle both regular metadata (with 'values') and Granth_date_ranges (with 'date_ranges')
+            values = source.get('values')
+            date_ranges = source.get('date_ranges')
+
+            # Use whichever field exists
+            data = values if values is not None else date_ranges
+
+            if key and data and content_type:
                 # Ensure content_type key exists in result
                 if content_type not in result:
                     result[content_type] = {}
@@ -283,8 +289,8 @@ def get_metadata(config: Config) -> dict[str, dict[str, list[str]]]:
                 # Create composite key: key_language
                 composite_key = f"{key}_{language}"
 
-                # The values should already be sorted from the indexing process
-                result[content_type][composite_key] = values
+                # The values/date_ranges should already be sorted/structured from the indexing process
+                result[content_type][composite_key] = data
 
         log_handle.info(
             f"Metadata retrieved from '{metadata_index}': "
@@ -359,12 +365,92 @@ def update_metadata_index(config: Config, opensearch_client: OpenSearch, metadat
     log_handle.info(f"Metadata: {json_dumps(metadata)}")
 
     actions = []
+
+    # Handle Granth_date_ranges correlation (Option 1)
+    granth_values = metadata.get("Granth")
+    series_start = metadata.get("series_start_date")
+    series_end = metadata.get("series_end_date")
+
+    if granth_values and series_start and series_end:
+        # Build the Granth→dates mapping
+        granth_list = granth_values if isinstance(granth_values, list) else [granth_values]
+        granth_list = [str(g) for g in granth_list]
+
+        # Create the date range object for this document
+        date_range = {
+            "start_date": str(series_start),
+            "end_date": str(series_end)
+        }
+
+        doc_id = f"{content_type}_Granth_date_ranges_{lang_key}"
+
+        # Build initial values map for upsert
+        initial_values = {granth: [date_range] for granth in granth_list}
+
+        action = {
+            "_op_type": "update",
+            "_index": metadata_index_name,
+            "_id": doc_id,
+            "script": {
+                "source": """
+                    // Initialize date_ranges as Map if it doesn't exist
+                    if (ctx._source.date_ranges == null) {
+                        ctx._source.date_ranges = new HashMap();
+                    }
+
+                    // Process each Granth
+                    for (granth in params.granths) {
+                        // Get or create the array for this Granth
+                        if (!ctx._source.date_ranges.containsKey(granth)) {
+                            ctx._source.date_ranges[granth] = new ArrayList();
+                        }
+
+                        // Check if this date range already exists
+                        boolean exists = false;
+                        for (range in ctx._source.date_ranges[granth]) {
+                            if (range.start_date == params.dateRange.start_date &&
+                                range.end_date == params.dateRange.end_date) {
+                                exists = true;
+                                break;
+                            }
+                        }
+
+                        // Add the date range if it doesn't exist
+                        if (!exists) {
+                            ctx._source.date_ranges[granth].add(params.dateRange);
+                        }
+                    }
+
+                    // Update metadata fields
+                    ctx._source.language = params.language;
+                    ctx._source.key = params.key;
+                    ctx._source.content_type = params.content_type;
+                """,
+                "lang": "painless",
+                "params": {
+                    "granths": granth_list,
+                    "dateRange": date_range,
+                    "language": lang_key,
+                    "key": "Granth_date_ranges",
+                    "content_type": content_type
+                }
+            },
+            "upsert": {
+                "key": "Granth_date_ranges",
+                "date_ranges": initial_values,
+                "language": lang_key,
+                "content_type": content_type
+            }
+        }
+        actions.append(action)
+
+    # Process other metadata fields
     for key, value in metadata.items():
         if not value:
             continue
 
-        # Skip file_url and category as they're not useful for metadata filtering
-        if key not in ["Anuyog", "Granth", "series_start_date", "series_end_date", "Author"]:
+        # Skip file_url, category, and date fields (dates are now in Granth_date_ranges)
+        if key not in ["Anuyog", "Granth", "Author"]:
             continue
 
         # Ensure new_values is a list of strings

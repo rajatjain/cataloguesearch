@@ -155,16 +155,19 @@ class SingleFileProcessor:
                 self._file_path, scan_config, pages_list)
 
             if ret:
-                self._save_state(
-                    document_id,
-                    {
-                        "file_path": relative_pdf_path,
-                        "last_indexed_timestamp": self._scan_time,
-                        "file_checksum": "",
-                        "config_hash": "",
-                        "ocr_checksum": current_ocr_checksum
-                    }
-                )
+                # Get current state to preserve parsed_bookmarks if it exists
+                current_state = self._index_state.get_state(document_id) or {}
+
+                # Update the state with new OCR info, preserving parsed_bookmarks
+                current_state.update({
+                    "file_path": relative_pdf_path,
+                    "last_indexed_timestamp": self._scan_time,
+                    "file_checksum": "",
+                    "config_hash": "",
+                    "ocr_checksum": current_ocr_checksum
+                })
+
+                self._save_state(document_id, current_state)
 
             log_handle.info(f"Generated OCR text files for {self._file_path}")
 

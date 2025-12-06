@@ -1,6 +1,7 @@
 import logging
 import os.path
 import shutil
+import sys
 import traceback
 from datetime import datetime, timezone
 
@@ -51,6 +52,19 @@ class IndexGenerator:
 
         # Read OCR data using appropriate processor (text files or JSON files)
         raw_data = self._pdf_processor.read_paragraphs(ocr_dir, pages_list)
+
+        # Convert metadata dates from DD-MM-YYYY to YYYY-MM-DD for OpenSearch
+        # (same logic as used for pravachan dates below)
+        metadata = metadata.copy()  # Don't mutate original
+        for date_field in ["series_start_date", "series_end_date"]:
+            if date_field in metadata and metadata[date_field]:
+                try:
+                    date_obj = datetime.strptime(metadata[date_field], "%d-%m-%Y")
+                    metadata[date_field] = date_obj.strftime("%Y-%m-%d")
+                except ValueError:
+                    log_handle.warning(
+                        f"Invalid date format for metadata.{date_field}: {metadata[date_field]}"
+                    )
 
         language = metadata.get("language", "hi")
         language_meta = get_language_meta(language, scan_config)
@@ -271,18 +285,37 @@ class IndexGenerator:
             for chunk in chunks
         ]
         try:
-            success, failed = helpers.bulk(
-                self._opensearch_client, actions, stats_only=True, raise_on_error=False
-            )
+            # Use streaming_bulk to get detailed error information
+            success_count = 0
+            failed_count = 0
+            errors = []
+
+            for ok, item in helpers.streaming_bulk(
+                self._opensearch_client, actions, raise_on_error=False
+            ):
+                if ok:
+                    success_count += 1
+                else:
+                    failed_count += 1
+                    errors.append(item)
+                    # Log EVERY error
+                    log_handle.error(f"Failed to index chunk #{failed_count}: {item}")
+
             log_handle.info(
-                f"Successfully indexed {success} chunks, failed to index {failed} chunks."
+                f"Successfully indexed {success_count} chunks, failed to index {failed_count} chunks."
             )
-            if failed > 0:
+
+            if failed_count > 0:
                 log_handle.error(
-                    f"Failed to index {failed} chunks. Check OpenSearch logs for details."
+                    f"FATAL: {failed_count} chunks failed to index. Exiting."
                 )
+                sys.exit(1)
+
         except Exception as e:
             log_handle.error(f"An exception occurred during bulk indexing: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
 
     def _get_paras(self, page_text_paths: list[str]) -> list[tuple[int, str]]:
         """
