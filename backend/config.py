@@ -135,6 +135,10 @@ class Config:
             return self._settings.get("transliteration", {}).get("timeout", 10)
         elif name == "GEMINI_API_KEY":
             return os.getenv("GEMINI_API_KEY")
+        elif name == "GROQ_API_KEY":
+            return os.getenv("GROQ_API_KEY")
+        elif name == "BOOKMARK_EXTRACTOR_LLM":
+            return self._settings.get("crawler", {}).get("bookmark_extractor_llm", "gemini")
         else:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 

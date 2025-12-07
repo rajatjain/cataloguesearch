@@ -23,7 +23,7 @@ from backend.config import Config
 from backend.crawler.pdf_processor import PDFProcessor
 from backend.crawler.markdown_parser import MarkdownParser
 from backend.common.scan_config import get_scan_config
-from backend.crawler.bookmark_extractor.gemini import GeminiBookmarkExtractor
+from backend.crawler.bookmark_extractor.factory import create_bookmark_extractor_by_name
 from .ocr import get_ocr_service
 from scratch.para_gen.para_gen import process_image_to_paragraphs
 
@@ -102,8 +102,7 @@ class ScriptureEvalRequest(BaseModel):
 # --- Bookmark Extraction Models ---
 class BookmarkExtractionRequest(BaseModel):
     pdf_path: str = Field(..., description="Full path to the PDF file")
-    use_local_llm: bool = Field(False, description="Use local LLM (Ollama) instead of Gemini")
-    ollama_model: str = Field("llama3.2", description="Ollama model name (only used if use_local_llm=True)")
+    llm_provider: str = Field("groq", description="LLM provider to use: 'groq' or 'gemini'")
 
 class BookmarkData(BaseModel):
     page: int
@@ -557,23 +556,13 @@ async def extract_bookmarks(request: BookmarkExtractionRequest):
         if not request.pdf_path.lower().endswith('.pdf'):
             raise HTTPException(status_code=400, detail="File must be a PDF")
 
-        log_handle.info(f"Extracting bookmarks from: {request.pdf_path}")
+        log_handle.info(f"Extracting bookmarks from: {request.pdf_path} using {request.llm_provider}")
 
-        # Initialize the appropriate extractor
-        if request.use_local_llm:
-            raise HTTPException(status_code=404, detail="Local LLM not supported yet")
-        else:
-            # Get Gemini API key from environment or config
-            config = Config("configs/config.yaml")
-            api_key = os.getenv("GEMINI_API_KEY", "")
-            if not api_key:
-                raise HTTPException(
-                    status_code=500,
-                    detail="GEMINI_API_KEY not found in environment variables"
-                )
-
-            log_handle.info("Using Gemini API for bookmark extraction")
-            extractor = GeminiBookmarkExtractor(api_key=api_key)
+        # Create extractor using factory
+        try:
+            extractor = create_bookmark_extractor_by_name(request.llm_provider)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         # Extract and parse bookmarks
         bookmarks_data = extractor.parse_bookmarks(request.pdf_path)

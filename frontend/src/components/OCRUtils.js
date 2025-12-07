@@ -28,6 +28,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
     const [isParsedBookmarksLoading, setIsParsedBookmarksLoading] = useState(false);
     const [useGoogleOCR, setUseGoogleOCR] = useState(false);
     const [ocrMode, setOcrMode] = useState('psm6');
+    const [bookmarkLLM, setBookmarkLLM] = useState('groq');
 
     // New state for batch processing
     const [batchJobId, setBatchJobId] = useState(null);
@@ -678,8 +679,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                 },
                 body: JSON.stringify({
                     pdf_path: pdfPath,
-                    use_local_llm: false,
-                    ollama_model: 'llama3.2'
+                    llm_provider: bookmarkLLM
                 })
             });
 
@@ -944,27 +944,38 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                                 onClick={() => setShowBookmarkModal(true)}
                             />
 
-                            {/* Show parsed bookmarks button */}
+                            {/* Show parsed bookmarks button with LLM selector */}
                             {isPDF && selectedFile && propSelectedFile && propSelectedFile.relativePath && (
-                                <button
-                                    onClick={handleFetchParsedBookmarks}
-                                    disabled={isParsedBookmarksLoading}
-                                    className="text-sm text-purple-600 hover:text-purple-800 flex items-center disabled:text-gray-400 disabled:hover:text-gray-400"
-                                >
-                                    {isParsedBookmarksLoading ? (
-                                        <>
-                                            <Spinner />
-                                            <span className="ml-1">Loading...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                            </svg>
-                                            Show Parsed Bookmarks
-                                        </>
-                                    )}
-                                </button>
+                                <div className="flex items-center space-x-2">
+                                    <select
+                                        value={bookmarkLLM}
+                                        onChange={(e) => setBookmarkLLM(e.target.value)}
+                                        className="text-sm border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                        disabled={isParsedBookmarksLoading}
+                                    >
+                                        <option value="groq">Groq</option>
+                                        <option value="gemini">Gemini</option>
+                                    </select>
+                                    <button
+                                        onClick={handleFetchParsedBookmarks}
+                                        disabled={isParsedBookmarksLoading}
+                                        className="text-sm text-purple-600 hover:text-purple-800 flex items-center disabled:text-gray-400 disabled:hover:text-gray-400"
+                                    >
+                                        {isParsedBookmarksLoading ? (
+                                            <>
+                                                <Spinner />
+                                                <span className="ml-1">Loading...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                                </svg>
+                                                Parse Bookmarks
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
                             )}
                         </div>
 

@@ -3,6 +3,7 @@ crawler:
   base_text_path: "{TEST_DATA_DIR}/text"
   base_ocr_path: "{TEST_DATA_DIR}/ocr"
   sqlite_db_path: "{TEST_DATA_DIR}/db/cataloguesearch.db"
+  bookmark_extractor_llm: "groq"
 
 index:
   opensearch_config: "{TEST_DATA_DIR}/configs/opensearch-config.yaml"

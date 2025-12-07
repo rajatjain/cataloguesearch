@@ -4,6 +4,7 @@ crawler:
   base_text_path: "{HOME}/cataloguesearch/text"
   base_ocr_path: "{HOME}/cataloguesearch/ocr"
   sqlite_db_path: "{HOME}/cataloguesearch/db/cataloguesearch.db"
+  bookmark_extractor_llm: "groq"
 
 index:
   opensearch_config: "{BASE_DIR}/configs/opensearch-config.yaml"

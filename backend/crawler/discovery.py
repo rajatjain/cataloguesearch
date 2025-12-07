@@ -243,10 +243,9 @@ class SingleFileProcessor:
             # Call bookmark extractor to parse bookmarks
             log_handle.info(f"Extracting parsed bookmarks for {self._file_path}")
             try:
-                from backend.crawler.bookmark_extractor.gemini import GeminiBookmarkExtractor
+                from backend.crawler.bookmark_extractor.factory import create_bookmark_extractor
 
-                api_key = self._config.GEMINI_API_KEY
-                extractor = GeminiBookmarkExtractor(api_key)
+                extractor = create_bookmark_extractor(self._config)
                 parsed_bookmarks = extractor.parse_bookmarks(self._file_path)
                 log_handle.info(f"Successfully extracted {len(parsed_bookmarks)} bookmarks")
             except Exception as e:

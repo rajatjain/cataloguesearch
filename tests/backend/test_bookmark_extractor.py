@@ -4,6 +4,7 @@ import pytest
 from dotenv import load_dotenv
 from pydantic_core.core_schema import bool_schema
 
+from backend.crawler.bookmark_extractor.groq import GroqBookmarkExtractor
 from tests.backend.base import *
 
 from backend.crawler.bookmark_extractor.gemini import GeminiBookmarkExtractor
@@ -13,12 +14,24 @@ log_handle = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module")
+def groq_extractor():
+    """
+    Fixture to create a GroqBookmarkExtractor instance.
+    Requires GROQ_API_KEY environment variable to be set.
+    """
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        pytest.skip("GROQ_API_KEY environment variable not set")
+
+    return GroqBookmarkExtractor(api_key=api_key)
+
+
+@pytest.fixture(scope="module")
 def gemini_extractor():
     """
     Fixture to create a GeminiBookmarkExtractor instance.
     Requires GEMINI_API_KEY environment variable to be set.
     """
-
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         pytest.skip("GEMINI_API_KEY environment variable not set")
@@ -59,39 +72,44 @@ def assert_extraction(extractor, input_string, expected_pravachan_no, expected_d
     log_handle.info(f"✓ Successfully extracted: {extracted}")
 
 
-def test_bookmark_extraction(gemini_extractor):
+@pytest.mark.parametrize("extractor_fixture", ["groq_extractor", "gemini_extractor"])
+def test_bookmark_extraction(extractor_fixture, request):
+    extractor = request.getfixturevalue(extractor_fixture)
+
     assert_extraction(
-        gemini_extractor,
+        extractor,
         "Prav. no. 244-A on Kalash 219, Date: 07-11-1965",
         "244-A", "07-11-1965"
     )
 
     assert_extraction(
-        gemini_extractor,
+        extractor,
         "Pravachan Num 3412 on Dt 1945-04-12",
         "3412",
         "12-04-1945"
     )
 
     assert_extraction(
-        gemini_extractor,
+        extractor,
         "Pravachan 342 on Gatha 34",
         "342",
         None
     )
 
     assert_extraction(
-        gemini_extractor,
+        extractor,
         "Pravachan on Date 1985-03-04",
         None,
         "04-03-1985"
     )
 
-def test_pdf_bookmarks(gemini_extractor):
+@pytest.mark.parametrize("extractor_fixture", ["groq_extractor", "gemini_extractor"])
+def test_pdf_bookmarks(extractor_fixture, request):
+    extractor = request.getfixturevalue(extractor_fixture)
     doc_ids = setup()
 
     hampi = doc_ids["hampi_hindi"][0]
-    bookmarks = gemini_extractor.parse_bookmarks(hampi)
+    bookmarks = extractor.parse_bookmarks(hampi)
     expected_vals = {
         2: ("248", "23-10-1985"),
         4: ("324", "24-05-1986")
@@ -103,7 +121,7 @@ def test_pdf_bookmarks(gemini_extractor):
         assert expected_vals[page_num][1] == val['date']
 
     jaipur = doc_ids["jaipur_hindi"][0]
-    bookmarks = gemini_extractor.parse_bookmarks(jaipur)
+    bookmarks = extractor.parse_bookmarks(jaipur)
     expected_vals = {
         1: ("10", "03-05-1986"),
         5: ("12", "04-06-1987")
@@ -115,7 +133,7 @@ def test_pdf_bookmarks(gemini_extractor):
         assert expected_vals[page_num][1] == val['date']
 
     indore = doc_ids["indore_gujarati"][0]
-    bookmarks = gemini_extractor.parse_bookmarks(indore)
+    bookmarks = extractor.parse_bookmarks(indore)
     expected_vals = {
         2: ("28", "23-10-1982"),
         4: ("324", "24-05-1982")
