@@ -36,7 +36,7 @@ The API accepts a JSON payload with the following structure:
     "proximity_distance": "integer",
     "categories": {
         "category_name_1": {"key1":  ["vals1", ... ]},
-        "bookmarks": ["keyword_for_bookmark", "another_bookmark_term"]
+        "language": ["hindi", "gujarati"]
     },
     "page_size": "integer",
     "page_number": "integer"
@@ -46,7 +46,7 @@ The API accepts a JSON payload with the following structure:
 **Field Descriptions:**
   - `keywords` (`string`, required): The main search query containing keywords.
   - `proximity_distance` (`integer`, optional): The maximum word distance between keywords for proximity search. Defaults to 5 if not provided.
-  - `categories` (`object`, optional): Dictionary where keys are category names (e.g., `"author"`, `"document_type"`, `"bookmarks"`) and values are arrays of strings representing the specific values to filter for within that category. Documents must match at least one value for each specified category.
+  - `categories` (`object`, optional): Dictionary where keys are category names (e.g., `"author"`, `"document_type"`, `"language"`) and values are arrays of strings representing the specific values to filter for within that category. Documents must match at least one value for each specified category.
   - `page_size` (`integer`, optional): Number of results per page. Default is 10.
   - `page_number` (`integer`, optional): The current page number for pagination. Default is 1.
 
@@ -106,7 +106,7 @@ The search API follows these steps:
     - **Keyword Extraction:** Extract individual keywords from the input query.
 3. **Perform Lexical Search:**
     - Construct an OpenSearch query using the relevant language field(s) and proximity logic.
-    - Apply category filters, including bookmarks.
+    - Apply category filters.
     - Execute the lexical search.
 4. **Perform Vector Search:**
     - Generate a vector embedding for the input keywords.
@@ -162,7 +162,7 @@ graph TD
 - **Logic:**
     - **Proximity Search:** Use `match_phrase` query with `slop` parameter.
     - **Multi-language:** Query detected language field; possibly query multiple fields with boosted scores if detection is uncertain.
-    - **Category Filtering:** For `bookmarks`, add a terms/match query; for other categories, add terms queries on corresponding metadata fields, all inside a `bool` filter.
+    - **Category Filtering:** Add terms queries on corresponding metadata fields, all inside a `bool` filter.
     - **Highlighting:** Include highlight section to get matched snippets.
 
 ---

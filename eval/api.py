@@ -19,22 +19,13 @@ from enum import Enum
 # OCR-specific imports
 from PIL import Image
 
-# Add the backend directory to the Python path to import config
-backend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend')
-if backend_path not in sys.path:
-    sys.path.insert(0, backend_path)
-
-# Add the scratch directory to import para_gen
-scratch_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'scratch', 'para_gen')
-if scratch_path not in sys.path:
-    sys.path.insert(0, scratch_path)
-
-from config import Config
+from backend.config import Config
 from backend.crawler.pdf_processor import PDFProcessor
 from backend.crawler.markdown_parser import MarkdownParser
 from backend.common.scan_config import get_scan_config
+from backend.crawler.bookmark_extractor.gemini import GeminiBookmarkExtractor
 from .ocr import get_ocr_service
-from para_gen import process_image_to_paragraphs
+from scratch.para_gen.para_gen import process_image_to_paragraphs
 
 log_handle = logging.getLogger(__name__)
 
@@ -107,6 +98,24 @@ class CostCalculationResponse(BaseModel):
 # --- Scripture Eval Request Model ---
 class ScriptureEvalRequest(BaseModel):
     relative_path: str
+
+# --- Bookmark Extraction Models ---
+class BookmarkExtractionRequest(BaseModel):
+    pdf_path: str = Field(..., description="Full path to the PDF file")
+    use_local_llm: bool = Field(False, description="Use local LLM (Ollama) instead of Gemini")
+    ollama_model: str = Field("llama3.2", description="Ollama model name (only used if use_local_llm=True)")
+
+class BookmarkData(BaseModel):
+    page: int
+    level: int
+    title: str
+    pravachan_no: Optional[str] = None
+    date: Optional[str] = None
+
+class BookmarkExtractionResponse(BaseModel):
+    bookmarks: List[BookmarkData]
+    total: int
+    pdf_path: str
 
 # --- Helper Functions ---
 def get_memory_usage():
@@ -528,6 +537,72 @@ async def process_scripture(request: ScriptureEvalRequest):
     except Exception as e:
         log_handle.error(f"Error processing scripture file: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing scripture file: {str(e)}")
+
+@router.post("/bookmarks/extract", response_model=BookmarkExtractionResponse)
+async def extract_bookmarks(request: BookmarkExtractionRequest):
+    """
+    Extract bookmarks from a PDF file and parse pravachan numbers and dates using LLM.
+
+    Args:
+        request: BookmarkExtractionRequest with pdf_path and LLM settings
+
+    Returns:
+        BookmarkExtractionResponse with extracted bookmark data
+    """
+    try:
+        # Validate PDF file exists
+        if not os.path.exists(request.pdf_path):
+            raise HTTPException(status_code=404, detail=f"PDF file not found: {request.pdf_path}")
+
+        if not request.pdf_path.lower().endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="File must be a PDF")
+
+        log_handle.info(f"Extracting bookmarks from: {request.pdf_path}")
+
+        # Initialize the appropriate extractor
+        if request.use_local_llm:
+            raise HTTPException(status_code=404, detail="Local LLM not supported yet")
+        else:
+            # Get Gemini API key from environment or config
+            config = Config("configs/config.yaml")
+            api_key = os.getenv("GEMINI_API_KEY", "")
+            if not api_key:
+                raise HTTPException(
+                    status_code=500,
+                    detail="GEMINI_API_KEY not found in environment variables"
+                )
+
+            log_handle.info("Using Gemini API for bookmark extraction")
+            extractor = GeminiBookmarkExtractor(api_key=api_key)
+
+        # Extract and parse bookmarks
+        bookmarks_data = extractor.parse_bookmarks(request.pdf_path)
+
+        log_handle.info(f"Successfully extracted {len(bookmarks_data)} bookmarks")
+
+        # Convert to response model
+        bookmark_list = [
+            BookmarkData(
+                page=b['page'],
+                level=b['level'],
+                title=b['title'],
+                pravachan_no=b.get('pravachan_no'),
+                date=b.get('date')
+            )
+            for b in bookmarks_data
+        ]
+
+        return BookmarkExtractionResponse(
+            bookmarks=bookmark_list,
+            total=len(bookmark_list),
+            pdf_path=request.pdf_path
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_handle.error(f"Error extracting bookmarks: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error extracting bookmarks: {str(e)}")
 
 @router.get("/pdf/proxy")
 async def proxy_pdf(url: str):

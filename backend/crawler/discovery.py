@@ -100,6 +100,40 @@ class SingleFileProcessor:
         # 3. Return the final sorted list of unique pages
         return sorted(list(all_pages))
 
+    def _apply_forward_fill(self, parsed_bookmarks, total_pages):
+        """
+        Maps every page to pravachan data using forward-fill logic.
+        Pages without bookmarks inherit data from the previous bookmark.
+
+        Args:
+            parsed_bookmarks: List of dicts with 'page', 'pravachan_no', 'date'
+            total_pages: Total number of pages in PDF
+
+        Returns:
+            dict[int, dict]: Mapping of page_num -> {pravachan_no, date}
+        """
+        page_to_data = {}
+        current_data = {"pravachan_no": None, "date": None}
+        bookmark_index = 0
+        sorted_bookmarks = sorted(parsed_bookmarks, key=lambda x: x['page'])
+
+        for page_num in range(1, total_pages + 1):
+            # Advance bookmark if next one starts on this page
+            while (bookmark_index < len(sorted_bookmarks) and
+                   sorted_bookmarks[bookmark_index]['page'] <= page_num):
+                bookmark = sorted_bookmarks[bookmark_index]
+                # Only process bookmarks with valid dates (pravachan bookmarks)
+                # Skip section headers, gatha titles, etc. which have null dates
+                if bookmark.get('date') is not None:
+                    current_data = {
+                        "pravachan_no": bookmark.get('pravachan_no'),
+                        "date": bookmark.get('date')
+                    }
+                bookmark_index += 1
+            page_to_data[page_num] = current_data.copy()
+
+        return page_to_data
+
     def process(self):
         relative_pdf_path = os.path.relpath(self._file_path, self._base_pdf_folder)
         document_id = str(uuid.uuid5(uuid.NAMESPACE_URL, relative_pdf_path))
@@ -125,16 +159,19 @@ class SingleFileProcessor:
                 self._file_path, scan_config, pages_list)
 
             if ret:
-                self._save_state(
-                    document_id,
-                    {
-                        "file_path": relative_pdf_path,
-                        "last_indexed_timestamp": self._scan_time,
-                        "file_checksum": "",
-                        "config_hash": "",
-                        "ocr_checksum": current_ocr_checksum
-                    }
-                )
+                # Get current state to preserve parsed_bookmarks if it exists
+                current_state = self._index_state.get_state(document_id) or {}
+
+                # Update the state with new OCR info, preserving parsed_bookmarks
+                current_state.update({
+                    "file_path": relative_pdf_path,
+                    "last_indexed_timestamp": self._scan_time,
+                    "file_checksum": "",
+                    "config_hash": "",
+                    "ocr_checksum": current_ocr_checksum
+                })
+
+                self._save_state(document_id, current_state)
 
             log_handle.info(f"Generated OCR text files for {self._file_path}")
 
@@ -144,10 +181,10 @@ class SingleFileProcessor:
             return
 
 
-    def index(self, dry_run=False):
+    def index(self, dry_run=False, reindex_metadata_only=False):
         relative_path = os.path.relpath(self._file_path, self._base_pdf_folder)
         document_id = str(uuid.uuid5(uuid.NAMESPACE_URL, relative_path))
-        log_handle.info(f"Indexing PDF: {self._file_path} ID: {document_id}")
+        log_handle.info(f"Indexing PDF: {self._file_path} ID: {document_id}, reindex_metadata_only: {reindex_metadata_only}")
 
         output_ocr_dir = f"{self._output_ocr_base_dir}/{os.path.splitext(relative_path)[0]}"
         output_text_dir = f"{self._output_text_base_dir}/{os.path.splitext(relative_path)[0]}"
@@ -183,27 +220,70 @@ class SingleFileProcessor:
         index_state = self._index_state.get_state(document_id)
 
         # Check if indexing is needed based on config changes or OCR changes
-        if (index_state and
-            index_state.get("config_hash") == current_config_hash and
-            index_state.get("ocr_checksum") == current_ocr_checksum):
-            log_handle.info(f"No changes detected for {self._file_path}. Not indexing.")
-            return
+        # Skip this check when reindex_metadata_only=True to force re-indexing
+        if not reindex_metadata_only:
+            if (index_state and
+                index_state.get("config_hash") == current_config_hash and
+                index_state.get("ocr_checksum") == current_ocr_checksum):
+                log_handle.info(f"No changes detected for {self._file_path}. Not indexing.")
+                return
 
-        bookmarks = self._pdf_processor.fetch_bookmarks(self._file_path)
+        # Extract or load cached parsed bookmarks (pravachan_no and date)
+        parsed_bookmarks_json = index_state.get("parsed_bookmarks")
+        if parsed_bookmarks_json:
+            # Use cached parsed bookmarks
+            parsed_bookmarks = json.loads(parsed_bookmarks_json)
+            log_handle.info(f"Using cached parsed bookmarks for {self._file_path}: "
+                          f"Received {len(parsed_bookmarks)} bookmarks")
+            # Log first 2 bookmarks for sanity check
+            if parsed_bookmarks:
+                sample_bookmarks = parsed_bookmarks[:2]
+                log_handle.info(f"Sample bookmarks: {sample_bookmarks}")
+        else:
+            # Call bookmark extractor to parse bookmarks
+            log_handle.info(f"Extracting parsed bookmarks for {self._file_path}")
+            try:
+                from backend.crawler.bookmark_extractor.gemini import GeminiBookmarkExtractor
+
+                api_key = self._config.GEMINI_API_KEY
+                extractor = GeminiBookmarkExtractor(api_key)
+                parsed_bookmarks = extractor.parse_bookmarks(self._file_path)
+                log_handle.info(f"Successfully extracted {len(parsed_bookmarks)} bookmarks")
+            except Exception as e:
+                log_handle.error(f"Failed to extract bookmarks: {e}")
+                parsed_bookmarks = []
+
+        # Get total pages for forward-fill
+        doc = fitz.open(self._file_path)
+        total_pages = doc.page_count
+        doc.close()
+
+        # Apply forward-fill logic to map all pages
+        page_to_pravachan_data = self._apply_forward_fill(parsed_bookmarks, total_pages)
+
         self._indexing_module.index_document(
             document_id, relative_path, output_ocr_dir, output_text_dir,
-            pages_list, file_metadata, scan_config, bookmarks, False,
-            dry_run
+            pages_list, file_metadata, scan_config,
+            page_to_pravachan_data,
+            reindex_metadata_only, dry_run
         )
 
-        if not dry_run:
+        if dry_run:
+            # During dry run, only cache the parsed bookmarks
+            current_state = self._index_state.get_state(document_id) or {}
+            current_state["parsed_bookmarks"] = json.dumps(parsed_bookmarks)
+            self._save_state(document_id, current_state)
+            log_handle.info(f"[DRY RUN] Cached parsed bookmarks for {self._file_path}")
+        else:
+            # During normal run, save complete state including parsed bookmarks
             self._save_state(document_id, {
                 "file_path": relative_path,
                 "last_indexed_timestamp": self._scan_time,
                 "file_checksum": "",
                 "config_hash": current_config_hash,
                 "index_checksum": "",
-                "ocr_checksum": current_ocr_checksum
+                "ocr_checksum": current_ocr_checksum,
+                "parsed_bookmarks": json.dumps(parsed_bookmarks)
             })
             log_handle.info(f"Completed indexing of {self._file_path}")
 
@@ -290,7 +370,7 @@ class Discovery:
 
         return directories_to_crawl
 
-    def process_directory(self, directory, process=False, index=False, dry_run=False, scan_time=None):
+    def process_directory(self, directory, process=False, index=False, dry_run=False, reindex_metadata_only=False, scan_time=None):
         """
         Process all PDF files in a single directory (non-recursive).
 
@@ -299,6 +379,7 @@ class Discovery:
             process: Whether to process (OCR) files
             index: Whether to index files
             dry_run: Whether to perform dry run (no actual indexing)
+            reindex_metadata_only: Whether to only update metadata fields
             scan_time: Timestamp for this scan (uses current time if not provided)
         """
         if scan_time is None:
@@ -332,9 +413,9 @@ class Discovery:
                     log_handle.info(f"[DRY RUN] Would index file {file_name}")
                 else:
                     log_handle.info(f"Indexing file {file_name}")
-                single_file_processor.index(dry_run)
+                single_file_processor.index(dry_run, reindex_metadata_only)
 
-    def crawl(self, process=False, index=False, dry_run=False):
+    def crawl(self, process=False, index=False, dry_run=False, reindex_metadata_only=False):
         """
         Scans the base PDF folder, identifies new or changed files/configs,
         and triggers indexing or re-indexing.
@@ -344,7 +425,7 @@ class Discovery:
         current_scan_time = datetime.now().isoformat()
         log_handle.info(f"Starting scan process... at {current_scan_time}")
         log_handle.info(f"Base PDF path: {self.base_pdf_folder}")
-        log_handle.info(f"process: {process}, index: {index}")
+        log_handle.info(f"process: {process}, index: {index}, reindex_metadata_only: {reindex_metadata_only}")
 
         if not process and not index:
             return
@@ -355,7 +436,7 @@ class Discovery:
 
         # Second, crawl each directory for PDF files
         for directory in directories_to_crawl:
-            self.process_directory(directory, process, index, dry_run, current_scan_time)
+            self.process_directory(directory, process, index, dry_run, reindex_metadata_only, current_scan_time)
 
         self._index_state.garbage_collect(self.base_pdf_folder)
 

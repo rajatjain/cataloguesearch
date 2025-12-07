@@ -34,7 +34,6 @@ class IndexSearcher:
             "gu": "text_content_gujarati",
         }
         self._vector_field = "vector_embedding"
-        self._bookmark_field = "bookmarks"
         self._metadata_prefix = "metadata"
         try:
             embedding_model = get_embedding_model_factory(self._config)
@@ -53,28 +52,107 @@ class IndexSearcher:
             if not values:
                 continue
 
-            if category_key == "bookmarks":
-                filters.append({
-                    "bool": {
-                        "should": [{"match": {self._bookmark_field: value}} for value in values],
-                        "minimum_should_match": 1
-                    }
-                })
-                log_handle.debug(
-                    f"Added bookmark filter: {self._bookmark_field} with values {values}")
-            else:
-                field_name = f"{self._metadata_prefix}.{category_key}.keyword"
-                filters.append({
-                    "terms": {
-                        field_name: values
-                    }
-                })
-                log_handle.debug(f"Added metadata filter: {field_name} with values {values}")
+            field_name = f"{self._metadata_prefix}.{category_key}.keyword"
+            filters.append({
+                "terms": {
+                    field_name: values
+                }
+            })
+            log_handle.debug(f"Added metadata filter: {field_name} with values {values}")
         return filters
+
+    def _build_date_range_filter(self, start_year: int | None, end_year: int | None) -> Dict[str, Any] | None:
+        """
+        Builds a date range filter for OpenSearch queries.
+
+        Returns documents where EITHER:
+        1. The document has a 'date' field AND it falls within the search range, OR
+        2. The document has NO 'date' field AND its series date range overlaps with the search range
+
+        This ensures that documents with specific bookmark dates are only included if those dates
+        are within range, while documents without bookmarks can be included via series date overlap.
+
+        Args:
+            start_year: Start year (e.g., 1985)
+            end_year: End year (e.g., 1987)
+
+        Returns:
+            Date range filter dict with OR logic, or None if no year parameters provided
+        """
+        if start_year is None and end_year is None:
+            return None
+
+        # Convert years to date strings (YYYY-MM-DD format)
+        search_start_date = f"{start_year}-01-01" if start_year is not None else None
+        search_end_date = f"{end_year}-12-31" if end_year is not None else None
+
+        # Build conditions for OR logic
+        should_conditions = []
+
+        # CONDITION 1: Document HAS a date field AND it's within search range
+        date_exists_and_in_range = {
+            "bool": {
+                "must": [
+                    {"exists": {"field": "date"}}
+                ]
+            }
+        }
+        date_range_condition = {"range": {"date": {}}}
+        if search_start_date:
+            date_range_condition["range"]["date"]["gte"] = search_start_date
+        if search_end_date:
+            date_range_condition["range"]["date"]["lte"] = search_end_date
+        date_exists_and_in_range["bool"]["must"].append(date_range_condition)
+        should_conditions.append(date_exists_and_in_range)
+        log_handle.debug(f"Added document date filter (must exist and be in range): {search_start_date} to {search_end_date}")
+
+        # CONDITION 2: Document has NO date field AND series dates overlap with search range
+        # Overlap occurs when: series_start_date <= search_end_date AND series_end_date >= search_start_date
+        no_date_and_series_overlap = {
+            "bool": {
+                "must": [
+                    {"bool": {"must_not": [{"exists": {"field": "date"}}]}}
+                ]
+            }
+        }
+
+        if search_end_date:
+            # series_start_date <= search_end_date
+            no_date_and_series_overlap["bool"]["must"].append({
+                "range": {
+                    "metadata.series_start_date": {
+                        "lte": search_end_date
+                    }
+                }
+            })
+
+        if search_start_date:
+            # series_end_date >= search_start_date
+            no_date_and_series_overlap["bool"]["must"].append({
+                "range": {
+                    "metadata.series_end_date": {
+                        "gte": search_start_date
+                    }
+                }
+            })
+
+        should_conditions.append(no_date_and_series_overlap)
+        log_handle.debug(f"Added series date overlap filter (only for docs without date field): series overlapping with {search_start_date} to {search_end_date}")
+
+        # Combine with OR logic (should with minimum_should_match=1)
+        date_filter = {
+            "bool": {
+                "should": should_conditions,
+                "minimum_should_match": 1
+            }
+        }
+
+        return date_filter
 
     def _build_lexical_query(
             self, keywords: str, exact_match: bool, exclude_words: List[str],
-            categories: Dict[str, List[str]], detected_language: str) -> Dict[str, Any]:
+            categories: Dict[str, List[str]], detected_language: str,
+            start_year: int | None = None, end_year: int | None = None) -> Dict[str, Any]:
         """
         Builds the OpenSearch DSL query for lexical search.
         exact_match determines if exact phrase match is used.
@@ -151,9 +229,17 @@ class IndexSearcher:
 
         # Add category filters
         category_filters = self._build_category_filters(categories)
-        if category_filters:
-            query_body["query"]["bool"]["filter"] = category_filters
-            log_handle.debug(f"Added {len(category_filters)} category filters to lexical query.")
+
+        # Add date range filter if provided
+        date_filter = self._build_date_range_filter(start_year, end_year)
+
+        all_filters = category_filters[:]
+        if date_filter:
+            all_filters.append(date_filter)
+
+        if all_filters:
+            query_body["query"]["bool"]["filter"] = all_filters
+            log_handle.debug(f"Added {len(all_filters)} filters to lexical query (category + date).")
 
         log_handle.verbose(f"Lexical query: {json_dumps(query_body)}")
 
@@ -161,7 +247,8 @@ class IndexSearcher:
 
     def _build_vector_query(
             self, embedding: List[float],
-            categories: Dict[str, List[str]], size: int, language: str = None) -> Dict[str, Any]:
+            categories: Dict[str, List[str]], size: int, language: str = None,
+            start_year: int | None = None, end_year: int | None = None) -> Dict[str, Any]:
         knn_query = {
             self._vector_field: {
                 "vector": embedding,
@@ -171,14 +258,14 @@ class IndexSearcher:
 
         # Build category filters
         category_filters = self._build_category_filters(categories)
-        
+
         # Add language filter if specified
         all_filters = category_filters[:]
         if language and language != 'all':
             # Convert language name to language code for filtering
             language_code_map = {"hindi": "hi", "gujarati": "gu"}
             language_code = language_code_map.get(language, language)
-            
+
             language_filter = {
                 "term": {
                     "language": language_code
@@ -186,7 +273,12 @@ class IndexSearcher:
             }
             all_filters.append(language_filter)
             log_handle.debug(f"Added language filter for: {language} (code: {language_code})")
-        
+
+        # Add date range filter if provided
+        date_filter = self._build_date_range_filter(start_year, end_year)
+        if date_filter:
+            all_filters.append(date_filter)
+
         if all_filters:
             # For filtered vector search, add filters directly to the knn query
             knn_query[self._vector_field]["filter"] = {
@@ -194,7 +286,7 @@ class IndexSearcher:
                     "filter": all_filters
                 }
             }
-            log_handle.debug(f"Added {len(all_filters)} total filters to vector query.")
+            log_handle.debug(f"Added {len(all_filters)} total filters to vector query (category + language + date).")
         query_body = {
             "size": size,
             "query": {
@@ -246,9 +338,12 @@ class IndexSearcher:
                 "paragraph_id": source.get('paragraph_id'),
                 "content_snippet": content_snippet,
                 "score": float(score) if score is not None else 0.0,
-                "bookmarks": source.get(self._bookmark_field, {}),
                 "metadata": source.get(self._metadata_prefix, {}),
-                "file_url": metadata.get("file_url", "")
+                "file_url": metadata.get("file_url", ""),
+                "date": source.get('date'),
+                "pravachan_number": source.get('pravachan_number'),
+                "series_start_date": metadata.get('series_start_date'),
+                "series_end_date": metadata.get('series_end_date')
             }
             if "Kanji" in metadata.get("Pravachankar", {}):
                 # Set Pravachankar text based on language
@@ -262,9 +357,11 @@ class IndexSearcher:
     def perform_lexical_search(
             self, keywords: str, exact_match: bool, exclude_words: List[str],
             categories: Dict[str, List[str]], detected_language: str,
-            page_size: int, page_number: int) -> Tuple[List[Dict[str, Any]], int]:
+            page_size: int, page_number: int,
+            start_year: int | None = None, end_year: int | None = None) -> Tuple[List[Dict[str, Any]], int]:
         query_body = self._build_lexical_query(keywords, exact_match,
-                                               exclude_words, categories, detected_language)
+                                               exclude_words, categories, detected_language,
+                                               start_year, end_year)
         from_ = (page_number - 1) * page_size
         log_handle.verbose(f"Lexical query: {json_dumps(query_body)}")
         try:
@@ -289,7 +386,8 @@ class IndexSearcher:
     def perform_pravachan_search(
             self, keywords: str, exact_match: bool, exclude_words: List[str],
             categories: Dict[str, List[str]], detected_language: str,
-            page_size: int, page_number: int) -> Tuple[List[Dict[str, Any]], int]:
+            page_size: int, page_number: int,
+            start_year: int | None = None, end_year: int | None = None) -> Tuple[List[Dict[str, Any]], int]:
         """
         Performs lexical search on pravachan documents.
         Adds metadata.category = "Pravachan" filter.
@@ -306,13 +404,16 @@ class IndexSearcher:
             categories=pravachan_categories,
             detected_language=detected_language,
             page_size=page_size,
-            page_number=page_number
+            page_number=page_number,
+            start_year=start_year,
+            end_year=end_year
         )
 
     def perform_granth_search(
             self, keywords: str, exact_match: bool, exclude_words: List[str],
             categories: Dict[str, List[str]], detected_language: str,
-            page_size: int, page_number: int) -> Tuple[List[Dict[str, Any]], int]:
+            page_size: int, page_number: int,
+            start_year: int | None = None, end_year: int | None = None) -> Tuple[List[Dict[str, Any]], int]:
         """
         Performs lexical search on granth documents.
         Adds metadata.category = "Granth" filter.
@@ -329,17 +430,21 @@ class IndexSearcher:
             categories=granth_categories,
             detected_language=detected_language,
             page_size=page_size,
-            page_number=page_number
+            page_number=page_number,
+            start_year=start_year,
+            end_year=end_year
         )
 
     def perform_vector_search(
             self, keywords: str, embedding: List[float], categories: Dict[str, List[str]],
             page_size: int, page_number: int, language: str, rerank: bool = True,
-            rerank_top_k: int = 40) -> Tuple[List[Dict[str, Any]], int]:
+            rerank_top_k: int = 40,
+            start_year: int | None = None, end_year: int | None = None) -> Tuple[List[Dict[str, Any]], int]:
         initial_fetch_size = rerank_top_k
         from_ = 0 if rerank else (page_number - 1) * page_size
 
-        query_body = self._build_vector_query(embedding, categories, initial_fetch_size, language)
+        query_body = self._build_vector_query(embedding, categories, initial_fetch_size, language,
+                                              start_year, end_year)
         log_handle.debug(f"Vector query: {query_body}")
         try:
             response = self._opensearch_client.search(
@@ -389,8 +494,10 @@ class IndexSearcher:
             end_index = start_index + page_size
             paginated_hits = reranked_hits[start_index:end_index]
 
+            # Do not return total hits for vector search because we only care about the top-30
+            # always
             return (self._extract_results(paginated_hits, is_lexical=False, language=language),
-                    total_hits)
+                    page_size)
         except Exception as e:
             log_handle.error(f"Error during vector search: {e}", exc_info=True)
             return [], 0

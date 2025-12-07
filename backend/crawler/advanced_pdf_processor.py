@@ -20,6 +20,15 @@ class AdvancedPDFProcessor(PDFProcessor):
     for later processing with the paragraph generation algorithm.
     """
 
+    def get_output_file_extension(self) -> str:
+        """
+        Returns the file extension for OCR output files.
+
+        Returns:
+            str: File extension including the dot (e.g., '.json')
+        """
+        return ".json"
+
     def _write_output_to_file(self, output_ocr_dir: str, paragraphs: list[tuple[int, list[str]]]):
         """
         Overridden to write JSON files instead of text files.

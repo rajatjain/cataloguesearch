@@ -5,6 +5,7 @@ import tempfile
 import uuid
 
 import fitz
+from dotenv import load_dotenv
 
 from backend.common import opensearch
 from backend.common.opensearch import get_opensearch_client
@@ -29,7 +30,7 @@ def get_doc_id(base_dir, file_path):
         uuid.uuid5(uuid.NAMESPACE_URL, relative_path))
     return doc_id
 
-def setup(copy_ocr_files=False, add_scan_config=False):
+def setup(copy_ocr_files=False, add_scan_config=False, add_bookmarks=True):
     config = Config()
     base_dir = tempfile.mkdtemp(prefix="test_")
     pdf_dir = "%s/data/pdfs" % base_dir
@@ -38,6 +39,11 @@ def setup(copy_ocr_files=False, add_scan_config=False):
     config.settings()["crawler"]["base_text_path"] = "%s/data/texts" % base_dir
     config.settings()["crawler"]["base_ocr_path"] = "%s/data/ocr" % base_dir
     config.settings()["crawler"]["sqlite_db_path"] = "%s/crawl_state.db" % base_dir
+
+    project_root = os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))
+    )
+    load_dotenv(dotenv_path=f"{project_root}/.env")
 
     # Create directory structure for hindi and gujarati
     hindi_base = f"{pdf_dir}/hindi"
@@ -123,7 +129,11 @@ def setup(copy_ocr_files=False, add_scan_config=False):
 
     # Create config files for category directories
     cities_config = {"Anuyog": "city"}
-    spiritual_config = {"Anuyog": "spiritual"}
+    spiritual_config = {
+        "Anuyog": "spiritual",
+        "series_start_date": "1975-01-01",
+        "series_end_date": "1977-12-31"
+    }
     history_config = {"Anuyog": "history"}
     metro_config = {"type": "metro"}
     non_metro_config = {"type": "non_metro"}
@@ -135,6 +145,13 @@ def setup(copy_ocr_files=False, add_scan_config=False):
         write_config_file(f"{lang_base}/cities/non_metro/config.json", non_metro_config)
         write_config_file(f"{lang_base}/spiritual/config.json", spiritual_config)
         write_config_file(f"{lang_base}/history/config.json", history_config)
+
+    # Add file-specific config for thanjavur_gujarati with series dates
+    thanjavur_gujarati_file_config = {
+        "series_start_date": "1978-01-01",
+        "series_end_date": "1983-12-31"
+    }
+    write_config_file(f"{gujarati_base}/history/thanjavur_gujarati_config.json", thanjavur_gujarati_file_config)
 
     if copy_ocr_files:
         # This is to simulate the text files that would be generated
@@ -209,6 +226,26 @@ def setup(copy_ocr_files=False, add_scan_config=False):
                 config_path = os.path.join(directory, "scan_config.json")
                 write_config_file(config_path, scan_config)
                 log_handle.info(f"Created scan_config.json for {directory}")
+
+    if add_bookmarks:
+        # add a few bookmarks in gujarati and hindi files
+        add_bookmarks_to_pdf(
+            doc_ids["hampi_hindi"][0],
+            [(2, "prav number 248, 1985-10-23"), (4, "Prav 324. Date 24-05-1986")]
+        )
+        add_bookmarks_to_pdf(
+            doc_ids["jaipur_hindi"][0],
+            [(1, "Pravachan Num 10 on Date 03-05-1986"), (5, "Pravachan Num 12 on Date 04-06-1987")]
+        )
+
+        add_bookmarks_to_pdf(
+            doc_ids["indore_gujarati"][0],
+            [(2, "pr number 28, 1982-10-23"), (4, "Prav 324. Date 24-05-1982")]
+        )
+        add_bookmarks_to_pdf(
+            doc_ids["thanjavur_gujarati"][0],
+            [(2, "Pravachan Num 15 on Date 06-05-1980"), (3, "Pravachan Num 18 on Date 04-06-1983")]
+        )
 
     return doc_ids
 
@@ -397,3 +434,34 @@ def setup_granth():
         "base_dir": pdf_dir,
         "granth_files": granth_files
     }
+
+def add_bookmarks_to_pdf(file_name, bookmarks_list):
+    """
+    Add bookmarks to a PDF file.
+
+    Args:
+        file_name: Path to the PDF file
+        bookmarks_list: List of tuples [(page_num, bookmark_str)] where page_num starts with 1
+    """
+    doc = fitz.open(file_name)
+
+    # Convert bookmarks_list to TOC (Table of Contents) format
+    # TOC format: [[level, title, page_num], ...]
+    # level is the hierarchy level (1 for top level)
+    toc = []
+    for page_num, bookmark_str in bookmarks_list:
+        toc.append([1, bookmark_str, page_num])
+
+    # Set the TOC (this adds bookmarks to the PDF)
+    doc.set_toc(toc)
+
+    # Save to a temporary file first, then replace the original
+    # This avoids issues with incremental saves and encryption
+    temp_file = f"{file_name}.tmp"
+    doc.save(temp_file, encryption=fitz.PDF_ENCRYPT_NONE)
+    doc.close()
+
+    # Replace original file with the temp file
+    os.replace(temp_file, file_name)
+
+    log_handle.info(f"Added {len(bookmarks_list)} bookmarks to {file_name}")

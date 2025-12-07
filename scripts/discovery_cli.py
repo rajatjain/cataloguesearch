@@ -179,7 +179,7 @@ class DiscoveryDaemon:
             logging.info("Discovery daemon stopped")
 
 
-def run_discovery_once(config: Config, crawl=False, index=False, dry_run=False):
+def run_discovery_once(config: Config, crawl=False, index=False, dry_run=False, reindex_metadata_only=False):
     """Run discovery once"""
     try:
         start = datetime.now()
@@ -195,7 +195,7 @@ def run_discovery_once(config: Config, crawl=False, index=False, dry_run=False):
         create_indices_if_not_exists(config, client)
 
         # Run discovery
-        discovery.crawl(crawl, index, dry_run)
+        discovery.crawl(crawl, index, dry_run, reindex_metadata_only)
 
         # Update metadata cache after discovery
         logging.info("Updating metadata cache...")
@@ -220,7 +220,7 @@ def delete_index(config: Config):
     index_state = IndexState(config.SQLITE_DB_PATH)
     index_state.delete_index_state()
 
-def process_folder(config: Config, folder_path: str, dry_run=False):
+def process_folder(config: Config, folder_path: str, dry_run=False, reindex_metadata_only=False):
     """Process all PDF files in a specific folder (non-recursive)"""
     if not os.path.exists(folder_path):
         log_handle.error(f"Folder does not exist: {folder_path}")
@@ -242,7 +242,7 @@ def process_folder(config: Config, folder_path: str, dry_run=False):
     create_indices_if_not_exists(config, client)
 
     # Process the directory (both process OCR and index)
-    discovery.process_directory(folder_path, process=True, index=True, dry_run=dry_run)
+    discovery.process_directory(folder_path, process=True, index=True, dry_run=dry_run, reindex_metadata_only=reindex_metadata_only)
 
     if dry_run:
         log_handle.warning("DRY RUN was enabled. No documents were actually indexed.")
@@ -344,6 +344,8 @@ def main():
                         help='Clean up all data for a specific PDF file or directory.')
     parser.add_argument('--process-folder', type=str, metavar='PATH',
                         help='Process all PDF files in a specific folder (non-recursive).')
+    parser.add_argument('--reindex-metadata-only', action='store_true', default=False,
+                        help='Only update metadata and pravachan fields without re-generating embeddings.')
 
 
     args = parser.parse_args()
@@ -359,12 +361,20 @@ def main():
         logging.error(f"Failed to load config: {e}")
         sys.exit(1)
 
+    # Check if GEMINI_API_KEY is available
+    if not config.GEMINI_API_KEY:
+        logging.error(
+            "GEMINI_API_KEY is not set. Please set it in your environment or .env.local file.\n"
+            "You can obtain a Gemini API key from: https://ai.google.dev/gemini-api/docs/api-key"
+        )
+        sys.exit(1)
+
     if args.cleanup:
         cleanup_files(config, args.cleanup)
         sys.exit(0) # Exit after cleanup is done
 
     if args.process_folder:
-        process_folder(config, args.process_folder, args.dry_run)
+        process_folder(config, args.process_folder, args.dry_run, args.reindex_metadata_only)
         sys.exit(0) # Exit after processing folder is done
 
     if args.command == 'discover':
@@ -379,7 +389,7 @@ def main():
             daemon = DiscoveryDaemon(config)
             daemon.start()
         else:
-            run_discovery_once(config, args.crawl, args.index, args.dry_run)
+            run_discovery_once(config, args.crawl, args.index, args.dry_run, args.reindex_metadata_only)
 
 
 if __name__ == '__main__':

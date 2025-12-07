@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import time
 from typing import Any, Dict, List
 
@@ -15,8 +16,9 @@ from backend.utils import json_dumps, JSONResponse, log_memory_usage
 from utils.logger import setup_logging, VERBOSE_LEVEL_NUM, METRICS_LEVEL_NUM
 from backend.api.feedback_api import router as feedback_router
 
-# Only import eval router if not in Docker environment (eval/ folder not available in Docker)
-if not Config.is_docker_environment():
+# Only import eval router if not in Docker environment and not running pytest
+# (eval/ folder not available in Docker, and eval imports may fail in tests)
+if not Config.is_docker_environment() and 'pytest' not in sys.modules:
     from eval.api import router as eval_router
 
 log_handle = logging.getLogger(__name__)
@@ -40,8 +42,8 @@ app.add_middleware(
 # --- Include Routers ---
 app.include_router(feedback_router, prefix="/api")
 
-# Only include eval router if not in Docker environment
-if not Config.is_docker_environment():
+# Only include eval router if not in Docker environment and not running pytest
+if not Config.is_docker_environment() and 'pytest' not in sys.modules:
     app.include_router(eval_router, prefix="/api")
 
 @app.on_event("startup")
@@ -183,7 +185,9 @@ class SearchRequest(BaseModel):
     language: str = Field(..., description="Language of the query.", example="hindi")
     exact_match: bool = Field(False, description="Use exact phrase matching instead of regular match.")
     exclude_words: List[str] = Field([], description="List of words to exclude from search results.")
-    categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "bookmarks": ["important terms"]})
+    categories: Dict[str, List[str]] = Field({}, example={"author": ["John Doe"], "category": ["Pravachan"]})
+    start_year: int | None = Field(None, description="Start year for date range filter (e.g., 1985).", example=1985)
+    end_year: int | None = Field(None, description="End year for date range filter (e.g., 1987).", example=1987)
 
     # Search types configuration
     search_types: Dict[str, Dict[str, Any]] = Field(
@@ -239,6 +243,8 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
     search_types = request_data.search_types
     enable_reranking = request_data.enable_reranking
     language = request_data.language
+    start_year = request_data.start_year
+    end_year = request_data.end_year
 
     # Extract search type configurations
     pravachan_config = search_types.get("Pravachan")
@@ -279,7 +285,9 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                     categories=categories,
                     detected_language=language,
                     page_size=pravachan_config.get("page_size", 20),
-                    page_number=pravachan_config.get("page_number", 1)
+                    page_number=pravachan_config.get("page_number", 1),
+                    start_year=start_year,
+                    end_year=end_year
                 )
                 log_handle.info(f"Pravachan search returned {len(pravachan_results)} results (total: {pravachan_total_hits}).")
 
@@ -291,7 +299,9 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                     categories=categories,
                     detected_language=language,
                     page_size=granth_config.get("page_size", 20),
-                    page_number=granth_config.get("page_number", 1)
+                    page_number=granth_config.get("page_number", 1),
+                    start_year=start_year,
+                    end_year=end_year
                 )
                 log_handle.info(f"Granth search returned {len(granth_results)} results (total: {granth_total_hits}).")
 
@@ -384,11 +394,13 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                         keywords=keywords,
                         embedding=query_embedding,
                         categories={**categories, 'category': ['Pravachan']},
-                        page_size=30,
-                        page_number=1,
+                        page_size=pravachan_config.get("page_size", 20),
+                        page_number=pravachan_config.get("page_number", 1),
                         language=language,
                         rerank=enable_reranking,
-                        rerank_top_k=30
+                        rerank_top_k=pravachan_config.get("page_size", 20),
+                        start_year=start_year,
+                        end_year=end_year
                     )
                     log_handle.info(f"Pravachan vector search returned {len(pravachan_results)} results (total: {pravachan_total_hits}).")
 
@@ -397,11 +409,13 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                         keywords=keywords,
                         embedding=query_embedding,
                         categories={**categories, 'category': ['Granth']},
-                        page_size=20,
-                        page_number=1,
+                        page_size=granth_config.get("page_size", 20),
+                        page_number=granth_config.get("page_number", 1),
                         language=language,
                         rerank=enable_reranking,
-                        rerank_top_k=20
+                        rerank_top_k=granth_config.get("page_size", 20),
+                        start_year=start_year,
+                        end_year=end_year
                     )
                     log_handle.info(f"Granth vector search returned {len(granth_results)} results (total: {granth_total_hits}).")
 
@@ -410,14 +424,14 @@ async def search(request: Request, request_data: SearchRequest = Body(...)):
                 pravachan_results=SearchTypeResults(
                     results=pravachan_results,
                     total_hits=pravachan_total_hits,
-                    page_size=30,
-                    page_number=1
+                    page_size=pravachan_config.get("page_size", 20),
+                    page_number=pravachan_config.get("page_number", 1)
                 ),
                 granth_results=SearchTypeResults(
                     results=granth_results,
                     total_hits=granth_total_hits,
-                    page_size=20,
-                    page_number=1
+                    page_size=granth_config.get("page_size", 20),
+                    page_number=granth_config.get("page_number", 1)
                 ),
                 suggestions=[]
             )

@@ -42,7 +42,7 @@ class MockIndexGenerator(IndexGenerator):
     def index_document(
         self, document_id: str, original_filename: str,
         ocr_dir: str, output_text_dir: str, pages_list: list[int], metadata: dict,
-        scan_config: dict, bookmarks: dict[int, str],
+        scan_config: dict, page_to_pravachan_data: dict[int, dict],
         reindex_metadata_only: bool = False, dry_run: bool = True):
         pass
 
@@ -58,16 +58,16 @@ class MockPDFProcessor(PDFProcessor):
         pages_list: list[int]):
         relative_pdf_path = os.path.relpath(pdf_path, self._base_pdf_folder)
         output_ocr_dir = f"{self._base_ocr_folder}/{os.path.splitext(relative_pdf_path)[0]}"
-        
+
         if os.path.exists(output_ocr_dir):
             shutil.rmtree(output_ocr_dir)
-        
+
         os.makedirs(output_ocr_dir, exist_ok=True)
-        
+
         # Get the base filename without path and extension for source directory
         base_filename = os.path.splitext(os.path.basename(pdf_path))[0]
         source_ocr_dir = f"{get_test_base_dir()}/data/ocr/{base_filename}"
-        
+
         # Copy the page files for the pages in pages_list
         if os.path.exists(source_ocr_dir):
             for page_num in pages_list:
@@ -75,7 +75,7 @@ class MockPDFProcessor(PDFProcessor):
                 dest_file = f"{output_ocr_dir}/page_{page_num:04d}.txt"
                 if os.path.exists(source_file):
                     shutil.copy2(source_file, dest_file)
-        
+
         return True
 
 class MockIndexState(IndexState):
@@ -138,7 +138,8 @@ def test_get_metadata():
         datetime.datetime.now().isoformat()
     )
     meta = sfp._get_metadata()
-    assert meta == {'language': 'gu', 'category': 'Pravachan', 'Anuyog': 'spiritual'}
+    assert meta == {'language': 'gu', 'category': 'Pravachan', 'Anuyog': 'spiritual',
+                    'series_end_date': '1977-12-31', 'series_start_date': '1975-01-01' }
 
 def test_crawl(initialise):
     config = Config()
@@ -190,41 +191,31 @@ def test_crawl(initialise):
     state3 = index_state.load_state()
     validate(state2, state3, changed_keys, check_file_changed=False, check_config_changed=True)
 
-    # adding bookmarks doesn't change anything.
-    hampi_gujarati = doc_ids["hampi_gujarati"][0]
-    add_bookmark_to_pdf(hampi_gujarati, "new_bookmark", 1)
-    log_handle.info(f"Test 3: re-crawling after changing file content")
-    discovery.crawl(process=True, index=True)
-    state4 = index_state.load_state()
-    log_handle.info(f"state: {json_dumps(state4)}")
-    changed_keys = []
-    validate(state3, state4, changed_keys, check_file_changed=True, check_config_changed=False)
-
     # delete a config file. should be removed from state
-    log_handle.info(f"Test 4: re-crawling after deleting config file")
+    log_handle.info(f"Test 3: re-crawling after deleting config file")
     fname = doc_ids["jaipur_hindi"][0]
     assert os.path.exists(fname)
     os.remove(fname)
     assert not os.path.exists(fname)
     discovery.crawl(process=True, index=True)
-    state5 = index_state.load_state()
-    log_handle.info(f"state: {json_dumps(state5)}")
-    assert len(state5) == 11
+    state4 = index_state.load_state()
+    log_handle.info(f"state: {json_dumps(state4)}")
+    assert len(state4) == 11
 
     # it shouldn't have the fname in "state"
-    assert doc_ids["jaipur_hindi"][1] not in state5
-    validate(state4, state5, changed_keys=[], check_file_changed=False, check_config_changed=False)
+    assert doc_ids["jaipur_hindi"][1] not in state4
+    validate(state3, state4, changed_keys=[], check_file_changed=False, check_config_changed=False)
 
     # copy an existing file to another folder to test new file discovery
-    log_handle.info(f"Test 5: copying file to new location and re-crawling")
+    log_handle.info(f"Test 4: copying file to new location and re-crawling")
     source_file = doc_ids["songadh_hindi"][0]  # hindi/spiritual/songadh_hindi.pdf
     dest_file = f"{config.BASE_PDF_PATH}/gujarati/history/songadh_copy.pdf"
     shutil.copy(source_file, dest_file)
-    
+
     discovery.crawl(process=True, index=True)
-    state6 = index_state.load_state()
-    log_handle.info(f"state after copying file: {json_dumps(state6)}")
-    assert len(state6) == 12  # should be back to 12 files (11 + 1 new copy)
+    state5 = index_state.load_state()
+    log_handle.info(f"state after copying file: {json_dumps(state5)}")
+    assert len(state5) == 12  # should be back to 12 files (11 + 1 new copy)
 
 
 def test_pages_crawl(initialise):
@@ -266,7 +257,7 @@ def test_pages_crawl(initialise):
 
     # Ensure that only the modified files have their config_checksum changed
     changed_files = [doc_ids["bangalore_hindi"][1], doc_ids["bangalore_gujarati"][1], doc_ids["hampi_hindi"][1]]
-    
+
     validate(state1, state2, changed_files, check_file_changed=False, check_config_changed=True)
 
 def test_ignore_file(initialise):
@@ -286,7 +277,7 @@ def test_ignore_file(initialise):
         f"{config.BASE_PDF_PATH}/hindi/cities/metro",     # Will ignore bangalore_hindi.pdf
         f"{config.BASE_PDF_PATH}/gujarati/history"        # Will ignore hampi_gujarati.pdf, thanjavur_gujarati.pdf
     ]
-    
+
     for folder in ignore_folders:
         ignore_file = f"{folder}/_ignore"
         with open(ignore_file, 'w') as f:
@@ -294,11 +285,11 @@ def test_ignore_file(initialise):
 
     # First crawl - should ignore files in the 2 folders
     discovery.crawl(process=True, index=True)
-    
+
     state1 = index_state.load_state()
     log_handle.info(f"Initial crawl with 2 ignored folders: {json_dumps(state1)}")
     # Should have fewer files (depends on how many files are in ignored folders)
-    
+
     # Verify the ignored files are not in state
     ignored_doc_ids = [doc_ids["bangalore_hindi"][1], doc_ids["hampi_gujarati"][1],
                        doc_ids["thanjavur_gujarati"][1]]
@@ -308,12 +299,12 @@ def test_ignore_file(initialise):
     # Delete first ignore file
     first_ignore = f"{ignore_folders[0]}/_ignore"
     os.remove(first_ignore)
-    
+
     discovery.crawl(process=True, index=True)
     state2 = index_state.load_state()
     log_handle.info(f"After removing first ignore file: {json_dumps(state2)}")
     assert doc_ids["bangalore_hindi"][1] in state2  # This file should now be indexed
-    
+
     # Validate that only the newly unignored file is changed, others remain unchanged
     changed_keys = [doc_ids["bangalore_hindi"][1]]
     validate(state1, state2, changed_keys, check_file_changed=False, check_config_changed=True, new_file_added=True)
@@ -321,17 +312,17 @@ def test_ignore_file(initialise):
     # Delete second ignore file
     second_ignore = f"{ignore_folders[1]}/_ignore"
     os.remove(second_ignore)
-    
+
     discovery.crawl(process=True, index=True)
     state3 = index_state.load_state()
     log_handle.info(f"After removing second ignore file: {json_dumps(state3)}")
     assert doc_ids["hampi_gujarati"][1] in state3  # This file should now be indexed
     assert doc_ids["thanjavur_gujarati"][1] in state3
-    
+
     # Validate that only the newly unignored file is changed, others remain unchanged
     changed_keys = [doc_ids["hampi_gujarati"][1], doc_ids["thanjavur_gujarati"][1]]
     validate(state2, state3, changed_keys, check_file_changed=False, check_config_changed=True, new_file_added=True)
-    
+
     # Final validation - should have all 10 files
     assert len(state3) == 12
 
@@ -349,11 +340,11 @@ def test_crawl_vs_crawl_and_index(initialise):
 
     # First call crawl with only process=True (no indexing)
     discovery.crawl(process=True, index=False)
-    
+
     state1 = index_state.load_state()
     log_handle.info(f"State after crawl(process=True, index=False): {json_dumps(state1)}")
     assert len(state1) == 12
-    
+
     # Validate that ocr_checksum is present but config_hash should be empty (since no indexing was done)
     for doc_id, vals in state1.items():
         assert vals["ocr_checksum"] is not None  # OCR processing was done
@@ -361,11 +352,11 @@ def test_crawl_vs_crawl_and_index(initialise):
 
     # Now call crawl with both process=True and index=True
     discovery.crawl(process=True, index=True)
-    
+
     state2 = index_state.load_state()
     log_handle.info(f"State after crawl(process=True, index=True): {json_dumps(state2)}")
     assert len(state2) == 12
-    
+
     # Validate that both ocr_checksum and config_hash are present
     for doc_id, vals in state2.items():
         assert vals["ocr_checksum"] is not None  # OCR processing was done
@@ -394,37 +385,3 @@ def validate(old_state, new_state, changed_keys,
             assert vals["last_indexed_timestamp"] == old_state[doc_id]["last_indexed_timestamp"]
             assert vals["config_hash"] == old_state[doc_id]["config_hash"]
             assert vals["ocr_checksum"] == old_state[doc_id]["ocr_checksum"]
-
-def add_bookmark_to_pdf(pdf_path, bookmark_name, page_number):
-    doc = None
-    # Define a temporary path for the new file
-    temp_pdf_path = tempfile.mkstemp(suffix=".temp.pdf")[1]
-
-    try:
-        doc = fitz.open(pdf_path)
-        toc = doc.get_toc()
-
-        # Add the new bookmark
-        toc.append([1, bookmark_name, page_number])
-
-        doc.set_toc(toc)
-
-        # Save the changes to the temporary file (this is a full rewrite)
-        doc.save(temp_pdf_path, garbage=4, deflate=True, clean=True)
-    except Exception as e:
-        log_handle.error(f"An error occurred during PDF modification: {e}")
-        # If the temp file was created, clean it up
-        if os.path.exists(temp_pdf_path):
-            os.remove(temp_pdf_path)
-        return  # Exit the function on error
-    finally:
-        if doc:
-            doc.close()
-
-    try:
-        # If saving was successful, replace the original file with the new one
-        os.replace(temp_pdf_path, pdf_path)
-        log_handle.verbose(f"Successfully added bookmark '{bookmark_name}' to page {page_number}.")
-        log_handle.verbose(f"The file '{pdf_path}' has been updated.")
-    except Exception as e:
-        log_handle.error(f"An error occurred during file replacement: {e}")

@@ -59,8 +59,6 @@ services:
       - FEEDBACK_TO_EMAIL=${FEEDBACK_TO_EMAIL}
       - HOME=/app/data
       - BASE_DIR=/app
-      # Indic NLP Resources
-      - INDIC_RESOURCES_PATH=/app/indic_nlp_resources
     volumes:
       - cataloguesearch-data:/app/data
       - cataloguesearch-logs:/app/logs

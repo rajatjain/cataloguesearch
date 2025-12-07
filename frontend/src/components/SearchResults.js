@@ -155,8 +155,17 @@ export const ResultCard = ({ result, onFindSimilar, onExpand, onExpandGranth, re
                     </span>
                 )}
                 {result.metadata?.Series && <span>{result.metadata.Series}</span>}
-                {resultType !== 'granth' && <span className="text-slate-600">{result.filename}</span>}
-                <span>Page Number: {result.page_number}</span>
+                {result.date && result.pravachan_number ? (
+                    <>
+                        <span className="text-slate-600">Date: {result.date}</span>
+                        <span className="text-slate-600">Pravachan Number: {result.pravachan_number}</span>
+                    </>
+                ) : (
+                    <>
+                        {resultType !== 'granth' && <span className="text-slate-600">{result.filename}</span>}
+                        <span>Page Number: {result.page_number}</span>
+                    </>
+                )}
                 {result.file_url && (
                     <a
                         href={`${result.file_url}#page=${result.page_number}`}

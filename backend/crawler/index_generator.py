@@ -1,6 +1,7 @@
 import logging
 import os.path
 import shutil
+import sys
 import traceback
 from datetime import datetime, timezone
 
@@ -43,7 +44,7 @@ class IndexGenerator:
     def index_document(
         self, document_id: str, original_filename: str,
         ocr_dir: str, output_text_dir: str, pages_list: list[int], metadata: dict,
-        scan_config: dict, bookmarks: dict[int, str],
+        scan_config: dict, page_to_pravachan_data: dict[int, dict],
         reindex_metadata_only: bool = False, dry_run: bool = True):
         log_handle.info(
             f"Indexing document: {document_id}, reindex_metadata_only: {reindex_metadata_only}, "
@@ -51,6 +52,19 @@ class IndexGenerator:
 
         # Read OCR data using appropriate processor (text files or JSON files)
         raw_data = self._pdf_processor.read_paragraphs(ocr_dir, pages_list)
+
+        # Convert metadata dates from DD-MM-YYYY to YYYY-MM-DD for OpenSearch
+        # (same logic as used for pravachan dates below)
+        metadata = metadata.copy()  # Don't mutate original
+        for date_field in ["series_start_date", "series_end_date"]:
+            if date_field in metadata and metadata[date_field]:
+                try:
+                    date_obj = datetime.strptime(metadata[date_field], "%d-%m-%Y")
+                    metadata[date_field] = date_obj.strftime("%Y-%m-%d")
+                except ValueError:
+                    log_handle.warning(
+                        f"Invalid date format for metadata.{date_field}: {metadata[date_field]}"
+                    )
 
         language = metadata.get("language", "hi")
         language_meta = get_language_meta(language, scan_config)
@@ -77,7 +91,7 @@ class IndexGenerator:
 
         timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
         if reindex_metadata_only:
-            self._reindex_metadata_only(document_id, metadata, bookmarks, timestamp)
+            self._reindex_metadata_only(document_id, metadata, page_to_pravachan_data, timestamp)
             return
 
         # --- Full Re-indexing Logic ---
@@ -99,7 +113,8 @@ class IndexGenerator:
         paras = self._get_paras(page_text_paths)
 
         chunks = self._create_chunks_from_paras(
-            paras, document_id, original_filename, metadata, bookmarks, timestamp
+            paras, document_id, original_filename, metadata,
+            page_to_pravachan_data, timestamp
         )
         log_handle.info(f"Created {len(chunks)} initial chunks for document {document_id}.")
 
@@ -135,8 +150,8 @@ class IndexGenerator:
                 traceback.print_exc()
                 log_handle.error(f"Failed to write {fname}")
 
-    def _reindex_metadata_only(self, document_id, metadata, bookmarks, timestamp):
-        """Handles the logic for updating metadata of existing documents."""
+    def _reindex_metadata_only(self, document_id, metadata, page_to_pravachan_data, timestamp):
+        """Handles the logic for updating metadata and pravachan fields of existing documents."""
         try:
             query = {"query": {"term": {"document_id": document_id}}, "size": 10000}
             response = self._opensearch_client.search(index=self._index_name, body=query)
@@ -150,13 +165,29 @@ class IndexGenerator:
             for hit in hits:
                 doc_id = hit['_id']
                 page_number = hit['_source'].get('page_number')
+
+                # Get pravachan data for this page
+                pravachan_data = page_to_pravachan_data.get(page_number, {})
+                pravachan_number = pravachan_data.get('pravachan_no')
+                date_str = pravachan_data.get('date')  # Format: DD-MM-YYYY
+
+                # Convert date from DD-MM-YYYY to YYYY-MM-DD for OpenSearch
+                date_iso = None
+                if date_str:
+                    try:
+                        date_obj = datetime.strptime(date_str, "%d-%m-%Y")
+                        date_iso = date_obj.strftime("%Y-%m-%d")
+                    except ValueError:
+                        log_handle.warning(f"Invalid date format for page {page_number}: {date_str}")
+
                 action = {
                     "_op_type": "update",
                     "_index": self._index_name,
                     "_id": doc_id,
                     "doc": {
                         "metadata": metadata,
-                        "bookmarks": bookmarks.get(page_number),
+                        "pravachan_number": pravachan_number,
+                        "date": date_iso,
                         "timestamp_indexed": timestamp
                     }
                 }
@@ -168,16 +199,32 @@ class IndexGenerator:
             # Also update the dedicated metadata index
             update_metadata_index(self._config, self._opensearch_client, metadata)
 
-            log_handle.info(f"Metadata re-indexed for document {document_id}.")
+            log_handle.info(f"Metadata and pravachan fields re-indexed for document {document_id}.")
         except Exception as e:
             log_handle.error(f"Error during metadata-only re-indexing for {document_id}: {e}")
 
     def _create_chunks_from_paras(self, paras, document_id,
-                                  original_filename, metadata, bookmarks, timestamp):
+                                  original_filename, metadata,
+                                  page_to_pravachan_data, timestamp):
         """Converts a list of paragraphs into a list of chunk dictionaries."""
         chunks = []
         for i, (page_num, para_text) in enumerate(paras):
             chunk_id = f"{document_id}_p{page_num}_para{i}"
+
+            # Get pravachan data for this page
+            pravachan_data = page_to_pravachan_data.get(page_num, {})
+            pravachan_number = pravachan_data.get('pravachan_no')
+            date_str = pravachan_data.get('date')  # Format: DD-MM-YYYY
+
+            # Convert date from DD-MM-YYYY to YYYY-MM-DD for OpenSearch
+            date_iso = None
+            if date_str:
+                try:
+                    date_obj = datetime.strptime(date_str, "%d-%m-%Y")
+                    date_iso = date_obj.strftime("%Y-%m-%d")
+                except ValueError:
+                    log_handle.warning(f"Invalid date format for page {page_num}: {date_str}")
+
             chunk = {
                 "chunk_id": chunk_id,
                 "document_id": document_id,
@@ -186,7 +233,8 @@ class IndexGenerator:
                 "paragraph_id": i,
                 "embedding_text": para_text,
                 "metadata": metadata,
-                "bookmarks": bookmarks.get(page_num),
+                "pravachan_number": pravachan_number,
+                "date": date_iso,
                 "timestamp_indexed": timestamp,
             }
 
@@ -237,18 +285,37 @@ class IndexGenerator:
             for chunk in chunks
         ]
         try:
-            success, failed = helpers.bulk(
-                self._opensearch_client, actions, stats_only=True, raise_on_error=False
-            )
+            # Use streaming_bulk to get detailed error information
+            success_count = 0
+            failed_count = 0
+            errors = []
+
+            for ok, item in helpers.streaming_bulk(
+                self._opensearch_client, actions, raise_on_error=False
+            ):
+                if ok:
+                    success_count += 1
+                else:
+                    failed_count += 1
+                    errors.append(item)
+                    # Log EVERY error
+                    log_handle.error(f"Failed to index chunk #{failed_count}: {item}")
+
             log_handle.info(
-                f"Successfully indexed {success} chunks, failed to index {failed} chunks."
+                f"Successfully indexed {success_count} chunks, failed to index {failed_count} chunks."
             )
-            if failed > 0:
+
+            if failed_count > 0:
                 log_handle.error(
-                    f"Failed to index {failed} chunks. Check OpenSearch logs for details."
+                    f"FATAL: {failed_count} chunks failed to index. Exiting."
                 )
+                sys.exit(1)
+
         except Exception as e:
             log_handle.error(f"An exception occurred during bulk indexing: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
 
     def _get_paras(self, page_text_paths: list[str]) -> list[tuple[int, str]]:
         """

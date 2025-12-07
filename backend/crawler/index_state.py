@@ -26,7 +26,8 @@ class IndexState:
                 file_checksum TEXT,
                 config_hash TEXT,
                 index_checksum TEXT,
-                ocr_checksum TEXT
+                ocr_checksum TEXT,
+                parsed_bookmarks TEXT
             )
         """)
         c.execute("""
@@ -45,7 +46,7 @@ class IndexState:
         c = conn.cursor()
         c.execute(
             "SELECT document_id, file_path, last_indexed_timestamp, file_checksum, "
-            "config_hash, index_checksum, ocr_checksum FROM indexed_files_state"
+            "config_hash, index_checksum, ocr_checksum, parsed_bookmarks FROM indexed_files_state"
         )
         rows = c.fetchall()
         conn.close()
@@ -57,7 +58,8 @@ class IndexState:
                 "file_checksum": row[3],
                 "config_hash": row[4],
                 "index_checksum": row[5],
-                "ocr_checksum": row[6] if len(row) > 6 else None
+                "ocr_checksum": row[6] if len(row) > 6 else None,
+                "parsed_bookmarks": row[7] if len(row) > 7 else None
             }
         return state
 
@@ -70,7 +72,7 @@ class IndexState:
         conn = sqlite3.connect(self.state_db_path)
         c = conn.cursor()
         sql_query = """
-            SELECT document_id, file_path, last_indexed_timestamp, file_checksum, config_hash, index_checksum, ocr_checksum
+            SELECT document_id, file_path, last_indexed_timestamp, file_checksum, config_hash, index_checksum, ocr_checksum, parsed_bookmarks
             FROM indexed_files_state WHERE document_id = ?
         """
         c.execute(sql_query, (document_id,))
@@ -83,7 +85,8 @@ class IndexState:
                 "file_checksum": row[3],
                 "config_hash": row[4],
                 "index_checksum": row[5],
-                "ocr_checksum": row[6] if len(row) > 6 else None
+                "ocr_checksum": row[6] if len(row) > 6 else None,
+                "parsed_bookmarks": row[7] if len(row) > 7 else None
             }
         return {}
 
@@ -93,15 +96,16 @@ class IndexState:
         c = conn.cursor()
         log_handle.info(f"Storing state: {json_dumps(state)}")
         c.execute("""
-            INSERT INTO indexed_files_state (document_id, file_path, last_indexed_timestamp, file_checksum, config_hash, index_checksum, ocr_checksum)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO indexed_files_state (document_id, file_path, last_indexed_timestamp, file_checksum, config_hash, index_checksum, ocr_checksum, parsed_bookmarks)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(document_id) DO UPDATE SET
                 file_path=excluded.file_path,
                 last_indexed_timestamp=excluded.last_indexed_timestamp,
                 file_checksum=excluded.file_checksum,
                 config_hash=excluded.config_hash,
                 index_checksum=excluded.index_checksum,
-                ocr_checksum=excluded.ocr_checksum
+                ocr_checksum=excluded.ocr_checksum,
+                parsed_bookmarks=excluded.parsed_bookmarks
         """, (
             document_id,
             state.get("file_path"),
@@ -109,7 +113,8 @@ class IndexState:
             state.get("file_checksum"),
             state.get("config_hash"),
             state.get("index_checksum", ""),
-            state.get("ocr_checksum", "")
+            state.get("ocr_checksum", ""),
+            state.get("parsed_bookmarks")
         ))
         conn.commit()
         conn.close()

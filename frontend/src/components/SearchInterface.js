@@ -1,6 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import TransliterationInput from './TransliterationInput';
 
+// --- UTILITY FUNCTIONS ---
+const parseYear = (dateString) => {
+    // Handle both "DD-MM-YYYY" and "YYYY-MM-DD" formats
+    if (!dateString) return null;
+    const match = dateString.match(/\d{4}/);
+    return match ? parseInt(match[0]) : null;
+};
+
+const extractYearsFromMetadata = (metadata, selectedGranths, language) => {
+    const dateRanges = metadata?.Pravachan?.[language]?.['Granth_date_ranges'];
+
+    if (!dateRanges) return [];
+
+    let relevantRanges = [];
+
+    if (selectedGranths.length === 0) {
+        // No Granth selected → show all years
+        relevantRanges = Object.values(dateRanges).flat();
+    } else {
+        // Specific Granths → show only their years
+        relevantRanges = selectedGranths
+            .map(granth => dateRanges[granth] || [])
+            .flat();
+    }
+
+    // Extract years and deduplicate
+    const years = new Set();
+    relevantRanges.forEach(range => {
+        const startYear = parseYear(range.start_date);
+        const endYear = parseYear(range.end_date);
+        if (startYear && endYear) {
+            // Add all years in the range
+            for (let y = startYear; y <= endYear; y++) {
+                years.add(y);
+            }
+        }
+    });
+
+    return Array.from(years).sort((a, b) => a - b);
+};
+
 // --- SEARCH INTERFACE COMPONENTS ---
 export const SearchBar = ({ query, setQuery, onSearch, language }) => {
     return (
@@ -15,13 +56,40 @@ export const SearchBar = ({ query, setQuery, onSearch, language }) => {
     );
 };
 
-export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter, contentTypes, setContentTypes }) => {
+export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemoveFilter, contentTypes, setContentTypes, language, startYear, setStartYear, endYear, setEndYear }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [granthMode, setGranthMode] = useState('all'); // 'all' or 'specific'
     const [selectedGranths, setSelectedGranths] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
 
-    const availableGranths = metadata['Granth'] || [];
+    // Extract available Granths from metadata structure
+    const getAvailableGranths = () => {
+        const granths = new Set();
+
+        // Get Granths from Pravachan metadata if enabled
+        if (contentTypes.pravachans && metadata['Pravachan']?.[language]?.['Granth']) {
+            const list = metadata['Pravachan'][language]['Granth'];
+            if (Array.isArray(list)) {
+                list.forEach(g => granths.add(g));
+            }
+        }
+
+        // Get Granths from Granth metadata if enabled
+        if (contentTypes.granths && metadata['Granth']?.[language]?.['Granth']) {
+            const list = metadata['Granth'][language]['Granth'];
+            if (Array.isArray(list)) {
+                list.forEach(g => granths.add(g));
+            }
+        }
+
+        return Array.from(granths).sort();
+    };
+
+    const availableGranths = getAvailableGranths();
+
+    // Extract available years based on selected Granths
+    const availableYears = extractYearsFromMetadata(metadata, selectedGranths, language);
+    const endYearOptions = startYear ? availableYears.filter(y => y >= startYear) : availableYears;
     const filteredGranths = availableGranths.filter(granth =>
         granth.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -85,6 +153,8 @@ export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemove
         setSelectedGranths([]);
         setContentTypes({ pravachans: true, granths: true });
         setSearchTerm('');
+        setStartYear(null);
+        setEndYear(null);
         // Remove all Granth filters
         const granthFilterIndices = [];
         activeFilters.forEach((filter, index) => {
@@ -113,7 +183,8 @@ export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemove
 
     const getSummaryText = () => {
         const hasContentTypeFilter = !contentTypes.pravachans || !contentTypes.granths;
-        const totalActiveFilters = granthFilterCount + (hasContentTypeFilter ? 1 : 0);
+        const hasYearFilter = startYear || endYear;
+        const totalActiveFilters = granthFilterCount + (hasContentTypeFilter ? 1 : 0) + (hasYearFilter ? 1 : 0);
 
         if (totalActiveFilters === 0) {
             return 'All Content';
@@ -138,7 +209,7 @@ export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemove
             </button>
 
             {/* Active Filters */}
-            {(granthFilterCount > 0 || (!contentTypes.pravachans || !contentTypes.granths)) && (
+            {(granthFilterCount > 0 || (!contentTypes.pravachans || !contentTypes.granths) || startYear || endYear) && (
                 <div className="flex flex-wrap gap-1.5 items-center">
                     <span className="font-semibold text-slate-500 text-sm">Active:</span>
 
@@ -186,6 +257,22 @@ export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemove
                                 </button>
                             </div>
                         ))
+                    )}
+
+                    {/* Year Filter Chip */}
+                    {(startYear || endYear) && (
+                        <div className="bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full flex items-center gap-2 text-sm font-medium">
+                            <span>📅 {startYear || '?'} - {endYear || '?'}</span>
+                            <button
+                                onClick={() => {
+                                    setStartYear(null);
+                                    setEndYear(null);
+                                }}
+                                className="text-emerald-600 hover:text-emerald-800 font-bold"
+                            >
+                                &times;
+                            </button>
+                        </div>
                     )}
                 </div>
             )}
@@ -363,6 +450,55 @@ export const MetadataFilters = ({ metadata, activeFilters, onAddFilter, onRemove
                                             )}
                                         </div>
                                     )}
+                                </div>
+
+                                <div className="border-t border-slate-200 pt-4 mb-4"></div>
+
+                                {/* Year Range Section */}
+                                <div>
+                                    <h4 className="text-sm font-semibold text-slate-600 mb-3">Year Range (Optional)</h4>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {/* Start Year */}
+                                        <div>
+                                            <label className="block text-sm text-slate-600 mb-1">Start Year</label>
+                                            <select
+                                                value={startYear || ''}
+                                                onChange={(e) => {
+                                                    const year = e.target.value ? parseInt(e.target.value) : null;
+                                                    setStartYear(year);
+                                                    // Reset end year if it's less than the new start year
+                                                    if (endYear && year && endYear < year) {
+                                                        setEndYear(null);
+                                                    }
+                                                }}
+                                                className="w-full p-2 bg-slate-50 border border-slate-300 rounded-md text-slate-800 text-base focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                                            >
+                                                <option value="">Any</option>
+                                                {availableYears.map(year => (
+                                                    <option key={year} value={year}>{year}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* End Year */}
+                                        <div>
+                                            <label className="block text-sm text-slate-600 mb-1">End Year</label>
+                                            <select
+                                                value={endYear || ''}
+                                                onChange={(e) => setEndYear(e.target.value ? parseInt(e.target.value) : null)}
+                                                className="w-full p-2 bg-slate-50 border border-slate-300 rounded-md text-slate-800 text-base focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                disabled={!startYear}
+                                            >
+                                                <option value="">Any</option>
+                                                {endYearOptions.map(year => (
+                                                    <option key={year} value={year}>{year}</option>
+                                                ))}
+                                            </select>
+                                            {!startYear && (
+                                                <p className="text-xs text-slate-500 mt-1">Select start year first</p>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

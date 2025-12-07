@@ -1405,3 +1405,444 @@ def validate_result_schema(data, lexical_results):
     granth_keys = ["results", "total_hits", "page_size", "page_number"]
     for key in granth_keys:
         assert key in data["granth_results"], f"Expected {key} in granth_results"
+
+
+def test_api_year_filter_single_year_lexical(api_server):
+    """Test year filtering with a single year (1985) using lexical search."""
+    # Query for content that exists in hampi_hindi with dates in 1985
+    # Based on common.py bookmarks: hampi_hindi page 2 has date 1985-10-23
+
+    # First, search WITHOUT year filter to verify the word exists and check what dates are present
+    search_payload_no_filter = {
+        "query": "गोलकोंडा",  # This word appears in hampi_hindi
+        "language": "hi",
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 20,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 20,
+                "page_number": 1
+            }
+        },
+        "enable_reranking": True
+    }
+
+    response_no_filter = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload_no_filter
+    )
+
+    assert response_no_filter.status_code == 200
+    data_no_filter = response_no_filter.json()
+    log_handle.info(f"Search WITHOUT year filter response: {json_dumps(data_no_filter, truncate_fields=['vector_embedding'])}")
+
+    # Check if we have any results without year filter
+    if data_no_filter["pravachan_results"]["total_hits"] > 0:
+        # Log what dates are actually in the results
+        for result in data_no_filter["pravachan_results"]["results"]:
+            date = result.get("date") or result.get("metadata", {}).get("date")
+            log_handle.info(f"Result without filter: file={result['filename']}, page={result.get('page_number')}, date={date}")
+    else:
+        log_handle.warning("No results found even WITHOUT year filter - the word may not be indexed")
+
+    # Test Case: Single year 1985 - should only return results from hampi_hindi pages 2-3
+    search_payload = {
+        "query": "गोलकोंडा",  # This word appears in hampi_hindi
+        "language": "hi",
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "start_year": 1985,
+        "end_year": 1985,
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 20,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 20,
+                "page_number": 1
+            }
+        },
+        "enable_reranking": True
+    }
+
+    response = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    log_handle.info(f"Year filter (1985) response: {json_dumps(data, truncate_fields=['vector_embedding'])}")
+
+    # Validate response structure
+    validate_result_schema(data, True)
+
+    # Should have results from 1985
+    assert data["pravachan_results"]["total_hits"] > 0, "Expected results for year 1985"
+
+    # Validate all results have dates in 1985
+    for result in data["pravachan_results"]["results"]:
+        # The date field should be at the root level of the result or in metadata
+        # Based on the implementation, it should be in metadata
+        date = result.get("date") or result.get("metadata", {}).get("date")
+        assert date is not None, f"Expected date field in result {result.get('document_id')}"
+
+        # Extract year from date (format: YYYY-MM-DD)
+        year = date.split("-")[0]
+        assert year == "1985", f"Expected year 1985, got {year} for result with date {date}"
+
+        # Should be from hampi_hindi.pdf
+        assert "hampi_hindi.pdf" in result["filename"], \
+            f"Expected result from hampi_hindi.pdf, got {result['filename']}"
+
+        log_handle.info(f"✓ Result: file={result['filename']}, page={result.get('page_number')}, date={date}")
+
+    log_handle.info(f"✓ Year filter test (1985) passed - found {data['pravachan_results']['total_hits']} results, all from 1985")
+
+
+def test_api_year_filter_range_lexical(api_server):
+    """Test year filtering with a year range (1986-1987) using lexical search."""
+    # Based on common.py bookmarks:
+    # - jaipur_hindi: pages 1-4 (1986-05-03), pages 5-6 (1987-06-04)
+    # - hampi_hindi: pages 4-5 (1986-05-24)
+
+    # Test Case: Year range 1986-1987 - should return results from both files
+    search_payload = {
+        "query": "इतिहास",  # Common word that appears in multiple files
+        "language": "hi",
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "start_year": 1986,
+        "end_year": 1987,
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 50,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 20,
+                "page_number": 1
+            }
+        },
+        "enable_reranking": True
+    }
+
+    response = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    log_handle.info(f"Year filter (1986-1987) response: {json_dumps(data, truncate_fields=['vector_embedding'])}")
+
+    # Validate response structure
+    validate_result_schema(data, True)
+
+    # Should have results from 1986-1987
+    assert data["pravachan_results"]["total_hits"] > 0, "Expected results for year range 1986-1987"
+
+    # Track files and years found
+    files_found = set()
+    years_found = set()
+
+    # Validate all results have dates in 1986-1987
+    for result in data["pravachan_results"]["results"]:
+        date = result.get("date") or result.get("metadata", {}).get("date")
+        assert date is not None, f"Expected date field in result {result.get('document_id')}"
+
+        # Extract year from date (format: YYYY-MM-DD)
+        year = int(date.split("-")[0])
+        assert 1986 <= year <= 1987, f"Expected year between 1986-1987, got {year} for result with date {date}"
+
+        # Track files and years
+        files_found.add(result["filename"])
+        years_found.add(year)
+
+        log_handle.info(f"✓ Result: file={result['filename']}, page={result.get('page_number')}, date={date}, year={year}")
+
+    # Should have results from both jaipur_hindi and hampi_hindi
+    expected_files = {"jaipur_hindi.pdf", "hampi_hindi.pdf"}
+    assert files_found == expected_files, \
+        f"Expected results from {expected_files}, got {files_found}"
+
+    # Should have results from both 1986 and 1987
+    expected_years = {1986, 1987}
+    assert years_found == expected_years, \
+        f"Expected years {expected_years}, got {years_found}"
+
+    log_handle.info(f"✓ Year range filter test (1986-1987) passed - found {data['pravachan_results']['total_hits']} results from years {years_found} across files {files_found}")
+
+
+def test_api_series_date_filter(api_server):
+    """
+    Test that year filtering works with series dates for documents without bookmarks.
+
+    The songadh_hindi and songadh_gujarati files are in the spiritual directory which has:
+    - series_start_date: 1975-01-01
+    - series_end_date: 1977-12-31
+
+    These files have NO bookmarks, so they should be found via series date overlap.
+    """
+    # Search for a word that appears in spiritual files
+    search_payload = {
+        "query": "सोनगढ़",
+        "language": "hi",
+        "start_year": 1976,
+        "end_year": 1976,
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 20,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 20,
+                "page_number": 1
+            }
+        },
+        "enable_reranking": True
+    }
+
+    response = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload
+    )
+    assert response.status_code == 200, f"API returned status {response.status_code}: {response.text}"
+
+    data = response.json()
+    assert data["pravachan_results"]["total_hits"] > 0, \
+        "Expected to find results via series date filtering"
+
+    # Verify the results have series dates
+    results = data["pravachan_results"]["results"]
+    assert len(results) > 0, "Expected at least one result"
+
+    for result in results:
+        log_handle.info(
+            f"Result: file={result['filename']}, page={result.get('page_number')}, "
+            f"date={result.get('date')}, series_start={result.get('series_start_date')}, "
+            f"series_end={result.get('series_end_date')}, Anuyog={result.get('metadata', {}).get('Anuyog')}")
+
+        # Should be from spiritual files (which have series dates but no bookmark dates)
+        assert result.get('metadata', {}).get('Anuyog') == 'spiritual', \
+            f"Expected spiritual Anuyog, got {result.get('metadata', {}).get('Anuyog')}"
+
+        # Document date should be None (no bookmarks)
+        assert result.get('date') is None, \
+            f"Expected no document date (no bookmarks), got {result.get('date')}"
+
+        # Should have series dates from config
+        assert result.get('series_start_date') == '1975-01-01', \
+            f"Expected series_start_date=1975-01-01, got {result.get('series_start_date')}"
+        assert result.get('series_end_date') == '1977-12-31', \
+            f"Expected series_end_date=1977-12-31, got {result.get('series_end_date')}"
+
+    log_handle.info(f"✓ Series date filter test (1975-1977) passed - found {data['pravachan_results']['total_hits']} results with series dates")
+
+
+def test_api_series_date_filter_exclude_bookmark_dates(api_server):
+    """
+    Test that series date filtering correctly excludes documents with bookmark dates outside the search range.
+
+    thanjavur_gujarati has:
+    - File-specific config: series_start_date=1978-01-01, series_end_date=1983-12-31
+    - Bookmarks on page 2 (1980-05-06) and page 3 (1983-06-04)
+
+    When searching for 1978-1979:
+    - Should NOT find pages 2 and 3 (their bookmark dates are outside the range)
+    - SHOULD find pages without bookmarks (1, 4, 5) via series date overlap
+    """
+    # Search for a word that appears throughout thanjavur_gujarati
+    search_payload = {
+        "query": "તંજાવુર",  # "Thanjavur" in Gujarati
+        "language": "gu",
+        "start_year": 1978,
+        "end_year": 1979,
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 50,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 20,
+                "page_number": 1
+            }
+        },
+        "enable_reranking": True
+    }
+
+    response = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload
+    )
+    assert response.status_code == 200, f"API returned status {response.status_code}: {response.text}"
+
+    data = response.json()
+
+    # Should find results via series date overlap
+    assert data["pravachan_results"]["total_hits"] > 0, \
+        "Expected to find results via series date filtering"
+
+    # Verify the results
+    results = data["pravachan_results"]["results"]
+    assert len(results) > 0, "Expected at least one result"
+
+    pages_with_dates = []
+    pages_without_dates = []
+
+    for result in results:
+        log_handle.info(
+            f"Result: file={result['filename']}, page={result.get('page_number')}, "
+            f"date={result.get('date')}, series_start={result.get('series_start_date')}, "
+            f"series_end={result.get('series_end_date')}")
+
+        # Should be from thanjavur_gujarati
+        assert "thanjavur_gujarati" in result['filename'], \
+            f"Expected thanjavur_gujarati, got {result['filename']}"
+
+        # Should have series dates from file-specific config
+        assert result.get('series_start_date') == '1978-01-01', \
+            f"Expected series_start_date=1978-01-01, got {result.get('series_start_date')}"
+        assert result.get('series_end_date') == '1983-12-31', \
+            f"Expected series_end_date=1983-12-31, got {result.get('series_end_date')}"
+
+        page_num = result.get('page_number')
+        if result.get('date'):
+            pages_with_dates.append((page_num, result.get('date')))
+        else:
+            pages_without_dates.append(page_num)
+
+    # Should NOT find pages 2 or 3 (they have dates outside the search range)
+    assert 2 not in pages_without_dates, "Page 2 has bookmark date 1980-05-06, should not appear"
+    assert 3 not in pages_without_dates, "Page 3 has bookmark date 1983-06-04, should not appear"
+    assert len(pages_with_dates) == 0, \
+        f"Expected no pages with dates in 1978-1979, found: {pages_with_dates}"
+
+    # Should find pages without bookmarks (1, 4, 5) via series date overlap
+    assert len(pages_without_dates) > 0, \
+        "Expected to find pages without bookmarks via series date overlap"
+
+    log_handle.info(
+        f"✓ Series date exclusion test (1978-1979) passed - found {len(pages_without_dates)} "
+        f"pages without bookmarks via series overlap, correctly excluded pages with dates outside range")
+
+
+def test_api_series_date_filter_include_bookmark_dates(api_server):
+    """
+    Test that series date filtering includes both documents with matching bookmark dates
+    and documents without bookmarks.
+
+    thanjavur_gujarati has:
+    - File-specific config: series_start_date=1978-01-01, series_end_date=1983-12-31
+    - Bookmarks on page 2 (1980-05-06) and page 3 (1983-06-04)
+
+    When searching for 1980:
+    - SHOULD find page 2 (bookmark date matches)
+    - SHOULD find pages without bookmarks (1, 4, 5) via series date overlap
+    - Should NOT find page 3 (bookmark date 1983 is outside range)
+    """
+    # Search for a word that appears throughout thanjavur_gujarati
+    search_payload = {
+        "query": "મંદિર",
+        "language": "gu",
+        "start_year": 1980,
+        "end_year": 1980,
+        "exact_match": False,
+        "exclude_words": [],
+        "categories": {},
+        "search_types": {
+            "Pravachan": {
+                "enabled": True,
+                "page_size": 50,
+                "page_number": 1
+            },
+            "Granth": {
+                "enabled": False,
+                "page_size": 20,
+                "page_number": 1
+            }
+        },
+        "enable_reranking": True
+    }
+
+    response = requests.post(
+        f"http://{api_server.host}:{api_server.port}/api/search",
+        json=search_payload
+    )
+    assert response.status_code == 200, f"API returned status {response.status_code}: {response.text}"
+
+    data = response.json()
+
+    # Should find results
+    assert data["pravachan_results"]["total_hits"] > 0, \
+        "Expected to find results"
+
+    # Verify the results
+    results = data["pravachan_results"]["results"]
+    assert len(results) > 0, "Expected at least one result"
+
+    pages_with_dates = {}
+    pages_without_dates = []
+
+    for result in results:
+        log_handle.info(
+            f"Result: file={result['filename']}, page={result.get('page_number')}, "
+            f"date={result.get('date')}, series_start={result.get('series_start_date')}, "
+            f"series_end={result.get('series_end_date')}")
+
+        # Should be from thanjavur_gujarati
+        assert "thanjavur_gujarati" in result['filename'], \
+            f"Expected thanjavur_gujarati, got {result['filename']}"
+
+        # Should have series dates from file-specific config
+        assert result.get('series_start_date') == '1978-01-01', \
+            f"Expected series_start_date=1978-01-01, got {result.get('series_start_date')}"
+        assert result.get('series_end_date') == '1983-12-31', \
+            f"Expected series_end_date=1983-12-31, got {result.get('series_end_date')}"
+
+        page_num = result.get('page_number')
+        if result.get('date'):
+            pages_with_dates[page_num] = result.get('date')
+        else:
+            pages_without_dates.append(page_num)
+
+    # Should find page 2 with date 1980-05-06
+    assert 2 in pages_with_dates, "Expected to find page 2 with date 1980-05-06"
+    assert pages_with_dates[2] == '1980-05-06', \
+        f"Expected date 1980-05-06 for page 2, got {pages_with_dates[2]}"
+
+    # Should NOT find page 3 (date 1983-06-04 is outside the 1980 range)
+    assert 3 not in pages_with_dates, "Page 3 has date 1983-06-04, should not appear in 1980 search"
+    assert 3 not in pages_without_dates, "Page 3 should not appear at all in 1980 search"
+
+    # Should find pages without bookmarks via series date overlap
+    assert len(pages_without_dates) > 0, \
+        "Expected to find pages without bookmarks via series date overlap"
+
+    log_handle.info(
+        f"✓ Series date inclusion test (1980) passed - found page 2 with matching date, "
+        f"and {len(pages_without_dates)} pages without bookmarks via series overlap")
