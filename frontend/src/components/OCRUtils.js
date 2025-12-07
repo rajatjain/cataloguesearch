@@ -28,7 +28,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
     const [isParsedBookmarksLoading, setIsParsedBookmarksLoading] = useState(false);
     const [useGoogleOCR, setUseGoogleOCR] = useState(false);
     const [ocrMode, setOcrMode] = useState('psm6');
-    const [bookmarkLLM, setBookmarkLLM] = useState('groq');
+    const [bookmarkLLM, setBookmarkLLM] = useState('ollama');
 
     // New state for batch processing
     const [batchJobId, setBatchJobId] = useState(null);
@@ -953,6 +953,7 @@ const OCRUtils = ({ selectedFile: propSelectedFile, onFileSelect, basePaths, bas
                                         className="text-sm border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-purple-500"
                                         disabled={isParsedBookmarksLoading}
                                     >
+                                        <option value="ollama">Ollama (Local)</option>
                                         <option value="groq">Groq</option>
                                         <option value="gemini">Gemini</option>
                                     </select>
