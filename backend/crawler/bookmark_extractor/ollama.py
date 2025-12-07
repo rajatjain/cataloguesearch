@@ -14,12 +14,12 @@ class OllamaBookmarkExtractor(BookmarkExtractor):
     Uses local Ollama models for completely offline, private inference.
     """
 
-    def __init__(self, model: str = "nuextract", base_url: str = "http://localhost:11434"):
+    def __init__(self, model: str = "gpt-oss:20b", base_url: str = "http://localhost:11434"):
         """
         Initialize Ollama bookmark extractor.
 
         Args:
-            model: Ollama model name to use (default: nuextract)
+            model: Ollama model name to use (default: gpt-oss:20b)
                    Other options: qwen2.5:7b, llama3.1:8b, phi4
             base_url: Ollama API base URL (default: http://localhost:11434)
         """
@@ -40,6 +40,7 @@ class OllamaBookmarkExtractor(BookmarkExtractor):
             List of dictionaries with extracted data, or None if failed
         """
         indexed_titles_json = json.dumps(indexed_titles)
+        log_handle.info(f"{indexed_titles_json}")
 
         # NuExtract expects a specific format - combine system prompt with user message
         full_prompt = f"""{self.system_prompt}

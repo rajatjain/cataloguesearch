@@ -46,7 +46,7 @@ def create_bookmark_extractor_by_name(llm_type: str, model: str = None) -> Bookm
     elif llm_type_lower == "ollama":
         # Ollama runs locally, no API key needed
         # Use custom model if provided, otherwise use default
-        ollama_model = model or os.getenv("OLLAMA_MODEL", "nuextract")
+        ollama_model = model or os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
         log_handle.info("Creating OllamaBookmarkExtractor for llm_type=ollama with model=%s", ollama_model)
         return OllamaBookmarkExtractor(model=ollama_model)
 
