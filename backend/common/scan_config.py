@@ -97,6 +97,14 @@ def get_scan_config(file_path: str, base_pdf_folder: str) -> dict:
                 if "psm" in default_config:
                     scan_meta["psm"] = default_config["psm"]
 
+                # Update chunk_strategy setting from default config (if present)
+                if "chunk_strategy" in default_config:
+                    scan_meta["chunk_strategy"] = default_config["chunk_strategy"]
+
+                # Update ignore_bookmarks setting from default config (if present)
+                if "ignore_bookmarks" in default_config:
+                    scan_meta["ignore_bookmarks"] = default_config["ignore_bookmarks"]
+
             except (json.JSONDecodeError, IOError) as e:
                 log_handle.warning(f"Could not read or parse {scan_config_path}: {e}")
 
@@ -123,5 +131,13 @@ def get_scan_config(file_path: str, base_pdf_folder: str) -> dict:
         # Update PSM setting from file-specific config (overrides default)
         if "psm" in file_config:
             scan_meta["psm"] = file_config["psm"]
+
+        # Update chunk_strategy setting from file-specific config (overrides default)
+        if "chunk_strategy" in file_config:
+            scan_meta["chunk_strategy"] = file_config["chunk_strategy"]
+
+        # Update ignore_bookmarks setting from file-specific config (overrides default)
+        if "ignore_bookmarks" in file_config:
+            scan_meta["ignore_bookmarks"] = file_config["ignore_bookmarks"]
 
     return scan_meta

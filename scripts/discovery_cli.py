@@ -126,10 +126,10 @@ class DiscoveryDaemon:
 
         # Initialize discovery components
         self.index_state = IndexState(config.SQLITE_DB_PATH)
-        self.pdf_processor = create_pdf_processor(config)
-        self.indexing_module = IndexGenerator(config)
+        opensearch_client = get_opensearch_client(config)
+        self.indexing_module = IndexGenerator(config, opensearch_client)
         self.discovery = Discovery(
-            config, self.indexing_module, self.pdf_processor, self.index_state)
+            config, self.indexing_module, self.index_state)
 
         logging.info("Discovery daemon initialized")
 
@@ -187,9 +187,8 @@ def run_discovery_once(config: Config, crawl=False, index=False, dry_run=False, 
 
         # Initialize components
         index_state = IndexState(config.SQLITE_DB_PATH)
-        pdf_processor = create_pdf_processor(config)
         indexing_module = IndexGenerator(config, get_opensearch_client(config))
-        discovery = Discovery(config, indexing_module, pdf_processor, index_state)
+        discovery = Discovery(config, indexing_module, index_state)
 
         client = get_opensearch_client(config)
         create_indices_if_not_exists(config, client)
@@ -234,9 +233,8 @@ def process_folder(config: Config, folder_path: str, dry_run=False, reindex_meta
 
     # Initialize components
     index_state = IndexState(config.SQLITE_DB_PATH)
-    pdf_processor = create_pdf_processor(config)
     indexing_module = IndexGenerator(config, get_opensearch_client(config))
-    discovery = Discovery(config, indexing_module, pdf_processor, index_state)
+    discovery = Discovery(config, indexing_module, index_state)
 
     client = get_opensearch_client(config)
     create_indices_if_not_exists(config, client)

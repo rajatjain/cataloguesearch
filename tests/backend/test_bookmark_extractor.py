@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from pydantic_core.core_schema import bool_schema
 
 from backend.crawler.bookmark_extractor.groq import GroqBookmarkExtractor
+from backend.crawler.bookmark_extractor.ollama import OllamaBookmarkExtractor
 from tests.backend.base import *
 
 from backend.crawler.bookmark_extractor.gemini import GeminiBookmarkExtractor
@@ -37,6 +38,10 @@ def gemini_extractor():
         pytest.skip("GEMINI_API_KEY environment variable not set")
 
     return GeminiBookmarkExtractor(api_key=api_key)
+
+@pytest.fixture(scope="module")
+def ollama_extractor():
+    return OllamaBookmarkExtractor()
 
 
 def assert_extraction(extractor, input_string, expected_pravachan_no, expected_date):
@@ -72,7 +77,7 @@ def assert_extraction(extractor, input_string, expected_pravachan_no, expected_d
     log_handle.info(f"✓ Successfully extracted: {extracted}")
 
 
-@pytest.mark.parametrize("extractor_fixture", ["groq_extractor", "gemini_extractor"])
+@pytest.mark.parametrize("extractor_fixture", ["ollama_extractor"])
 def test_bookmark_extraction(extractor_fixture, request):
     extractor = request.getfixturevalue(extractor_fixture)
 
@@ -103,7 +108,7 @@ def test_bookmark_extraction(extractor_fixture, request):
         "04-03-1985"
     )
 
-@pytest.mark.parametrize("extractor_fixture", ["groq_extractor", "gemini_extractor"])
+@pytest.mark.parametrize("extractor_fixture", ["ollama_extractor"])
 def test_pdf_bookmarks(extractor_fixture, request):
     extractor = request.getfixturevalue(extractor_fixture)
     doc_ids = setup()

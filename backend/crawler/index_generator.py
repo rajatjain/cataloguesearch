@@ -37,9 +37,6 @@ class IndexGenerator:
             "gu": "text_content_gujarati"
         }
 
-        # Create PDF processor based on CHUNK_STRATEGY
-        self._pdf_processor = create_pdf_processor(config)
-
 
     def index_document(
         self, document_id: str, original_filename: str,
@@ -50,8 +47,14 @@ class IndexGenerator:
             f"Indexing document: {document_id}, reindex_metadata_only: {reindex_metadata_only}, "
             f"Dry Run: {dry_run}")
 
+        # Extract chunk_strategy from scan_config, fallback to config.yaml if not provided
+        chunk_strategy = scan_config.get("chunk_strategy")
+
+        # Create appropriate PDF processor based on chunk_strategy to read OCR files
+        pdf_processor = create_pdf_processor(self._config, chunk_strategy)
+
         # Read OCR data using appropriate processor (text files or JSON files)
-        raw_data = self._pdf_processor.read_paragraphs(ocr_dir, pages_list)
+        raw_data = pdf_processor.read_paragraphs(ocr_dir, pages_list)
 
         # Convert metadata dates from DD-MM-YYYY to YYYY-MM-DD for OpenSearch
         # (same logic as used for pravachan dates below)
@@ -69,8 +72,8 @@ class IndexGenerator:
         language = metadata.get("language", "hi")
         language_meta = get_language_meta(language, scan_config)
 
-        # Create appropriate paragraph generator based on CHUNK_STRATEGY
-        paragraph_gen = create_paragraph_generator(self._config, language_meta)
+        # Create appropriate paragraph generator based on chunk_strategy
+        paragraph_gen = create_paragraph_generator(self._config, language_meta, chunk_strategy)
 
         # Generate paragraphs from raw data
         processed_paras = paragraph_gen.generate_paragraphs(raw_data, scan_config)

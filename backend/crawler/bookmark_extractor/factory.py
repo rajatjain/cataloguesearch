@@ -8,19 +8,21 @@ from backend.config import Config
 from backend.crawler.bookmark_extractor.base import BookmarkExtractor
 from backend.crawler.bookmark_extractor.gemini import GeminiBookmarkExtractor
 from backend.crawler.bookmark_extractor.groq import GroqBookmarkExtractor
+from backend.crawler.bookmark_extractor.ollama import OllamaBookmarkExtractor
 
 log_handle = logging.getLogger(__name__)
 
 
-def create_bookmark_extractor_by_name(llm_type: str) -> BookmarkExtractor:
+def create_bookmark_extractor_by_name(llm_type: str, model: str = None) -> BookmarkExtractor:
     """
     Factory function to create a BookmarkExtractor by LLM provider name.
 
     Args:
-        llm_type: LLM provider name ("groq" or "gemini")
+        llm_type: LLM provider name ("groq", "gemini", "ollama", or "mock")
+        model: Optional model name override (for Ollama)
 
     Returns:
-        BookmarkExtractor instance (GeminiBookmarkExtractor or GroqBookmarkExtractor)
+        BookmarkExtractor instance (GeminiBookmarkExtractor, GroqBookmarkExtractor, OllamaBookmarkExtractor, or MockBookmarkExtractor)
 
     Raises:
         ValueError: If the LLM type is not supported or API key is missing
@@ -41,10 +43,29 @@ def create_bookmark_extractor_by_name(llm_type: str) -> BookmarkExtractor:
         log_handle.info("Creating GeminiBookmarkExtractor for llm_type=gemini")
         return GeminiBookmarkExtractor(api_key=api_key)
 
+    elif llm_type_lower == "ollama":
+        # Ollama runs locally, no API key needed
+        # Use custom model if provided, otherwise use default
+        ollama_model = model or os.getenv("OLLAMA_MODEL", "phi4:14b")
+        log_handle.info("Creating OllamaBookmarkExtractor for llm_type=ollama with model=%s", ollama_model)
+        return OllamaBookmarkExtractor(model=ollama_model)
+
+    elif llm_type_lower == "mock":
+        # Mock extractor for testing - no API key needed
+        log_handle.info("Creating MockBookmarkExtractor for llm_type=mock")
+        try:
+            from tests.backend.mock_bookmark_extractor import MockBookmarkExtractor
+            return MockBookmarkExtractor()
+        except ImportError:
+            raise ValueError(
+                "MockBookmarkExtractor is only available in test environment. "
+                "Make sure tests/backend/mock_bookmark_extractor.py exists."
+            )
+
     else:
         raise ValueError(
             f"Unsupported bookmark extractor LLM: {llm_type}. "
-            f"Supported values: 'groq', 'gemini'"
+            f"Supported values: 'groq', 'gemini', 'ollama', 'mock'"
         )
 
 
