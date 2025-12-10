@@ -104,8 +104,8 @@ def build_index(initialise):
     discovery = Discovery(
         config,
         IndexGenerator(config, opensearch_client),
-        pdf_processor,
-        IndexState(config.SQLITE_DB_PATH)
+        IndexState(config.SQLITE_DB_PATH),
+        pdf_processor
     )
 
     # Call discovery with process=True, index=True to generate OCR files based on CHUNK_STRATEGY

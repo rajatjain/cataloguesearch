@@ -94,52 +94,48 @@ def test_get_metadata():
     sfp = SingleFileProcessor(
         config, f"{pdf_dir}/hindi/cities/metro/bangalore_hindi.pdf",
         None, None,
-        MockPDFProcessor(config),
-        datetime.datetime.now().isoformat()
+        datetime.datetime.now().isoformat(),
+        pdf_processor_factory=MockPDFProcessor
     )
     meta = sfp._get_metadata()
-    assert meta == {'language': 'hi', 'category': 'Pravachan', 'Anuyog': 'city', 'type': 'metro'}
+    assert meta == {'language': 'hi', 'category': 'Pravachan', 'Anuyog': 'city', 'type': 'metro', 'file_url': ''}
 
     # Test bangalore_gujarati.pdf in gujarati/cities/metro/ - should get language, category, and type
     sfp = SingleFileProcessor(
         config, f"{pdf_dir}/gujarati/cities/metro/bangalore_gujarati.pdf",
         None, None,
-        MockPDFProcessor(config),
         datetime.datetime.now().isoformat()
     )
     meta = sfp._get_metadata()
-    assert meta == {'language': 'gu', 'category': 'Pravachan', 'Anuyog': 'city', 'type': 'metro'}
+    assert meta == {'language': 'gu', 'category': 'Pravachan', 'Anuyog': 'city', 'type': 'metro', 'file_url': ''}
 
     # Test hampi_hindi.pdf in hindi/history/ - should get language and category
     sfp = SingleFileProcessor(
         config, f"{pdf_dir}/hindi/history/hampi_hindi.pdf",
         None, None,
-        MockPDFProcessor(config),
         datetime.datetime.now().isoformat()
     )
     meta = sfp._get_metadata()
-    assert meta == {'language': 'hi', 'category': 'Pravachan', 'Anuyog': 'history'}
+    assert meta == {'language': 'hi', 'category': 'Pravachan', 'Anuyog': 'history', 'file_url': ''}
 
     # Test indore_hindi.pdf in hindi/cities/non_metro/ - should get language, category, and type
     sfp = SingleFileProcessor(
         config, f"{pdf_dir}/hindi/cities/non_metro/indore_hindi.pdf",
         None, None,
-        MockPDFProcessor(config),
         datetime.datetime.now().isoformat()
     )
     meta = sfp._get_metadata()
-    assert meta == {'language': 'hi', 'category': 'Pravachan', 'Anuyog': 'city', 'type': 'non_metro'}
+    assert meta == {'language': 'hi', 'category': 'Pravachan', 'Anuyog': 'city', 'type': 'non_metro', 'file_url': ''}
 
     # Test songadh_gujarati.pdf in gujarati/spiritual/ - should get language and category
     sfp = SingleFileProcessor(
         config, f"{pdf_dir}/gujarati/spiritual/songadh_gujarati.pdf",
         None, None,
-        MockPDFProcessor(config),
         datetime.datetime.now().isoformat()
     )
     meta = sfp._get_metadata()
     assert meta == {'language': 'gu', 'category': 'Pravachan', 'Anuyog': 'spiritual',
-                    'series_end_date': '1977-12-31', 'series_start_date': '1975-01-01' }
+                    'series_end_date': '1977-12-31', 'series_start_date': '1975-01-01', 'file_url': '' }
 
 def test_crawl(initialise):
     config = Config()
@@ -151,8 +147,8 @@ def test_crawl(initialise):
     discovery = Discovery(
         config,
         MockIndexGenerator(config, None),
-        MockPDFProcessor(config),
-        index_state)
+        index_state,
+        pdf_processor_factory=MockPDFProcessor)
 
     discovery.crawl(process=True, index=True)
 
@@ -227,8 +223,8 @@ def test_pages_crawl(initialise):
     discovery = Discovery(
         config,
         MockIndexGenerator(config, None),
-        MockPDFProcessor(config),
-        index_state)
+        index_state,
+        pdf_processor_factory=MockPDFProcessor)
 
     # Start with scan_config pages [1]
     config.SCAN_CONFIG = {"pages": [1]}
@@ -269,8 +265,8 @@ def test_ignore_file(initialise):
     discovery = Discovery(
         config,
         MockIndexGenerator(config, None),
-        MockPDFProcessor(config),
-        index_state)
+        index_state,
+        pdf_processor_factory=MockPDFProcessor)
 
     # Add _ignore files in 2 folders to ignore all files in those folders
     ignore_folders = [
@@ -335,8 +331,8 @@ def test_crawl_vs_crawl_and_index(initialise):
     discovery = Discovery(
         config,
         MockIndexGenerator(config, None),
-        MockPDFProcessor(config),
-        index_state)
+        index_state,
+        pdf_processor_factory=MockPDFProcessor)
 
     # First call crawl with only process=True (no indexing)
     discovery.crawl(process=True, index=False)

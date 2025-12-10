@@ -71,7 +71,7 @@ def test_integration(init_integration_test):
     log_handle.info("Running crawl with index=True, process=True")
     discovery = Discovery(
         config, IndexGenerator(config, opensearch_client),
-        create_pdf_processor(config), IndexState(config.SQLITE_DB_PATH))
+        IndexState(config.SQLITE_DB_PATH))
     discovery.crawl(index=True, process=True)
     
     # Check base_ocr_dir - should not contain ignored files

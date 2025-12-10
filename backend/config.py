@@ -133,10 +133,6 @@ class Config:
             return self._settings.get("transliteration", {}).get("default_topk", 5)
         elif name == "TRANSLITERATION_TIMEOUT":
             return self._settings.get("transliteration", {}).get("timeout", 10)
-        elif name == "GEMINI_API_KEY":
-            return os.getenv("GEMINI_API_KEY")
-        elif name == "GROQ_API_KEY":
-            return os.getenv("GROQ_API_KEY")
         elif name == "BOOKMARK_EXTRACTOR_LLM":
             return self._settings.get("crawler", {}).get("bookmark_extractor_llm", "gemini")
         else:

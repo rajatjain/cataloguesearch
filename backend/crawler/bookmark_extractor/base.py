@@ -18,26 +18,28 @@ class BookmarkExtractor(ABC):
         self.system_prompt = """
 You are a data extraction assistant. Extract the Pravachan Number and Date from bookmark titles.
 
-Return a JSON array where each object has:
+You will receive a JSON array of objects. You MUST return a JSON array with the SAME number of items.
+
+Each output object must have:
 - index: the position number from the input
 - pravachan_no: the extracted pravachan number, or null if not found
 - date: the extracted date in DD-MM-YYYY format, or null if not found
 
-EXAMPLES:
-Input: {"index": 4, "title": "Prav. no. 244-A on Kalash 219, Date: 07-11-1965"}
-Output: {"index": 4, "pravachan_no": "244-A", "date": "07-11-1965"}
+EXAMPLE - Process ALL items in the input array:
+Input (2 items):
+[
+  {"index": 0, "title": "Prav. no. 244-A on Kalash 219, Date: 07-11-1965"},
+  {"index": 1, "title": "Gatha 65 & 66"}
+]
 
-Input: {"index": 5, "title": "Pravachan No.112, Date : 19-10-1978"}
-Output: {"index": 5, "pravachan_no": "112", "date": "19-10-1978"}
+Output (2 items - MUST match input length):
+[
+  {"index": 0, "pravachan_no": "244-A", "date": "07-11-1965"},
+  {"index": 1, "pravachan_no": null, "date": null}
+]
 
-Input: {"index": 6, "title": "Prav 45, 26th Sep 1978"}
-Output: {"index": 6, "pravachan_no": "45", "date": "26-09-1978"}
-
-Input: {"index": 9, "title": "Gatha 65 & 66"}
-Output: {"index": 9, "pravachan_no": null, "date": null}
-
-Note: Convert dates from various formats (like "26th Sep 1978") to DD-MM-YYYY format.
-
+CRITICAL: Output array length MUST equal input array length. Process every item.
+Convert dates from formats like "26th Sep 1978" to DD-MM-YYYY format.
 Return ONLY the JSON array, nothing else.
 """
 

@@ -126,10 +126,10 @@ class DiscoveryDaemon:
 
         # Initialize discovery components
         self.index_state = IndexState(config.SQLITE_DB_PATH)
-        self.pdf_processor = create_pdf_processor(config)
-        self.indexing_module = IndexGenerator(config)
+        opensearch_client = get_opensearch_client(config)
+        self.indexing_module = IndexGenerator(config, opensearch_client)
         self.discovery = Discovery(
-            config, self.indexing_module, self.pdf_processor, self.index_state)
+            config, self.indexing_module, self.index_state)
 
         logging.info("Discovery daemon initialized")
 
@@ -187,9 +187,8 @@ def run_discovery_once(config: Config, crawl=False, index=False, dry_run=False, 
 
         # Initialize components
         index_state = IndexState(config.SQLITE_DB_PATH)
-        pdf_processor = create_pdf_processor(config)
         indexing_module = IndexGenerator(config, get_opensearch_client(config))
-        discovery = Discovery(config, indexing_module, pdf_processor, index_state)
+        discovery = Discovery(config, indexing_module, index_state)
 
         client = get_opensearch_client(config)
         create_indices_if_not_exists(config, client)
@@ -205,7 +204,7 @@ def run_discovery_once(config: Config, crawl=False, index=False, dry_run=False, 
         hh, rem = divmod(total_secs, 3600)
         mm, ss = divmod(rem, 60)
         log_handle.info(f"Discovery completed in {hh:02}:{mm:02}:{ss:02}")
-        
+
         if dry_run:
             log_handle.warning("DRY RUN was enabled. No documents were actually indexed. Set --dry-run=false to actually index documents.")
     except Exception as e:
@@ -234,9 +233,8 @@ def process_folder(config: Config, folder_path: str, dry_run=False, reindex_meta
 
     # Initialize components
     index_state = IndexState(config.SQLITE_DB_PATH)
-    pdf_processor = create_pdf_processor(config)
     indexing_module = IndexGenerator(config, get_opensearch_client(config))
-    discovery = Discovery(config, indexing_module, pdf_processor, index_state)
+    discovery = Discovery(config, indexing_module, index_state)
 
     client = get_opensearch_client(config)
     create_indices_if_not_exists(config, client)
@@ -359,14 +357,6 @@ def main():
         config = Config("configs/config.yaml")
     except Exception as e:
         logging.error(f"Failed to load config: {e}")
-        sys.exit(1)
-
-    # Check if GEMINI_API_KEY is available
-    if not config.GEMINI_API_KEY:
-        logging.error(
-            "GEMINI_API_KEY is not set. Please set it in your environment or .env.local file.\n"
-            "You can obtain a Gemini API key from: https://ai.google.dev/gemini-api/docs/api-key"
-        )
         sys.exit(1)
 
     if args.cleanup:

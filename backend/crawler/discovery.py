@@ -10,6 +10,7 @@ from datetime import datetime
 import fitz
 
 from backend.crawler.pdf_processor import PDFProcessor
+from backend.crawler.pdf_factory import create_pdf_processor
 from backend.utils import json_dumps
 from backend.common.scan_config import get_scan_config
 from backend.config import Config
@@ -25,8 +26,8 @@ class SingleFileProcessor:
                  file_path: str,
                  indexing_mod: IndexGenerator,
                  index_state: IndexState,
-                 pdf_processor: PDFProcessor,
-                 scan_time: str):
+                 scan_time: str,
+                 pdf_processor_factory=None):
         self._config = config
         self._file_path = os.path.abspath(file_path)
         self._base_pdf_folder = config.BASE_PDF_PATH
@@ -34,37 +35,57 @@ class SingleFileProcessor:
         self._index_state = index_state
         self._output_text_base_dir = config.BASE_TEXT_PATH
         self._output_ocr_base_dir = config.BASE_OCR_PATH
-        self._pdf_processor = pdf_processor
         self._scan_time = scan_time
+        self._pdf_processor_factory = pdf_processor_factory  # Optional: for testing
+
+        # Load scan_config once and cache it
+        self._scan_config = get_scan_config(self._file_path, self._base_pdf_folder)
+
+    def _get_chunk_strategy(self) -> str:
+        """
+        Returns the chunk strategy from scan_config, falling back to config.CHUNK_STRATEGY.
+
+        Returns:
+            'advanced' or other strategy string
+        """
+        return self._scan_config.get("chunk_strategy", self._config.CHUNK_STRATEGY)
+
+    def _get_pdf_processor(self) -> PDFProcessor:
+        """
+        Creates and returns the appropriate PDF processor based on chunk_strategy.
+        Uses the injected pdf_processor_factory if provided (for testing).
+
+        Returns:
+            PDFProcessor or AdvancedPDFProcessor instance
+        """
+        if self._pdf_processor_factory:
+            # Use injected factory (for testing)
+            return self._pdf_processor_factory(self._config)
+        else:
+            # Use default factory
+            return create_pdf_processor(self._config, self._get_chunk_strategy())
 
     def _get_ocr_file_extension(self) -> str:
         """
-        Returns the file extension for OCR files based on CHUNK_STRATEGY.
+        Returns the file extension for OCR files based on chunk_strategy.
 
         Returns:
             '.json' for advanced strategy, '.txt' otherwise
         """
-        return '.json' if self._config.CHUNK_STRATEGY == 'advanced' else '.txt'
+        return '.json' if self._get_chunk_strategy() == 'advanced' else '.txt'
 
-    def _get_metadata(self, scan_config: dict = None) -> dict:
+    def _get_metadata(self) -> dict:
         """
-        Loads all the metadata for the file. This metadata will be indexed in OpenSearch
+        Loads all the metadata for the file. This metadata will be indexed in OpenSearch.
+        Includes file_url from scan_config if present.
         """
         # Use common utility to get merged config
         config = get_merged_config(self._file_path, self._base_pdf_folder)
 
         # Add file_url from scan_config if provided
-        if scan_config:
-            config["file_url"] = scan_config.get("file_url", "")
+        config["file_url"] = self._scan_config.get("file_url", "")
 
         return config
-
-    def _get_scan_config(self) -> dict:
-        """
-        Loads all the scan_config for this file. This config will be passed on to
-        PDFProcessor to extract relevant text, ignore headers/footers etc.
-        """
-        return get_scan_config(self._file_path, self._base_pdf_folder)
 
     def _get_config_hash(self, config_data: dict) -> str:
         """Generates a SHA256 hash for a config dictionary."""
@@ -138,8 +159,7 @@ class SingleFileProcessor:
         relative_pdf_path = os.path.relpath(self._file_path, self._base_pdf_folder)
         document_id = str(uuid.uuid5(uuid.NAMESPACE_URL, relative_pdf_path))
 
-        scan_config = self._get_scan_config()
-        pages_list = self._get_page_list(scan_config)
+        pages_list = self._get_page_list(self._scan_config)
         current_ocr_checksum = self._index_state.calculate_ocr_checksum(
             relative_pdf_path, pages_list)
 
@@ -151,12 +171,14 @@ class SingleFileProcessor:
             return
 
         try:
-            file_metadata = self._get_metadata(scan_config)
-            scan_config["language"] = file_metadata.get("language", "hi")
+            file_metadata = self._get_metadata()
+            self._scan_config["language"] = file_metadata.get("language", "hi")
 
-            language = scan_config.get("language", "hi")
-            ret = self._pdf_processor.process_pdf(
-                self._file_path, scan_config, pages_list)
+            # Get PDF processor based on chunk_strategy
+            pdf_processor = self._get_pdf_processor()
+
+            ret = pdf_processor.process_pdf(
+                self._file_path, self._scan_config, pages_list)
 
             if ret:
                 # Get current state to preserve parsed_bookmarks if it exists
@@ -195,11 +217,10 @@ class SingleFileProcessor:
                 f"OCR directory does not exist for {self._file_path}. Run process() first.")
             return
 
-        scan_config = self._get_scan_config()
-        pages_list = self._get_page_list(scan_config)
+        pages_list = self._get_page_list(self._scan_config)
+        ocr_extension = self._get_ocr_file_extension()
 
         # Check if all required OCR pages exist
-        ocr_extension = self._get_ocr_file_extension()
         missing_pages = []
         for page_num in pages_list:
             ocr_file = f"{output_ocr_dir}/page_{page_num:04d}{ocr_extension}"
@@ -213,7 +234,7 @@ class SingleFileProcessor:
             return
 
         # Calculate current checksums for comparison
-        file_metadata = self._get_metadata(scan_config)
+        file_metadata = self._get_metadata()
         current_config_hash = self._get_config_hash(file_metadata)
         current_ocr_checksum = self._index_state.calculate_ocr_checksum(relative_path, pages_list)
 
@@ -229,28 +250,33 @@ class SingleFileProcessor:
                 return
 
         # Extract or load cached parsed bookmarks (pravachan_no and date)
-        parsed_bookmarks_json = index_state.get("parsed_bookmarks")
-        if parsed_bookmarks_json:
-            # Use cached parsed bookmarks
-            parsed_bookmarks = json.loads(parsed_bookmarks_json)
-            log_handle.info(f"Using cached parsed bookmarks for {self._file_path}: "
-                          f"Received {len(parsed_bookmarks)} bookmarks")
-            # Log first 2 bookmarks for sanity check
-            if parsed_bookmarks:
-                sample_bookmarks = parsed_bookmarks[:2]
-                log_handle.info(f"Sample bookmarks: {sample_bookmarks}")
+        # Skip bookmark extraction if ignore_bookmarks is set in scan_config
+        if self._scan_config.get("ignore_bookmarks", False):
+            log_handle.info(f"Skipping bookmark extraction for {self._file_path} due to ignore_bookmarks flag")
+            parsed_bookmarks = []
         else:
-            # Call bookmark extractor to parse bookmarks
-            log_handle.info(f"Extracting parsed bookmarks for {self._file_path}")
-            try:
-                from backend.crawler.bookmark_extractor.factory import create_bookmark_extractor
+            parsed_bookmarks_json = index_state.get("parsed_bookmarks")
+            if parsed_bookmarks_json:
+                # Use cached parsed bookmarks
+                parsed_bookmarks = json.loads(parsed_bookmarks_json)
+                log_handle.info(f"Using cached parsed bookmarks for {self._file_path}: "
+                              f"Received {len(parsed_bookmarks)} bookmarks")
+                # Log first 2 bookmarks for sanity check
+                if parsed_bookmarks:
+                    sample_bookmarks = parsed_bookmarks[:2]
+                    log_handle.info(f"Sample bookmarks: {sample_bookmarks}")
+            else:
+                # Call bookmark extractor to parse bookmarks
+                log_handle.info(f"Extracting parsed bookmarks for {self._file_path}")
+                try:
+                    from backend.crawler.bookmark_extractor.factory import create_bookmark_extractor
 
-                extractor = create_bookmark_extractor(self._config)
-                parsed_bookmarks = extractor.parse_bookmarks(self._file_path)
-                log_handle.info(f"Successfully extracted {len(parsed_bookmarks)} bookmarks")
-            except Exception as e:
-                log_handle.error(f"Failed to extract bookmarks: {e}")
-                parsed_bookmarks = []
+                    extractor = create_bookmark_extractor(self._config)
+                    parsed_bookmarks = extractor.parse_bookmarks(self._file_path)
+                    log_handle.info(f"Successfully extracted {len(parsed_bookmarks)} bookmarks")
+                except Exception as e:
+                    log_handle.error(f"Failed to extract bookmarks: {e}")
+                    parsed_bookmarks = []
 
         # Get total pages for forward-fill
         doc = fitz.open(self._file_path)
@@ -262,7 +288,7 @@ class SingleFileProcessor:
 
         self._indexing_module.index_document(
             document_id, relative_path, output_ocr_dir, output_text_dir,
-            pages_list, file_metadata, scan_config,
+            pages_list, file_metadata, self._scan_config,
             page_to_pravachan_data,
             reindex_metadata_only, dry_run
         )
@@ -296,27 +322,25 @@ class Discovery:
     """
     def __init__(self, config: Config,
                  indexing_mod: IndexGenerator,
-                 pdf_processor: PDFProcessor,
-                 index_state : IndexState):
+                 index_state: IndexState,
+                 pdf_processor_factory=None):
         """
-        Initializes the Discovery module with configuration, indexing module, and PDF processor.
+        Initializes the Discovery module with configuration and indexing module.
 
         Args:
             config (Config): Configuration instance containing settings for discovery.
             indexing_mod (IndexGenerator): Instance responsible for indexing documents.
-            pdf_processor (PDFProcessor): Instance responsible for processing PDF files.
+            index_state (IndexState): Instance for managing indexing state.
+            pdf_processor_factory: Optional factory for creating PDF processors (for testing).
         """
         self._config = config
         self._indexing_module = indexing_mod
-        self._pdf_processor = pdf_processor
         self._index_state = index_state
+        self._pdf_processor_factory = pdf_processor_factory  # For testing
 
         # Ensure required components are initialized
         if not self._indexing_module:
             log_handle.critical("IndexingEmbeddingModule not provided. Exiting.")
-            sys.exit(1)
-        if not self._pdf_processor:
-            log_handle.critical("PDFProcessor not provided. Exiting.")
             sys.exit(1)
 
         self.base_pdf_folder = self._config.BASE_PDF_PATH
@@ -400,8 +424,8 @@ class Discovery:
                 file_path=pdf_file_path,
                 indexing_mod=self._indexing_module,
                 index_state=self._index_state,
-                pdf_processor=self._pdf_processor,
-                scan_time=scan_time
+                scan_time=scan_time,
+                pdf_processor_factory=self._pdf_processor_factory
             )
             if process:
                 log_handle.info(f"Processing PDF file {file_name}")
