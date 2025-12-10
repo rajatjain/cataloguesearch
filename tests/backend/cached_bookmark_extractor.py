@@ -1,7 +1,7 @@
 """
 Cached Bookmark Extractor for tests.
 
-This module provides a caching wrapper around real bookmark extractors (Ollama, Gemini, Groq).
+This module provides a caching wrapper around real bookmark extractors (eg. Ollama).
 It caches LLM responses based on the input bookmark titles, dramatically speeding up tests
 by avoiding redundant LLM calls for the same bookmarks.
 
@@ -26,7 +26,7 @@ class CachedBookmarkExtractor(BookmarkExtractor):
     """
     Caching wrapper for BookmarkExtractor implementations.
 
-    This class wraps any BookmarkExtractor (Ollama, Gemini, Groq) and caches
+    This class wraps any BookmarkExtractor (eg. Ollama) and caches
     the results of call_llm() based on the input bookmark titles.
 
     Cache Key Strategy:
@@ -51,7 +51,7 @@ class CachedBookmarkExtractor(BookmarkExtractor):
         Initialize cached bookmark extractor.
 
         Args:
-            real_extractor: The actual BookmarkExtractor instance (Ollama, Gemini, Groq)
+            real_extractor: The actual BookmarkExtractor instance (eg. Ollama)
             cache: Dictionary to store cached results (should be session-scoped)
         """
         super().__init__()

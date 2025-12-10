@@ -4,40 +4,12 @@ import pytest
 from dotenv import load_dotenv
 from pydantic_core.core_schema import bool_schema
 
-from backend.crawler.bookmark_extractor.groq import GroqBookmarkExtractor
 from backend.crawler.bookmark_extractor.ollama import OllamaBookmarkExtractor
 from tests.backend.base import *
-
-from backend.crawler.bookmark_extractor.gemini import GeminiBookmarkExtractor
 from tests.backend.common import setup
 
 log_handle = logging.getLogger(__name__)
 
-
-@pytest.fixture(scope="module")
-def groq_extractor():
-    """
-    Fixture to create a GroqBookmarkExtractor instance.
-    Requires GROQ_API_KEY environment variable to be set.
-    """
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        pytest.skip("GROQ_API_KEY environment variable not set")
-
-    return GroqBookmarkExtractor(api_key=api_key)
-
-
-@pytest.fixture(scope="module")
-def gemini_extractor():
-    """
-    Fixture to create a GeminiBookmarkExtractor instance.
-    Requires GEMINI_API_KEY environment variable to be set.
-    """
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        pytest.skip("GEMINI_API_KEY environment variable not set")
-
-    return GeminiBookmarkExtractor(api_key=api_key)
 
 @pytest.fixture(scope="module")
 def ollama_extractor():
@@ -49,7 +21,7 @@ def assert_extraction(extractor, input_string, expected_pravachan_no, expected_d
     Helper function to test bookmark extraction.
 
     Args:
-        extractor: GeminiBookmarkExtractor instance
+        extractor: OllamaBookmarkExtractor instance
         input_string: The bookmark title to parse
         expected_pravachan_no: Expected pravachan number (or None)
         expected_date: Expected date in DD-MM-YYYY format (or None)
