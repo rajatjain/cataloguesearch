@@ -204,7 +204,7 @@ def run_discovery_once(config: Config, crawl=False, index=False, dry_run=False, 
         hh, rem = divmod(total_secs, 3600)
         mm, ss = divmod(rem, 60)
         log_handle.info(f"Discovery completed in {hh:02}:{mm:02}:{ss:02}")
-        
+
         if dry_run:
             log_handle.warning("DRY RUN was enabled. No documents were actually indexed. Set --dry-run=false to actually index documents.")
     except Exception as e:
@@ -357,14 +357,6 @@ def main():
         config = Config("configs/config.yaml")
     except Exception as e:
         logging.error(f"Failed to load config: {e}")
-        sys.exit(1)
-
-    # Check if GEMINI_API_KEY is available
-    if not config.GEMINI_API_KEY:
-        logging.error(
-            "GEMINI_API_KEY is not set. Please set it in your environment or .env.local file.\n"
-            "You can obtain a Gemini API key from: https://ai.google.dev/gemini-api/docs/api-key"
-        )
         sys.exit(1)
 
     if args.cleanup:
